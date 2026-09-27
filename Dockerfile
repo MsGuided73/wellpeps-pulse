@@ -25,6 +25,7 @@ RUN useradd --create-home --uid 1000 harvey \
 COPY --chown=harvey:harvey harvey/ harvey/
 COPY --chown=harvey:harvey prompts/ prompts/
 COPY --chown=harvey:harvey skills/ skills/
+COPY --chown=harvey:harvey config/ config/
 COPY --chown=harvey:harvey harvey.yaml .
 
 USER harvey

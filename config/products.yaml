@@ -1,0 +1,342 @@
+# Source: C:\dev\hyperagents\wellpeps\registry\products.md (registry built 2026-09-27)
+# Generated: 2026-09-27 for WellPeps Pulse Phase 2.
+# PUBLIC-FACING FIELDS ONLY. Do not add internal costs: no per-unit prices WellPeps
+# pays, no pharmacy / partner names, no pricing-workbook columns. If a value is not
+# shown on wellpeps.com, it does not belong here.
+#
+# Brand-name equivalents are for MATCHING consumer posts only. WellPeps products
+# are not the branded drugs, and replies must never imply they are (R15, R16).
+# site_price = price on wellpeps.com today. Weight Loss prices are member prices.
+# status: live | coming_soon | waitlist
+# aliases: {term, inferred}. inferred: true = consumer slang / misspelling that
+# does not appear in any WellPeps source file.
+
+membership:
+  name: WellPeps membership
+  price_text: "$49 first month, then $79 per month"
+  covers: [Weight Loss, Hormone Optimization]
+  shipping_note: "Shipping costs are shown at checkout."
+
+categories:
+  - name: Weight Loss
+    page: /weight-loss
+    status: live
+    membership: true
+    aliases:
+      - {term: GLP-1, inferred: false}
+      - {term: GLP-1s, inferred: false}
+      - {term: needle-free, inferred: false}
+      - {term: microdosed GLP-1s, inferred: false}
+      - {term: microdose semaglutide, inferred: false}
+      - {term: food noise, inferred: false}
+      - {term: generic Ozempic, inferred: false}
+      - {term: generic Wegovy, inferred: false}
+      - {term: the shot, inferred: true}
+      - {term: the jab, inferred: true}
+      - {term: GLP, inferred: true}
+      - {term: GLP1, inferred: true}
+      - {term: glp one, inferred: true}
+      - {term: skinny shot, inferred: true}
+      - {term: weight loss shot, inferred: true}
+      - {term: weight loss injection, inferred: true}
+  - name: Sexual Wellness
+    page: /sexual-wellness
+    status: live
+    membership: false
+    aliases:
+      - {term: ED, inferred: false}
+      - {term: erectile dysfunction, inferred: false}
+      - {term: PDE5 inhibitors, inferred: false}
+      - {term: troche, inferred: false}
+      - {term: RDT, inferred: false}
+      - {term: ED meds, inferred: true}
+      - {term: ED pills, inferred: true}
+      - {term: boner pills, inferred: true}
+      - {term: hard mints, inferred: false}
+      - {term: chewables, inferred: false}
+  - name: Hair Restoration
+    page: /hair-restoration
+    status: coming_soon
+    membership: false
+    aliases:
+      - {term: fin + minox, inferred: false}
+      - {term: topical fin, inferred: false}
+      - {term: oral minoxidil, inferred: false}
+      - {term: dut + fin + minox, inferred: false}
+      - {term: minox, inferred: true}
+      - {term: oral minox, inferred: true}
+      - {term: low-dose oral minoxidil, inferred: true}
+      - {term: LDOM, inferred: true}
+      - {term: fin, inferred: true}
+      - {term: topical finasteride, inferred: true}
+      - {term: the big 3, inferred: true}
+      - {term: hair loss meds, inferred: true}
+      - {term: hair regrowth, inferred: true}
+      - {term: receding hairline, inferred: true}
+      - {term: thinning hair, inferred: true}
+      - {term: male pattern baldness, inferred: true}
+      - {term: MPB, inferred: true}
+      - {term: female hair loss, inferred: true}
+      - {term: minoxidil shed, inferred: true}
+      - {term: minoxidill, inferred: true}
+      - {term: minoxodil, inferred: true}
+      - {term: finastride, inferred: true}
+      - {term: finesteride, inferred: true}
+      - {term: finisteride, inferred: true}
+      - {term: dutesteride, inferred: true}
+  - name: Healthy Aging & Vitality
+    page: /healthy-aging
+    status: live
+    membership: false
+    aliases:
+      - {term: peptides, inferred: false}
+      - {term: lipotropic, inferred: false}
+      - {term: healthy aging, inferred: false}
+      - {term: longevity, inferred: false}
+      - {term: peptide therapy, inferred: true}
+      - {term: biohacking, inferred: true}
+  - name: Hormone Optimization
+    page: null
+    status: waitlist
+    membership: true
+    aliases: []
+  - name: Mental Wellness
+    page: null
+    status: waitlist
+    membership: false
+    aliases: []
+
+products:
+  # --- Weight Loss (GLP-1), member prices ---------------------------------
+  - name: Compounded Semaglutide
+    generic_names: [semaglutide]
+    brand_equivalents: [Ozempic, Wegovy, Wegovy pill]
+    form: weekly injection (subcutaneous)
+    category: Weight Loss
+    site_price: {amount_usd: 109, per: month, member_price: true}
+    status: live
+    aliases:
+      - {term: compounded semaglutide, inferred: false}
+      - {term: sema, inferred: true}
+      - {term: semi, inferred: true}
+      - {term: sema shots, inferred: true}
+      - {term: comp sema, inferred: true}
+      - {term: Oz, inferred: true}
+      - {term: semaglutid, inferred: true}
+      - {term: semaglitude, inferred: true}
+      - {term: sema glutide, inferred: true}
+      - {term: ozempik, inferred: true}
+      - {term: ozempics, inferred: true}
+      - {term: wegovey, inferred: true}
+      - {term: wegovi, inferred: true}
+  - name: Compounded Tirzepatide
+    generic_names: [tirzepatide]
+    brand_equivalents: [Mounjaro, Zepbound]
+    form: weekly injection (subcutaneous)
+    category: Weight Loss
+    site_price: {amount_usd: 269, per: month, member_price: true}
+    status: live
+    aliases:
+      - {term: compounded tirzepatide, inferred: false}
+      - {term: tirz, inferred: true}
+      - {term: tirzep, inferred: true}
+      - {term: tirz shots, inferred: true}
+      - {term: comp tirz, inferred: true}
+      - {term: compounded Zep, inferred: true}
+      - {term: Zep, inferred: true}
+      - {term: MJ, inferred: true}
+      - {term: Mounj, inferred: true}
+      - {term: tirzepatid, inferred: true}
+      - {term: terzepatide, inferred: true}
+      - {term: tirzapatide, inferred: true}
+      - {term: trizepatide, inferred: true}
+      - {term: monjaro, inferred: true}
+      - {term: mounjaru, inferred: true}
+      - {term: zepbond, inferred: true}
+      - {term: zepbounds, inferred: true}
+  - name: Oral Semaglutide
+    generic_names: [semaglutide]
+    brand_equivalents: [Rybelsus, Wegovy pill]
+    form: daily oral tablet
+    category: Weight Loss
+    site_price: {amount_usd: 119, per: month, member_price: true}
+    status: live
+    aliases:
+      - {term: oral semaglutide, inferred: false}
+      - {term: sema pills, inferred: true}
+  - name: Oral Tirzepatide
+    generic_names: [tirzepatide]
+    brand_equivalents: [Mounjaro, Zepbound]
+    form: oral tablet
+    category: Weight Loss
+    site_price: null
+    status: live
+    aliases:
+      - {term: oral tirz, inferred: true}
+
+  # --- Sexual Wellness -------------------------------------------------------
+  - name: Tadalafil Daily
+    generic_names: [tadalafil]
+    brand_equivalents: [Cialis, Cialis Daily]
+    form: low-dose daily oral tablet
+    category: Sexual Wellness
+    site_price: {amount_usd: 69, per: month, member_price: false}
+    status: live
+    aliases:
+      - {term: daily Cialis, inferred: true}
+      - {term: daily tad, inferred: true}
+      - {term: the weekend pill, inferred: true}
+      - {term: tada, inferred: true}
+      - {term: tadalifil, inferred: true}
+      - {term: generic Cialis, inferred: true}
+  - name: Tadalafil As Needed
+    generic_names: [tadalafil]
+    brand_equivalents: [Cialis]
+    form: high-dose oral tablet
+    category: Sexual Wellness
+    site_price: null
+    status: live
+    aliases:
+      - {term: the weekend pill, inferred: true}
+      - {term: tadalafill, inferred: true}
+  - name: Sildenafil As Needed
+    generic_names: [sildenafil]
+    brand_equivalents: [Viagra, Revatio]
+    form: as-needed oral tablet
+    category: Sexual Wellness
+    site_price: null
+    status: live
+    aliases:
+      - {term: the blue pill, inferred: true}
+      - {term: blue pill, inferred: true}
+      - {term: vitamin V, inferred: true}
+      - {term: generic Viagra, inferred: true}
+      - {term: sildenifil, inferred: true}
+      - {term: sildanafil, inferred: true}
+
+  # --- Hair Restoration (site gated "Coming Soon"; say only "on the way") ----
+  - name: Topical Treatments
+    generic_names: [minoxidil, finasteride, fluocinolone, tretinoin]
+    brand_equivalents: [Rogaine, Propecia]
+    formulations: ["Minoxidil + Finasteride", "Minoxidil + Fluocinolone + Tretinoin"]
+    form: topical solution / topical foam
+    category: Hair Restoration
+    site_price: {amount_usd: 79, per: month, member_price: false}
+    status: coming_soon
+    aliases:
+      - {term: topical minoxidil, inferred: true}
+  - name: Oral Treatments
+    generic_names: [finasteride, minoxidil, dutasteride]
+    brand_equivalents: [Propecia, Avodart, oral Rogaine]
+    formulations: [Finasteride, Oral Minoxidil, "Minoxidil + Biotin", Dutasteride]
+    form: oral capsule
+    category: Hair Restoration
+    site_price: {amount_usd: 59, per: month, member_price: false}
+    status: coming_soon
+    aliases:
+      - {term: hair pills, inferred: true}
+      - {term: dut, inferred: true}
+      - {term: dutas, inferred: true}
+  - name: Combination Therapy
+    generic_names: [minoxidil, finasteride]
+    brand_equivalents: [Rogaine, Propecia]
+    formulations: ["Topical Minoxidil + Finasteride + Oral Minoxidil", "Minoxidil + Finasteride + Biotin"]
+    form: topical + oral
+    category: Hair Restoration
+    site_price: {amount_usd: 99, per: month, member_price: false}
+    status: coming_soon
+    aliases: []
+  - name: Advanced Liposomal Formulas
+    generic_names: [minoxidil, finasteride, fluocinolone, tretinoin]
+    brand_equivalents: []
+    formulations: ["Minoxidil + Fluocinolone + Tretinoin", "Minoxidil + Finasteride + Fluocinolone + Tretinoin"]
+    form: topical solution
+    category: Hair Restoration
+    site_price: {amount_usd: 109, per: month, member_price: false}
+    status: coming_soon
+    aliases: []
+
+  # --- Healthy Aging & Vitality ---------------------------------------------
+  # Site footnote: some treatments may be compounded; compounded medications are
+  # not FDA-approved finished drug products. Replies: mechanism only (R18).
+  - name: Sermorelin
+    generic_names: [sermorelin]
+    brand_equivalents: [Geref]
+    form: subcutaneous injection
+    category: Healthy Aging & Vitality
+    site_price: {amount_usd: 149, per: null, member_price: false}
+    status: live
+    aliases:
+      - {term: serm, inferred: true}
+      - {term: sermorelin peptide, inferred: true}
+      - {term: GH peptide, inferred: true}
+      - {term: HGH peptide, inferred: true}
+      - {term: sermoreline, inferred: true}
+      - {term: sermorlin, inferred: true}
+  - name: NAD+
+    generic_names: [NAD+, nicotinamide adenine dinucleotide]
+    brand_equivalents: []
+    form: injection
+    category: Healthy Aging & Vitality
+    site_price: {amount_usd: 169, per: null, member_price: false}
+    status: live
+    aliases:
+      - {term: NAD, inferred: false}
+      - {term: NAD shots, inferred: true}
+      - {term: NAD injections, inferred: true}
+      - {term: NAD IV, inferred: true}
+      - {term: NAD drip, inferred: true}
+      - {term: NAD plus, inferred: true}
+  - name: Glutathione
+    generic_names: [glutathione]
+    brand_equivalents: []
+    form: injection
+    category: Healthy Aging & Vitality
+    site_price: {amount_usd: 129, per: null, member_price: false}
+    status: live
+    aliases:
+      - {term: gluta, inferred: true}
+      - {term: glutathione shots, inferred: true}
+      - {term: glutathion, inferred: true}
+      - {term: gluthathione, inferred: true}
+      - {term: glutatione, inferred: true}
+  - name: MIC + B12
+    generic_names: [cyanocobalamin]
+    brand_equivalents: []
+    formulations: ["methionine / inositol / choline chloride / cyanocobalamin"]
+    form: injection
+    category: Healthy Aging & Vitality
+    site_price: {amount_usd: 119, per: null, member_price: false}
+    status: live
+    aliases:
+      - {term: B12, inferred: false}
+      - {term: MIC shots, inferred: true}
+      - {term: B12 shots, inferred: true}
+      - {term: lipo B12, inferred: true}
+  - name: Lipo-C
+    generic_names: [L-carnitine, levocarnitine]
+    brand_equivalents: [Carnitor]
+    form: injection
+    category: Healthy Aging & Vitality
+    site_price: {amount_usd: 109, per: null, member_price: false}
+    status: live
+    aliases:
+      - {term: L-carnitine, inferred: false}
+      - {term: lipo shots, inferred: true}
+      - {term: lipo injections, inferred: true}
+  - name: Methylene Blue
+    generic_names: [methylene blue]
+    brand_equivalents: [ProvayBlue]
+    form: oral capsule
+    category: Healthy Aging & Vitality
+    site_price: {amount_usd: 79, per: null, member_price: false}
+    status: live
+    aliases:
+      - {term: MB, inferred: true}
+      - {term: methylene, inferred: true}
+      - {term: blue dye, inferred: true}
+      - {term: methyline blue, inferred: true}
+      - {term: methelene blue, inferred: true}
+
+# Tier 3 peptides and other substances WellPeps never offers. Listen only (R19).
+never_offered: [BPC-157, TB-500, CJC-1295, ipamorelin, AOD-9604, Melanotan II, Selank, Semax, KPV, DSIP, Epitalon, MOTS-c, thymosin alpha-1, LL-37, DiHexa, PEG-MGF, GHRP-2, GHRP-6, injectable GHK-Cu, HGH, somatropin, MK-677, ibutamoren, retatrutide, cagrilintide]

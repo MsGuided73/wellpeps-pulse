@@ -1,0 +1,249 @@
+# Source: C:\dev\hyperagents\wellpeps\registry\keywords.md (registry built 2026-09-27),
+#         plus products.md / competitors.md for cross-references.
+# Generated: 2026-09-27 for WellPeps Pulse Phase 2.
+# Listening seeds only. Do not add internal costs, pricing-workbook data, or
+# partner pharmacy names here.
+#
+# Families: brand, products, competitors (canonical names that must exist in
+# competitors.yaml; aliases live there, not here), category_intent, risk,
+# gray_market, communities, urgent_overrides.
+# communities: NO WellPeps file names a subreddit, so every community is
+# verified: false until someone confirms it exists and reads its rules (R4).
+# urgent_overrides: case-insensitive, word-bounded regexes. A hit forces
+# urgency=urgent in triage regardless of the model's answer. Order matters:
+# the first matching category wins.
+
+brand:
+  exact: [WellPeps, wellpeps.com, portal.wellpeps.com, "#WellPeps", WellPeps Patient Education, WellPeps Community Educator, Smart Patient Guide, Smart Patient Guides]
+  variants: [Well Peps, Well-Peps, Wellpep, Well Pep, WelPeps, Wel Peps, Wellpeeps, Well Peeps, wellpeps telehealth, wellpeps review, wellpeps reviews, wellpeps legit, wellpeps scam, "@wellpeps"]
+  taglines: ["Real care, not just medication", "Everything Included", "Why monitoring matters", "Telehealth Without the Runaround", "One Place for Your Wellness", "Become a Smart Patient"]
+  partners: [Scriptful, GEN Health]
+
+products:
+  names: [Compounded Semaglutide, Compounded Tirzepatide, Oral Semaglutide, Oral Tirzepatide, Tadalafil Daily, Tadalafil As Needed, Sildenafil As Needed, Topical Treatments, Oral Treatments, Combination Therapy, Advanced Liposomal Formulas, Sermorelin, NAD+, Glutathione, MIC + B12, Lipo-C, Methylene Blue]
+  generics: [semaglutide, tirzepatide, sildenafil, tadalafil, minoxidil, finasteride, dutasteride, fluocinolone, tretinoin, biotin, sermorelin, NAD, NAD+, glutathione, MIC B12, methionine inositol choline, cyanocobalamin, B12, L-carnitine, levocarnitine, lipotropic, methylene blue]
+  brand_names: [Ozempic, Wegovy, Wegovy pill, Rybelsus, Mounjaro, Zepbound, Viagra, Cialis, Propecia, Rogaine, Geref, Carnitor, ProvayBlue, Avodart, Revatio]
+  slang: [sema, tirz, tirzep, comp sema, comp tirz, compounded zep, the shot, the jab, skinny shot, weight loss shot, GLP1, glp one, microdose, microdosing GLP-1, food noise, blue pill, daily cialis, weekend pill, ED meds, minox, oral minox, LDOM, fin, topical fin, fin + minox, big 3, NAD shots, NAD drip, lipo shots, B12 shots, gluta, serm, peptide therapy]
+  misspellings: [semaglutid, semaglitude, tirzepatid, tirzapatide, terzepatide, trizepatide, ozempik, wegovey, wegovi, monjaro, zepbond, sildenifil, sildanafil, tadalifil, tadalafill, minoxodil, finastride, finesteride, sermoreline, glutathion, gluthathione, methyline blue, NAD plus]
+
+competitors: [Hims & Hers, Ro, Henry Meds, Eden, Ivím Health, LifeMD, Mochi Health, Noom Med, Found, Calibrate, Fella Health, Fridays, OrderlyMeds, Willow, Zealthy, Emerge, Form Health, WeightWatchers Clinic, Sesame, NovoCare Pharmacy, LillyDirect, IvyRx, MEDVi, ShedRx, BlueChew, Rex MD, Lemonaid Health, Hello Cake, Strut Health, Keeps, Happy Head, XYON, Hone Health, Maximus, Joi + Blokes, Marek Health, Fountain TRT, TRT Nation, Peter MD, Defy Medical, AgelessRx, Novos, Elysium, Jinfiniti, Concierge MD LA, Peptide Sciences, Function Health, Superpower, InsideTracker, Everlywell, LetsGetChecked, Paloma Health, Siphox Health, Labcorp OnDemand, Quest Health, DiscountedLabs.com, Private MD Labs]
+
+category_intent:
+  # Consumer searches named in WellPeps planning docs
+  - best online GLP-1 programs
+  - best online GLP-1 provider
+  - what does online semaglutide cost
+  - how to choose a GLP-1 telehealth provider
+  - what should I look for when choosing an online GLP-1 provider
+  - telehealth hair-loss treatment
+  - sildenafil vs tadalafil
+  - what is semaglutide
+  - semaglutide vs tirzepatide
+  - do I need bloodwork before taking a GLP-1
+  - has anyone used an online GLP-1 provider
+  - can I take semaglutide during menopause
+  - what does personalized dosing actually mean
+  - why isn't the lowest advertised price always the lowest treatment cost
+  - what should follow-up care look like
+  - understanding NAD+
+  # Topic buckets
+  - GLP-1
+  - weight loss
+  - telehealth
+  - hair loss
+  - men's health
+  - healthy aging
+  - hormone therapy
+  - labs
+  # Price and access
+  - $39 first month
+  - membership fee
+  - all-in price
+  - same price at every dose
+  - no insurance
+  - GLP-1 without insurance
+  - cheapest semaglutide
+  - cheapest tirzepatide
+  - affordable GLP-1
+  - cash price Zepbound
+  - insurance denied Wegovy
+  - prior authorization
+  - compounded vs brand
+  # Regulatory / market events (internal intel)
+  - compounded GLP-1
+  - compounding pharmacy
+  - "503A"
+  - "503B"
+  - 503B bulks list
+  - FDA warning letter
+  - GLP-1 shortage
+  - compounded GLP-1 ban
+  - essentially a copy
+  - Novo settlement
+  - Lilly lawsuit
+  - same active ingredient
+  - personalized dose
+  - LegitScript
+  - PCAC vote
+
+risk:
+  complaint: [scam, legit, review, reviews, BBB, complaint, customer service, no response, can't reach, no follow up, doctor never, never shipped, late shipment, arrived warm, switched from, switching from, stopped compounded, discontinued compounded, no longer offers, lab upsell, labs extra]
+  legal: [lawsuit, class action, arbitration, sued, attorney general, FDA warning letter, warning letter, FTC, cease and desist, MedWatch]
+  adverse_event: [adverse event, side effects, GLP-1 side effects, GLP-1 nausea, muscle loss on semaglutide, B12 depletion, nitrates, nausea, vomiting, constipation, diarrhea, sulfur burps, Ozempic face, hair loss on semaglutide, gastroparesis, pancreatitis, gallbladder, injection site reaction, dose increase, titration, missed dose, finasteride side effects, PFS, post finasteride, sildenafil headache, tadalafil back pain, NAD injection pain, hospitalized, ER visit, allergic reaction]
+  privacy: [HIPAA, shared my data, sold my data, leaked, data breach, privacy violation, pixel tracking]
+  billing: [refund, no refund, cancel, can't cancel, cancel subscription, charged again, auto renew, auto-renewal, hidden fees, price went up, after the first month, one-time price, chargeback, unauthorized charge, charged without, fraud]
+
+gray_market:
+  - research use only
+  - RUO peptides
+  - not for human consumption
+  - for research purposes
+  - peptide vendor
+  - no prescription needed
+  - without a prescription
+  - BPC-157
+  - TB-500
+  - CJC-1295
+  - ipamorelin
+  - AOD-9604
+  - Melanotan II
+  - Selank
+  - Semax
+  - KPV
+  - DSIP
+  - Epitalon
+  - MOTS-c
+  - thymosin alpha-1
+  - LL-37
+  - DiHexa
+  - PEG-MGF
+  - GHRP-2
+  - GHRP-6
+  - injectable GHK-Cu
+  - HGH
+  - somatropin
+  - MK-677
+  - ibutamoren
+  - retatrutide
+  - cagrilintide
+  - peptide ban
+
+communities:
+  # role: listen | approved (WellPeps may use) | avoid (monitor, never use) | competitor
+  # Subreddits: all inferred by the registry; none verified.
+  - {name: r/Semaglutide, kind: subreddit, platform: reddit, topic: weight, role: listen, verified: false}
+  - {name: r/tirzepatide, kind: subreddit, platform: reddit, topic: weight, role: listen, verified: false}
+  - {name: r/Zepbound, kind: subreddit, platform: reddit, topic: weight, role: listen, verified: false}
+  - {name: r/Mounjaro, kind: subreddit, platform: reddit, topic: weight, role: listen, verified: false}
+  - {name: r/Ozempic, kind: subreddit, platform: reddit, topic: weight, role: listen, verified: false}
+  - {name: r/Wegovy, kind: subreddit, platform: reddit, topic: weight, role: listen, verified: false}
+  - {name: r/WegovyWeightLoss, kind: subreddit, platform: reddit, topic: weight, role: listen, verified: false}
+  - {name: r/compoundedtirzepatide, kind: subreddit, platform: reddit, topic: weight, role: listen, verified: false}
+  - {name: r/CompoundedSemaglutide, kind: subreddit, platform: reddit, topic: weight, role: listen, verified: false}
+  - {name: r/loseit, kind: subreddit, platform: reddit, topic: weight, role: listen, verified: false}
+  - {name: r/PCOS, kind: subreddit, platform: reddit, topic: weight, role: listen, verified: false}
+  - {name: r/Menopause, kind: subreddit, platform: reddit, topic: hormones, role: listen, verified: false}
+  - {name: r/intermittentfasting, kind: subreddit, platform: reddit, topic: weight, role: listen, verified: false}
+  - {name: r/erectiledysfunction, kind: subreddit, platform: reddit, topic: sexual, role: listen, verified: false}
+  - {name: r/AskMenOver30, kind: subreddit, platform: reddit, topic: sexual, role: listen, verified: false}
+  - {name: r/sex, kind: subreddit, platform: reddit, topic: sexual, role: listen, verified: false}
+  - {name: r/tressless, kind: subreddit, platform: reddit, topic: hair, role: listen, verified: false}
+  - {name: r/HairLoss, kind: subreddit, platform: reddit, topic: hair, role: listen, verified: false}
+  - {name: r/FemaleHairLoss, kind: subreddit, platform: reddit, topic: hair, role: listen, verified: false}
+  - {name: r/minoxidil, kind: subreddit, platform: reddit, topic: hair, role: listen, verified: false}
+  - {name: r/finasteride, kind: subreddit, platform: reddit, topic: hair, role: listen, verified: false}
+  - {name: r/Peptides, kind: subreddit, platform: reddit, topic: peptides, role: listen, verified: false}
+  - {name: r/Biohackers, kind: subreddit, platform: reddit, topic: peptides, role: listen, verified: false}
+  - {name: r/longevity, kind: subreddit, platform: reddit, topic: peptides, role: listen, verified: false}
+  - {name: r/NAD, kind: subreddit, platform: reddit, topic: peptides, role: listen, verified: false}
+  - {name: r/Nootropics, kind: subreddit, platform: reddit, topic: peptides, role: listen, verified: false}
+  - {name: r/Testosterone, kind: subreddit, platform: reddit, topic: hormones, role: listen, verified: false}
+  - {name: r/trt, kind: subreddit, platform: reddit, topic: hormones, role: listen, verified: false}
+  - {name: r/telehealth, kind: subreddit, platform: reddit, topic: telehealth, role: listen, verified: false}
+  - {name: r/HealthInsurance, kind: subreddit, platform: reddit, topic: telehealth, role: listen, verified: false}
+  - {name: r/Costco, kind: subreddit, platform: reddit, topic: weight, role: listen, verified: false}
+  - {name: r/HimsAndHers, kind: subreddit, platform: reddit, topic: competitor, role: listen, verified: false}
+  - {name: r/hims, kind: subreddit, platform: reddit, topic: competitor, role: listen, verified: false}
+  - {name: r/RoHealth, kind: subreddit, platform: reddit, topic: competitor, role: listen, verified: false}
+  # Hashtags WellPeps may use (Social Calendar; max 5 per post)
+  - {name: "#wellness", kind: hashtag, platform: any, topic: brand, role: approved, verified: false}
+  - {name: "#metabolichealth", kind: hashtag, platform: any, topic: brand, role: approved, verified: false}
+  - {name: "#telehealth", kind: hashtag, platform: any, topic: brand, role: approved, verified: false}
+  - {name: "#healthyaging", kind: hashtag, platform: any, topic: brand, role: approved, verified: false}
+  - {name: "#WellPeps", kind: hashtag, platform: any, topic: brand, role: approved, verified: false}
+  # Monitor, but WellPeps must never use (R37)
+  - {name: "#ozempic", kind: hashtag, platform: any, topic: weight, role: avoid, verified: false}
+  - {name: "#semaglutide", kind: hashtag, platform: any, topic: weight, role: avoid, verified: false}
+  - {name: "#tirzepatide", kind: hashtag, platform: any, topic: weight, role: avoid, verified: false}
+  - {name: "#weightlossjourney", kind: hashtag, platform: any, topic: weight, role: avoid, verified: false}
+  # Competitor hashtags (from competitor research)
+  - {name: "#ivimhealth", kind: hashtag, platform: tiktok, topic: competitor, role: competitor, verified: false}
+  - {name: "#edenpartner", kind: hashtag, platform: tiktok, topic: competitor, role: competitor, verified: false}
+  # Additional listening hashtags (inferred)
+  - {name: "#glp1journey", kind: hashtag, platform: any, topic: weight, role: listen, verified: false}
+  - {name: "#mounjaro", kind: hashtag, platform: any, topic: weight, role: listen, verified: false}
+  - {name: "#zepbound", kind: hashtag, platform: any, topic: weight, role: listen, verified: false}
+  - {name: "#wegovy", kind: hashtag, platform: any, topic: weight, role: listen, verified: false}
+  - {name: "#compoundedtirzepatide", kind: hashtag, platform: any, topic: weight, role: listen, verified: false}
+  - {name: "#compoundedsemaglutide", kind: hashtag, platform: any, topic: weight, role: listen, verified: false}
+  - {name: "#nadplus", kind: hashtag, platform: any, topic: peptides, role: listen, verified: false}
+  - {name: "#peptides", kind: hashtag, platform: any, topic: peptides, role: listen, verified: false}
+  - {name: "#sermorelin", kind: hashtag, platform: any, topic: peptides, role: listen, verified: false}
+  - {name: "#methyleneblue", kind: hashtag, platform: any, topic: peptides, role: listen, verified: false}
+  - {name: "#hairlosstreatment", kind: hashtag, platform: any, topic: hair, role: listen, verified: false}
+  - {name: "#minoxidil", kind: hashtag, platform: any, topic: hair, role: listen, verified: false}
+  - {name: "#finasteride", kind: hashtag, platform: any, topic: hair, role: listen, verified: false}
+  - {name: "#edtreatment", kind: hashtag, platform: any, topic: sexual, role: listen, verified: false}
+  - {name: "#trt", kind: hashtag, platform: any, topic: hormones, role: listen, verified: false}
+  - {name: "#biohacking", kind: hashtag, platform: any, topic: peptides, role: listen, verified: false}
+  - {name: "#himsandhers", kind: hashtag, platform: any, topic: competitor, role: listen, verified: false}
+  - {name: "#bluechew", kind: hashtag, platform: any, topic: competitor, role: listen, verified: false}
+  - {name: "#henrymeds", kind: hashtag, platform: any, topic: competitor, role: listen, verified: false}
+
+urgent_overrides:
+  adverse_event:
+    - '\bhospitali[sz](?:ed|ation)\b'
+    - '(?-i:\bE\.?R\b)'  # case-sensitive: "ER"/"E.R." only, never "er," or "ERror"
+    - '\bER\s+visit\b'
+    - '\bemergency\s+room\b'
+    - '\burgent\s+care\b'
+    - '\bICU\b'
+    - '\bpancreatitis\b'
+    - '\bgall\s?bladder\b'
+    - '\bbowel\s+obstruction\b'
+    - '\bsevere\s+(?:vomiting|nausea|pain|abdominal\s+pain|reaction|dehydration)\b'
+    - '\bcan.?t\s+keep\s+(?:anything|food|water|liquids?)\s+down\b'
+    - '\ballergic\s+reaction\b'
+    - '\banaphyla(?:xis|ctic)\b'
+    - '\bsuicid(?:e|al)\b'
+    - '\bself[- ]harm\b'
+    - '\bpassed\s+out\b'
+    - '\bchest\s+pains?\b'
+    - '\bseizures?\b'
+    - '\bpriapism\b'
+  legal_regulatory:
+    - '\blawsuits?\b'
+    - '\bsu(?:e|ed|ing)\b'
+    - '\bclass[- ]action\b'
+    - '\battorneys?\s+general\b'
+    - '\bFDA\s+warning\b'
+    - '\bwarning\s+letter\b'
+    - '\bFTC\b'
+    - '\bcease\s+and\s+desist\b'
+    - '\bsubpoena'
+    - '\b(?:my|a|our)\s+(?:lawyer|attorney)\b'
+  privacy:
+    - '\bHIPAA\b'
+    - '\bshared\s+my\s+(?:data|info|information|health\s+(?:data|info|information))\b'
+    - '\bsold\s+my\s+(?:data|info|information)\b'
+    - '\bleak(?:ed|s)?\b'
+    - '\bdata\s+breach\b'
+    - '\bprivacy\s+violation\b'
+  billing_fraud:
+    - '\bscam(?:med|mers?)?\b'
+    - '\bfraud(?:ulent)?\b'
+    - '\bcharge\s?backs?\b'
+    - '\bcharged\s+(?:me\s+)?without\b'
+    - '\bunauthori[sz]ed\s+(?:charges?|transactions?|payments?)\b'
+    - '\bdouble[- ]charged\b'
+    - '\bstole\s+my\s+money\b'

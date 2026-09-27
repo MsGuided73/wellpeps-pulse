@@ -14,14 +14,15 @@ Pulse never posts on its own, and nothing clinical is ever auto-published.
 
 ## Status
 
-**Phase 1 skeleton.** Harvey's sales functionality is gone. What's here:
+**Phase 2 complete.** Harvey's sales functionality is gone. What's here:
 
 - a data layer with mentions, triage, drafts, escalations, and an append-only audit log
-- config
+- config, plus WellPeps knowledge in `config/*.yaml` (competitors, products, keywords, compliance rules, a seed claims library pending sign-off)
+- a deterministic compliance filter for draft replies (`harvey/compliance.py`)
 - a heartbeat loop that starts, logs, and idles
 - a local dashboard with a mention feed and Claude usage
 
-Collectors, triage, drafting, compliance, escalation paging, auth, and briefs
+Collectors, triage, drafting, escalation paging, auth, and briefs
 arrive in later phases. The full roadmap is in [docs/PLAN.md](docs/PLAN.md).
 
 ## Quick start

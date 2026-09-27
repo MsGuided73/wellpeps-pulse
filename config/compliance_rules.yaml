@@ -1,0 +1,163 @@
+# Source: C:\dev\hyperagents\wellpeps\registry\reply-compliance-rules.md R1-R39
+#         (registry built 2026-09-27; that file cites the WellPeps playbook,
+#         compliance spec, cheat sheet and social calendar).
+# Generated: 2026-09-27 for WellPeps Pulse Phase 2.
+# Deterministic reply filter config for harvey/compliance.py.
+# Do not add internal costs or partner pharmacy names here.
+#
+# All patterns are Python regexes, compiled case-insensitive. Use (?-i:...) for a
+# case-sensitive span. Every entry cites the rule id it encodes.
+#   prohibited            -> RED (hard block; never draft/publish)
+#   patient_confirmation  -> RED (R31: never confirm someone is a patient)
+#   yellow                -> needs human compliance review (R10 tiering), ok=True
+# unless_toggle: the entry is skipped when that toggle is true.
+# Rules that are process-only or need context the filter cannot see (R1, R3-R6,
+# R9, R26, R27 in full, R33 in full, R35, R36) are enforced elsewhere (triage,
+# reviewer, human approval); see docs.
+
+toggles:
+  forbid_medication_names_in_replies: true   # R38 (open item: confirm scope after Month 1)
+  allow_certification_claims: false         # R12 (LegitScript certification pending)
+
+limits:
+  max_links: 1                    # R6 / R35: no link in every reply; one at most
+  max_hashtags:                   # R37: at most 5; none on Reddit
+    default: 5
+    reddit: 0
+  max_chars:
+    default: 1000
+    reddit: 1500
+    instagram: 2200
+    facebook: 8000
+
+prohibited:
+  # --- R2: approved, disclosed identities; the AI never poses as a clinician or customer
+  - {id: R2, pattern: '(?:,|\s-|—|–)\s*(?:(?-i:MD|RN|NP|PA-C|PharmD)(?![\w-])|M\.D\.)', reason: "clinical credential sign-off; drafts must not carry MD/RN/NP titles", source: "R2 ([PB] §04-05)"}
+  - {id: R2, pattern: '(?-i:\bDr\.?\s+[A-Z][a-z]+)', reason: "Dr. title in a reply; the AI never signs as a doctor", source: "R2 ([PB] §04)"}
+  - {id: R2, pattern: '\b(?:I.m|I\s+am)\s+(?:a|an|your)\s+(?:doctor|physician|nurse|pharmacist|clinician|MD|medical\s+provider)\b|\bas\s+a\s+(?:doctor|physician|nurse|pharmacist|clinician|medical\s+professional)\b', reason: "claims a clinical identity", source: "R2 ([PB] §04)"}
+  - {id: R2, pattern: '\b(?:I.m|I\s+am)\s+(?:just\s+)?(?:a\s+)?(?:happy|satisfied|real|regular|independent)\s+(?:customer|patient|user)\b|\b(?:I.m|I\s+am)\s+not\s+(?:affiliated|sponsored|paid)\b', reason: "poses as an independent customer (astroturfing)", source: "R2 ([PB] §05, §14 RED)"}
+
+  # --- R8: pre-certification CTA limits
+  - {id: R8, pattern: '\bstart\s+(?:your|an|the|a)\s+(?:free\s+|online\s+)?assessment\b', reason: 'pre-certification: never "Start your assessment"', source: "R8 ([SC] Assessment links)"}
+  - {id: R8, pattern: '\bwellpeps\.com/\S*(?:assessment|intake|checkout|get-started|cart|buy)', reason: "social links go to Why WellPeps or a Learning Center article only", source: "R8 ([SC]; [CS] Rule 14)"}
+
+  # --- R10 (escalated): competitor disparagement
+  - {id: R10, pattern: '\b(?:scam(?:my|mers?)?|rip[- ]?off|fraud(?:ulent|sters?)?|shady|sketchy|predatory|snake[- ]oil|garbage|trash|avoid\s+(?:them|that\s+company|those\s+guys))\b', reason: "competitor disparagement; comparisons are YELLOW at best, attacks are blocked", source: "R10 ([CS] Rule 14) + R5 (hostile threads)"}
+
+  # --- R11: pricing claims held until after certification
+  - {id: R11, pattern: '\blabs?\s+(?:are\s+|is\s+)?included\b', reason: '"Labs included" is a pricing claim held until after certification', source: "R11 ([SC] Labs / pricing)"}
+
+  # --- R12: certification status (toggle-controlled) and pharmacy accreditation
+  - {id: R12, pattern: '\b(?:LegitScript|NABP)[- ](?:certified|certification|approved|accredited|verified)\b', reason: "LegitScript certification is pending", source: "R12 ([PB] §07, §14; [CS] Rule 11)", unless_toggle: allow_certification_claims}
+  - {id: R12, pattern: '\b(?:certified|accredited|verified|approved)\s+by\s+(?:LegitScript|NABP)\b', reason: "LegitScript certification is pending", source: "R12", unless_toggle: allow_certification_claims}
+  - {id: R12, pattern: '\bcertification[- ]pending\b|\bpending\s+(?:LegitScript\s+)?certification\b', reason: "certification-pending wording implies certification", source: "R12"}
+  - {id: R12, pattern: '\bpharmac(?:y|ies)\s+(?:is|are)\s+(?:fully\s+)?(?:certified|accredited)\b', reason: "partner pharmacy certification not confirmed", source: "R12 ([REG])", unless_toggle: allow_certification_claims}
+  - {id: R12, pattern: '\bFDA[- ]?(?:approved|certified|registered|licensed)\s+(?:pharmac(?:y|ies)|compounding|compounders?)\b', reason: "pharmacies are not FDA-approved; false accreditation claim", source: "R12 + R27"}
+
+  # --- R13: promised outcomes
+  - {id: R13, pattern: '\bguarantee(?:d|s)?\b', reason: "guaranteed outcome", source: "R13 ([CS] Rule 1)"}
+  - {id: R13, pattern: '\b(?:lose|drop|shed|losing|dropping)\s+(?:up\s+to\s+)?\d+(?:\.\d+)?\s*(?:%|(?:lbs?|pounds|kg|kilos|percent|(?:pant\s+|dress\s+)?sizes?)\b)', reason: "promised weight-loss amount", source: "R13 + R17 ([CS] Rule 1, 5)"}
+  - {id: R13, pattern: '\b(?:rapid|fast|quick|effortless|easy)\s+weight[- ]loss\b', reason: "rapid/effortless weight loss", source: "R13"}
+  - {id: R13, pattern: '\bfat[- ]burn(?:ing|ers?)?\b|\bburns?\s+fat\b', reason: "fat-burning claim", source: "R13"}
+  - {id: R13, pattern: '\banti[- ]aging\b|\blongevity\b|\bdetox(?:ify|ification)?\b', reason: "anti-aging / longevity / detox claim", source: "R13 + R18 ([CS] Rule 6)"}
+  - {id: R13, pattern: '\b(?:immune|immunity)\s+boost|\bboosts?\s+(?:your\s+)?(?:energy|immunity|immune\s+system|metabolism|testosterone|mood)\b', reason: "boost claim", source: "R13"}
+  - {id: R13, pattern: '\b(?:more\s+energy|mental\s+clarity|better\s+(?:mood|sleep)|faster\s+(?:healing|recovery)|muscle[- ]building|build\s+muscle)\b', reason: "wellness outcome claim", source: "R13"}
+  - {id: R13, pattern: '\b(?:restore[sd]?|restoring|reverse[sd]?|reversing)\s+(?:your\s+)?(?:libido|youth|hair|hairline|aging)\b', reason: "restoration claim", source: "R13"}
+
+  # --- R14: banned words
+  - {id: R14, pattern: '\bclinically\s+proven\b', reason: 'banned word "clinically proven"', source: "R14 ([CS] Rule 1; [CHS] §2)"}
+  - {id: R14, pattern: '\bproven\s+to\b', reason: 'banned word "proven to"', source: "R14"}
+  - {id: R14, pattern: '\b(?:dramatic(?:ally)?|breakthrough|miracle|game[- ]chang(?:ing|er))\b', reason: "banned hype word", source: "R14"}
+  - {id: R14, pattern: '\brisk[- ]free\b|\bside[- ]effect[- ]free\b|\bno\s+side[- ]effects?\b', reason: "risk-free / no side effects", source: "R14 ([PB] §14 RED)"}
+  - {id: R14, pattern: '\bwill\s+(?:improve|restore|reverse)\b', reason: 'banned "will improve / restore / reverse"', source: "R14"}
+  - {id: R14, pattern: '\b(?:really|actually|definitely|totally|100%)\s+works?\b|\bworks\s+(?:wonders|every\s+time|for\s+everyone|like\s+magic)\b', reason: 'efficacy use of "works"', source: "R14"}
+  - {id: R14, pattern: '\b(?:completely|totally|perfectly|absolutely|entirely)\s+safe\b|100%\s+safe\b|\bsafe\s+(?:and\s+effective|for\s+everyone)\b', reason: '"safe" as an absolute', source: "R14"}
+
+  # --- R15 / R16: FDA status and sameness
+  - {id: R15, pattern: '\bgeneric\s+(?:Ozempic|Wegovy|Mounjaro|Zepbound|Rybelsus|Viagra|Cialis|Propecia|Rogaine|semaglutide|tirzepatide)\b', reason: 'compounded is never "generic" of a brand', source: "R15 ([CS] Rule 4; [CHS] §4)"}
+  - {id: R15, pattern: '\bsame\s+(?:active\s+ingredients?|ingredients?\s+as|(?:medication|drug|formula|molecule)\s+as)\b', reason: '"same active ingredient" sameness claim (FDA warning-letter language)', source: "R15 ([CHS] §4)"}
+  - {id: R15, pattern: '\b(?:the\s+same\s+as|identical\s+to|equivalent\s+to|essentially\s+(?:a\s+copy\s+of|the\s+same\s+as))\s+(?:the\s+)?(?:brand|Ozempic|Wegovy|Mounjaro|Zepbound|Rybelsus|Viagra|Cialis)\b', reason: "equivalence to a branded drug", source: "R15"}
+  - {id: R15, pattern: '\bcompounded\b[^.!?]{0,80}?(?<!\bnot\s)(?<!n.t\s)(?<!never\s)\bFDA[- ]?(?:approved|cleared)\b', reason: "implies a compounded medication is FDA-approved", source: "R15 ([CS] Rule 4)"}
+  - {id: R15, pattern: '\bFDA[- ]?(?:approved|cleared)\s+compounded\b', reason: "implies a compounded medication is FDA-approved", source: "R15"}
+  - {id: R15, pattern: '\bcompounded\b[^.!?]{0,60}?\b(?:safer|better|stronger|more\s+(?:effective|personali[sz]ed)|just\s+as\s+(?:good|effective|safe))\b', reason: "compounded presented as safer/better/equivalent", source: "R15"}
+  - {id: R16, pattern: '\b(?:WellPeps|our)(?:.s)?\s+(?:Ozempic|Wegovy|Mounjaro|Zepbound|Rybelsus|Viagra|Cialis|Rogaine|Propecia)\b', reason: "brand name used as a WellPeps product", source: "R16 ([CS] Rule 4-5)"}
+
+  # --- R17: universality and additive claims
+  - {id: R17, pattern: '\b(?:right|perfect|safe)\s+for\s+everyone\b|\beveryone\s+qualifies\b', reason: "treatment presented as right for everyone", source: "R17 ([CS] Rule 5)"}
+  - {id: R17, pattern: '\b(?:B12|B6|glycine|L-carnitine|levocarnitine|niacinamide)\b[^.!?]{0,40}?\b(?:boosts?|enhances?|amplif(?:y|ies)|more\s+effective|work\s+better|works\s+better)\b', reason: "additives claimed to make GLP-1s work better", source: "R17 ([CS] Rule 10)"}
+
+  # --- R18: Healthy Aging line: never say WellPeps offers it (pre-certification)
+  - {id: R18, pattern: '\b(?:we|WellPeps)\s+(?:now\s+)?(?:offers?|provides?|carry|carries|sells?)\s+(?:NAD\+?|glutathione|sermorelin|MIC(?:\s*\+\s*B12)?|Lipo-C|methylene\s+blue)', reason: "pre-certification: explain the molecule, never say WellPeps offers it", source: "R18 ([SC] Compounded products)"}
+
+  # --- R19: Tier 3 peptides and performance framing
+  - {id: R19, pattern: '\b(?:we|WellPeps)\s+(?:now\s+)?(?:offers?|provides?|carry|carries|sells?|prescribes?|recommends?)\b[^.!?]{0,30}?(?:BPC-?157|TB-?500|CJC-?1295|ipamorelin|AOD-?9604|Melanotan|Selank|Semax|KPV|DSIP|Epitalon|MOTS-?c|thymosin|LL-?37|DiHexa|PEG-?MGF|GHRP-?[26]|GHK-?Cu|HGH|somatropin|MK-?677|retatrutide)', reason: "Tier 3 peptide presented as a WellPeps treatment", source: "R19 ([CHS] §1)"}
+  - {id: R19, pattern: '\b(?:now\s+legal|FDA[- ]cleared|approved\s+for\s+compounding)\b', reason: "false regulatory status for peptides", source: "R19"}
+  - {id: R19, pattern: '\b(?:athletic|sports?)\s+performance\b|\bperformance[- ]enhanc(?:ing|ers?|ement)\b', reason: "athletic-performance framing", source: "R19 ([CHS] §7)"}
+
+  # --- R20: sexual wellness
+  - {id: R20, pattern: '\b(?:harder|stronger|longer[- ]lasting|bigger|firmer)\s+erections?\b|\blast(?:s|ing)?\s+(?:longer|all\s+night|for\s+hours)\b', reason: "erection / stamina promise", source: "R20 ([CS] Rule 8)"}
+  - {id: R20, pattern: '\b(?:better|improved?|enhanced?|boost(?:ed)?)\s+(?:sexual\s+)?(?:performance|stamina|libido|sex\s+drive)\b', reason: "performance / libido claim", source: "R20 + R13"}
+  - {id: R20, pattern: '\bwork(?:s|ing)?\s+without\s+(?:any\s+)?(?:sexual\s+)?stimulation\b', reason: "implies PDE5 inhibitors work without stimulation", source: "R20"}
+  - {id: R20, pattern: '\b(?:fine|safe|ok|okay)\s+(?:to\s+take\s+)?with\s+nitrates\b|\bnitrates\s+(?:are|is)\s+(?:fine|ok|okay|not\s+a\s+problem)\b', reason: "minimizes a contraindication", source: "R20"}
+
+  # --- R21: hair
+  - {id: R21, pattern: '\bfull\s+head\s+of\s+hair\b|\beveryone\s+(?:responds|sees\s+results|regrows)\b', reason: "hair regrowth promise", source: "R21 ([CS] Rule 7)"}
+  - {id: R21, pattern: '\bhair\s+(?:restoration|treatments?|loss\s+treatments?)\s+(?:is|are)\s+(?:now\s+)?(?:available|live)\b', reason: 'pre-certification hair is only "on the way"', source: "R21 ([SC] Hair Restoration)"}
+
+  # --- R22: prescribing language
+  - {id: R22, pattern: '\bget\s+prescribed\b', reason: '"get prescribed X"', source: "R22 ([CS] Rule 2-3)"}
+  - {id: R22, pattern: '\bno\s+(?:doctor|provider|physician)(?:.s)?\s+(?:visit|appointment|consult(?:ation)?)\s+(?:needed|required|necessary)\b', reason: '"no doctor visit needed"', source: "R22"}
+  - {id: R22, pattern: '\bapproved\s+in\s+(?:minutes|seconds|an?\s+hour|\d+\s*(?:min|minutes|hours?))\b', reason: '"approved in minutes"', source: "R22"}
+  - {id: R22, pattern: '\bguaranteed?\s+(?:prescription|approval|Rx)\b', reason: "guaranteed prescription", source: "R22"}
+  - {id: R22, pattern: '\bour\s+(?:doctors|physicians|MDs)\b|\b(?:physician|doctor)\s+review(?:ed)?\b', reason: 'say "licensed healthcare provider", not "our doctors"', source: "R22"}
+
+  # --- R23: WellPeps' role
+  - {id: R23, pattern: '\bour\s+(?:pharmacy|pharmacists|compounding)\b|\bwe\s+(?:compound|manufacture|prescribe|dispense)\b|\bWellPeps\s+(?:ships|compounds|manufactures|prescribes|dispenses)\b|\bwe\s+ship\s+your\s+(?:medication|meds|prescription)\b', reason: "WellPeps is a telehealth platform, not the pharmacy or prescriber", source: "R23 ([CS] Rule 11)"}
+
+  # --- R24: testimonials / before-after
+  - {id: R24, pattern: '\bbefore\s*(?:and|&|/|-)\s*afters?\b', reason: "before/after content", source: "R24 ([CS] Rule 10; [PB] §14)"}
+  - {id: R24, pattern: '\b(?:our|WellPeps|my|his|her)\s+(?:patients?|members?|customers?|clients?)\s+(?:have\s+|has\s+)?(?:lost|dropped|shed)\b|\b(?:I|we)\s+(?:lost|dropped|shed)\s+\d+', reason: "quoted patient outcome / testimonial", source: "R24"}
+
+  # --- R25: disguised promotion
+  - {id: R25, pattern: '\bsign\s+up\s+(?:here|now|today|at)\b|\buse\s+(?:my|our|the)\s+(?:code|promo(?:\s+code)?|discount\s+code)\b|\bpromo\s+code\b|\bcoupon\b|\$\d+\s+off\b', reason: "sales pitch / promo in a community reply", source: "R25 ([PB] §05, §07, §14)"}
+
+  # --- R28: labs
+  - {id: R28, pattern: '\b(?:lab\s+(?:panel|test|kit)s?|at-home\s+(?:test|kit)s?|test\s+kits?|blood\s+tests?)\b[^.!?]{0,40}?(?<!\bnot\s)(?<!n.t\s)\bFDA[- ]?approved\b', reason: 'lab panels / at-home kits are never "FDA approved"', source: "R28 ([LA] FDA Status)"}
+
+  # --- R29: Made in America
+  - {id: R29, pattern: '\ball\s+(?:our\s+|of\s+our\s+)?(?:medications?|meds|products)\s+(?:are\s+)?(?:made|sourced|manufactured|compounded)\s+in\b', reason: 'never "all medications" made/sourced in the U.S.', source: "R29 ([SC] Made in America)"}
+  - {id: R29, pattern: '\bmade\s+in\s+(?:America|the\s+USA|the\s+U\.S\.)(?![\s\S]*\bwhen\s+applicable\b)', reason: '"Made in America" needs the approved "When applicable" qualifier', source: "R29"}
+
+  # --- R30: individual dosing / clinical advice (escalate, never reply)
+  - {id: R30, pattern: '\b\d+(?:\.\d+)?\s?(?:mg|mcg|ml|units?|iu|cc)\b', reason: "dose amount in a reply; dosing questions go to clinical escalation", source: "R30 ([PB] §04 step 7, §13)"}
+  - {id: R30, pattern: '\byou\s+should\s+(?:take|stop|start|increase|decrease|lower|raise|double|skip|switch|inject)\b', reason: "individual treatment recommendation", source: "R30 + R9"}
+  - {id: R30, pattern: '\b(?:increase|decrease|lower|raise|titrate|double)\s+(?:your|the)\s+dos(?:e|age)\b', reason: "dosing instruction", source: "R30"}
+
+  # --- R32: never collect health information
+  - {id: R32, pattern: '\bwhat(?:.s|\s+is)\s+your\s+(?:current\s+|starting\s+)?(?:weight|BMI|A1C|dose|dosage|diagnosis)\b|\bwhat\s+(?:medications?|meds|conditions?)\s+(?:are\s+you|do\s+you)\b', reason: "asks for health information in public", source: "R32 (inferred from R9/R30, [CHS] §9)"}
+  - {id: R32, pattern: '\b(?:send|DM|message)\s+(?:us|me)\s+(?:a\s+|your\s+)?(?:photos?|pics?|pictures?|meds|medications?|labs?|lab\s+results|weight|health\s+details)\b', reason: "asks for health information or photos", source: "R32"}
+
+  # --- R37: hashtags WellPeps must never use
+  - {id: R37, pattern: '#(?:ozempic|semaglutide|tirzepatide|weightlossjourney)\b', reason: "banned hashtag", source: "R37 ([SC] Hashtags)"}
+
+  # --- R39: urgency / countdown language
+  - {id: R39, pattern: '\b(?:spots?\s+(?:are\s+)?(?:limited|filling)|limited[- ]time|limited\s+(?:spots|availability|supply)|today\s+only|act\s+(?:now|fast)|hurry|while\s+(?:supplies|spots)\s+last|ends\s+(?:tonight|today|soon|at\s+midnight)|last\s+chance|don.?t\s+miss\s+out|only\s+\d+\s+(?:spots|left))\b', reason: "urgency language", source: "R39 (LegitScript Enterprise Fact Sheet p.2)"}
+
+patient_confirmation:
+  - {id: R31, pattern: '\byour\s+(?:order|orders|prescription|prescriptions|Rx|account|shipment|package|refill|refills|chart|medical\s+records?|records|intake|treatment\s+plan|care\s+team|provider|WellPeps\s+provider|lab\s+results)\b', reason: "references the person's account, order, prescription or provider", source: "R31 ([CHS] §9; inferred)"}
+  - {id: R31, pattern: '\bas\s+(?:our|a\s+WellPeps)\s+(?:patient|customer|member|client)\b', reason: "confirms patient status", source: "R31"}
+  - {id: R31, pattern: '\b(?:you.re|you\s+are)\s+(?:a|an|one\s+of\s+our)\s+(?:existing\s+|current\s+)?(?:WellPeps\s+)?(?:patients?|customers?|members?|clients?)\b', reason: "confirms patient status", source: "R31"}
+  - {id: R31, pattern: '\bwe\s+(?:can\s+)?(?:see|noticed|checked|reviewed|looked\s+(?:at|into))\s+(?:that\s+)?(?:you|your)\b', reason: "implies access to the person's records", source: "R31"}
+  - {id: R31, pattern: '\b(?:our|the)\s+records\s+show\b|\bin\s+our\s+(?:system|records)\b|\bwe\s+(?:have|received)\s+your\b', reason: "implies access to the person's records", source: "R31"}
+
+yellow:
+  - {id: R10, pattern: '\$\s?\d', reason: "price mentioned (R11: approved pricing and contexts only)", source: "R10 + R11"}
+  - {id: R10, pattern: '\bcompound(?:ed|ing)\b', reason: "compounded-drug discussion", source: "R10 ([CS] Rule 14)"}
+  - {id: R10, pattern: '\b(?:vs|versus|compared\s+(?:to|with)|comparison|better\s+than|cheaper\s+than|worse\s+than|switch(?:ed|ing)?\s+(?:from|to))\b', reason: "competitor / treatment comparison", source: "R10"}
+  - {id: R10, pattern: '\b(?:weight[- ]loss|lose\s+weight|efficacy|effective(?:ness)?|results?)\b', reason: "weight-loss or efficacy topic", source: "R10"}
+  - {id: R10, pattern: '\b(?:get\s+started|book\s+(?:a|your)|schedule\s+(?:a|your)|assessment|enroll|join\s+(?:now|today|WellPeps))\b', reason: "treatment-specific CTA", source: "R10 + R8"}
+  - {id: R10, pattern: '\b(?:testimonials?|my\s+(?:experience|results|journey)|I\s+(?:took|take|was\s+on|am\s+on|started|tried))\b', reason: "testimonial / personal medication experience", source: "R10 + R24"}
+  - {id: R12, pattern: '\bLegitScript\b', reason: "any LegitScript mention needs review while certification is pending", source: "R12"}
+  - {id: R27, pattern: '\d+(?:\.\d+)?\s?%|\bstud(?:y|ies)\s+(?:show|shows|found|prove|proves)\b', reason: "statistic or study citation must come from approved material", source: "R27 + R17"}
+  - {id: R31, pattern: '\b(?:DM|message|inbox)\s+(?:us|me)\b|\bsend\s+(?:us|me)\s+a\s+(?:DM|message)\b|\breach\s+out\s+privately\b', reason: "private-channel invitation; no unsolicited DMs (R6)", source: "R31 + R6"}
+  - {id: R33, pattern: '\b(?:teens?|teenagers?|minors?|under\s+18|high\s+school(?:ers?)?|1[3-7]\s*(?:yo|y/o|years?\s+old))\b', reason: "possible minor; no weight-loss or muscle engagement with under-18s", source: "R33 ([CHS] §5-6)"}

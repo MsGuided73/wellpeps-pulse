@@ -1,0 +1,435 @@
+# Source: C:\dev\hyperagents\wellpeps\registry\competitors.md (registry built 2026-09-27)
+# Generated: 2026-09-27 for WellPeps Pulse Phase 2.
+# Public-facing competitor facts only. Do not add internal costs, prices WellPeps
+# pays, or the names of WellPeps' own pharmacy / platform partners (those are not
+# competitors and must not be listed here).
+#
+# Fields: name, aliases[], categories[], website (or null), handles[] (only handles
+# the registry records), complaint_themes[], tier.
+# tier: multi-category | weight | sexual | hair | hormones | peptides | lab
+# categories: weight | sexual | hair | hormones | peptides | lab
+# Most aliases/misspellings are inferred in the registry; noisy single-word aliases
+# (Ro, Found, Eden, Rex, Hone, Keeps, Sequence) need product context in triage.
+# Excluded on purpose (registry "not consumer competitors"): design references,
+# white-label telehealth vendors, pharmacy benchmarks, and WellPeps' partners.
+
+competitors:
+  # --- Tier A: multi-category DTC leaders ---------------------------------
+  - name: Hims & Hers
+    aliases: [Hims, Hers, Hims and Hers, hers weight loss, forhims, forhers, hims.com, Hims Hard Mints, Hims GLP-1, Him's, Hymns]
+    categories: [weight, sexual, hair, hormones]
+    website: hims.com
+    handles: []
+    complaint_themes:
+      - FDA warning letter over "same active ingredient" and "clinically proven" claims
+      - Super Bowl ad criticised for omitting risk information
+      - Novo lawsuit settled; stopped compounded GLP-1 (Mar 2026)
+      - FTC and state suits over subscription and health-data practices
+      - intro price steps up from $39 to ~$149
+      - shipped cycles non-refundable
+      - ads read as body-shaming
+    tier: multi-category
+  - name: Ro
+    aliases: [Ro Health, Ro Body, Roman, Roman ED, Ro Sparks, Daily Rise, Ro Mane, Modern Fertility, ro.co, getroman]
+    categories: [weight, sexual, hair, lab]
+    website: ro.co
+    handles: []
+    complaint_themes:
+      - no transparent pricing before commitment
+      - celebrity "selling slim" critique
+      - exited compounded GLP-1 (Jul 2026)
+      - intro price steps up from $39 to $149
+    tier: multi-category
+  - name: Henry Meds
+    aliases: [Henry, HenryMeds, henrymeds.com, Henry Meds semaglutide, Henrymed, Henry Med's]
+    categories: [weight, hormones]
+    website: henrymeds.com
+    handles: []
+    complaint_themes:
+      - Eli Lilly lawsuit over "personalized" compounded tirzepatide claims
+      - mass arbitration over advertising and billing
+      - BBB F rating; auto-renewal billing complaints
+      - TV spots cited for inadequate risk disclosure
+      - thin clinical follow-up and slow support
+    tier: multi-category
+  - name: Eden
+    aliases: [Eden Health, tryeden, Try Eden, Eden GLP-1]
+    categories: [weight, peptides, hair]
+    website: tryeden.com
+    handles: []
+    complaint_themes:
+      - FDA warning letter (June 2026)
+      - named in NCL FTC petition
+      - BBB F rating
+      - no refunds once shipped
+      - undisclosed paid creators / affiliate codes
+    tier: multi-category
+  - name: Ivím Health
+    aliases: [Ivim, Ivím, Ivim Health, ivimhealth, Ivym, Ivem]
+    categories: [weight, peptides]
+    website: ivimhealth.com
+    handles: []
+    complaint_themes:
+      - FDA warning letter (Feb 2026)
+      - multi-month prepaid with no cancellation once started
+      - undisclosed paid creators / referral links
+    tier: multi-category
+  - name: LifeMD
+    aliases: [Life MD, LifeMD weight loss]
+    categories: [weight, sexual]
+    website: lifemd.com
+    handles: []
+    complaint_themes:
+      - intro price steps up from $39 to $149
+    tier: multi-category
+
+  # --- Tier B: weight / GLP-1 challengers ---------------------------------
+  - name: Mochi Health
+    aliases: [Mochi, joinmochi, Dr. Myra]
+    categories: [weight]
+    website: joinmochi.com
+    handles: ["@drmyramochi"]
+    complaint_themes:
+      - ad cited by state attorneys general in letter to Meta
+      - affiliated pharmacy raided by WA state
+      - labs are a paid add-on
+      - intro price steps up
+    tier: weight
+  - name: Noom Med
+    aliases: [Noom, Noom GLP-1, NoomMed]
+    categories: [weight]
+    website: noom.com
+    handles: []
+    complaint_themes:
+      - auto-renew billed up front
+    tier: weight
+  - name: Found
+    aliases: [Found Health, joinfound]
+    categories: [weight]
+    website: joinfound.com
+    handles: ["@joinfound"]
+    complaint_themes:
+      - multi-month commitment
+      - unsubstantiated side-effect claims
+    tier: weight
+  - name: Calibrate
+    aliases: [Calibrate Health, joincalibrate]
+    categories: [weight]
+    website: joincalibrate.com
+    handles: []
+    complaint_themes:
+      - 3-month minimum
+      - medication not included
+    tier: weight
+  - name: Fella Health
+    aliases: [Fella]
+    categories: [weight]
+    website: fellahealth.com
+    handles: []
+    complaint_themes:
+      - UK ad amended after regulator action
+    tier: weight
+  - name: Fridays
+    aliases: [Join Fridays, joinfridays, Fridays GLP-1]
+    categories: [weight]
+    website: joinfridays.com
+    handles: []
+    complaint_themes:
+      - brand rep posts unprofessional content and blocks critics
+      - unsubstantiated success-rate claims
+      - undisclosed affiliate codes
+    tier: weight
+  - name: OrderlyMeds
+    aliases: [Orderly Meds, Orderly]
+    categories: [weight]
+    website: orderlymeds.com
+    handles: []
+    complaint_themes:
+      - '"same active ingredient" claims under law-firm investigation'
+    tier: weight
+  - name: Willow
+    aliases: [Willow Health]
+    categories: [weight]
+    website: null
+    handles: []
+    complaint_themes:
+      - pant-size ad hooks cited by attorneys general
+      - stock-photo fake testimonials
+    tier: weight
+  - name: Zealthy
+    aliases: [Zealthy GLP-1]
+    categories: [weight]
+    website: null
+    handles: []
+    complaint_themes:
+      - pricing hidden until after charge
+      - DOJ asset-freeze and receivership motion
+    tier: weight
+  - name: Emerge
+    aliases: [Emerge Health]
+    categories: [weight]
+    website: null
+    handles: []
+    complaint_themes: []
+    tier: weight
+  - name: Form Health
+    aliases: []
+    categories: [weight]
+    website: null
+    handles: []
+    complaint_themes: []
+    tier: weight
+  - name: WeightWatchers Clinic
+    aliases: [WeightWatchers, WW, WW Clinic, WeightWatchers Med+, Sequence]
+    categories: [weight]
+    website: weightwatchers.com
+    handles: []
+    complaint_themes:
+      - medication not included
+    tier: weight
+  - name: Sesame
+    aliases: [Sesame Care, Costco Wegovy]
+    categories: [weight]
+    website: null
+    handles: []
+    complaint_themes: []
+    tier: weight
+  - name: NovoCare Pharmacy
+    aliases: [NovoCare, Wegovy self-pay]
+    categories: [weight]
+    website: novocare.com
+    handles: []
+    complaint_themes:
+      - not a telehealth; no provider
+    tier: weight
+  - name: LillyDirect
+    aliases: [Lilly Direct, Zepbound vials]
+    categories: [weight]
+    website: zepbound.lilly.com
+    handles: []
+    complaint_themes:
+      - not a telehealth; no provider
+    tier: weight
+  - name: IvyRx
+    aliases: []
+    categories: [weight]
+    website: null
+    handles: []
+    complaint_themes: []
+    tier: weight
+  - name: MEDVi
+    aliases: []
+    categories: [weight]
+    website: null
+    handles: []
+    complaint_themes: []
+    tier: weight
+  - name: ShedRx
+    aliases: [Shed Rx]
+    categories: [weight]
+    website: null
+    handles: []
+    complaint_themes: []
+    tier: weight
+
+  # --- Tier C: sexual wellness --------------------------------------------
+  - name: BlueChew
+    aliases: [Blue Chew, BlueChew MAX, blue chews]
+    categories: [sexual]
+    website: bluechew.com
+    handles: []
+    complaint_themes:
+      - FDA warning letter for "same active ingredients" claims
+      - free-trial fine print
+      - pixel health-data lawsuit
+    tier: sexual
+  - name: Rex MD
+    aliases: [RexMD, Rex]
+    categories: [sexual]
+    website: rexmd.com
+    handles: []
+    complaint_themes:
+      - '"one-time price" converts to a subscription'
+    tier: sexual
+  - name: Lemonaid Health
+    aliases: [Lemonaid, Lemonade Health]
+    categories: [sexual]
+    website: lemonaidhealth.com
+    handles: []
+    complaint_themes: []
+    tier: sexual
+  - name: Hello Cake
+    aliases: [Cake ED meds]
+    categories: [sexual]
+    website: hellocake.com
+    handles: []
+    complaint_themes: []
+    tier: sexual
+  - name: Strut Health
+    aliases: [Strut]
+    categories: [sexual, hair]
+    website: struthealth.com
+    handles: []
+    complaint_themes:
+      - fee if prescription is transferred out
+    tier: sexual
+
+  # --- Tier D: hair restoration -------------------------------------------
+  - name: Keeps
+    aliases: [Keeps hair]
+    categories: [hair]
+    website: keeps.com
+    handles: []
+    complaint_themes:
+      - charges a shipping fee
+    tier: hair
+  - name: Happy Head
+    aliases: [HappyHead, ProBlend]
+    categories: [hair]
+    website: happyhead.com
+    handles: []
+    complaint_themes: []
+    tier: hair
+  - name: XYON
+    aliases: [Xyon Health]
+    categories: [hair]
+    website: xyonhealth.com
+    handles: []
+    complaint_themes: []
+    tier: hair
+
+  # --- Tier E: testosterone / hormones ------------------------------------
+  - name: Hone Health
+    aliases: [Hone]
+    categories: [hormones, peptides, lab]
+    website: honehealth.com
+    handles: []
+    complaint_themes:
+      - named for marketing TRT to veterans
+    tier: hormones
+  - name: Maximus
+    aliases: [Maximus Tribe]
+    categories: [hormones, lab]
+    website: maximustribe.com
+    handles: []
+    complaint_themes:
+      - BBB F rating
+      - shipping and billing complaints
+      - labs charged separately
+    tier: hormones
+  - name: Joi + Blokes
+    aliases: [Joi, Blokes, Joi and Blokes]
+    categories: [hormones]
+    website: null
+    handles: []
+    complaint_themes: []
+    tier: hormones
+  - name: Marek Health
+    aliases: [Marek, Marek Diagnostics, MPMD, More Plates More Dates]
+    categories: [hormones, lab]
+    website: marekdiagnostics.com
+    handles: [moreplatesmoredates]
+    complaint_themes:
+      - labs charged separately
+    tier: hormones
+  - name: Fountain TRT
+    aliases: [Fountain]
+    categories: [hormones]
+    website: null
+    handles: []
+    complaint_themes: []
+    tier: hormones
+  - name: TRT Nation
+    aliases: []
+    categories: [hormones]
+    website: null
+    handles: []
+    complaint_themes:
+      - lab-upsell complaints
+    tier: hormones
+  - name: Peter MD
+    aliases: [PeterMD, Get Peter MD, getpetermd]
+    categories: [hormones, lab]
+    website: getpetermd.com
+    handles: []
+    complaint_themes:
+      - labs and evaluation charged extra
+    tier: hormones
+  - name: Defy Medical
+    aliases: [Defy]
+    categories: [hormones]
+    website: defymedical.com
+    handles: []
+    complaint_themes:
+      - labs charged separately
+    tier: hormones
+
+  # --- Tier F: peptides / longevity / vitality ----------------------------
+  # AgelessRx: bare "Ageless" is deliberately NOT an alias (too noisy).
+  - name: AgelessRx
+    aliases: [Ageless Rx]
+    categories: [peptides, weight]
+    website: agelessrx.com
+    handles: []
+    complaint_themes: []
+    tier: peptides
+  - name: Novos
+    aliases: [NOVOS Labs]
+    categories: [peptides]
+    website: null
+    handles: ["@slowmyage", "@novoslabs"]
+    complaint_themes:
+      - unpublished internal studies
+    tier: peptides
+  - name: Elysium
+    aliases: [Elysium Health]
+    categories: [peptides]
+    website: null
+    handles: []
+    complaint_themes: []
+    tier: peptides
+  - name: Jinfiniti
+    aliases: []
+    categories: [peptides]
+    website: null
+    handles: []
+    complaint_themes: []
+    tier: peptides
+  - name: Concierge MD LA
+    aliases: []
+    categories: [peptides]
+    website: null
+    handles: []
+    complaint_themes: []
+    tier: peptides
+  - name: Peptide Sciences
+    aliases: []
+    categories: [peptides]
+    website: null
+    handles: []
+    complaint_themes:
+      - research-use-only peptide vendor targeted by FDA
+    tier: peptides
+
+# --- Tier G: lab testing (adjacent, not direct competitors) ----------------
+# Relevant because the WellPeps membership includes access to low-cost labs.
+# Complaint themes are not recorded for these in the registry.
+adjacent:
+  - {name: Function Health, aliases: [], categories: [lab], website: functionhealth.com, handles: [], complaint_themes: [], tier: lab}
+  - {name: Superpower, aliases: [], categories: [lab], website: superpower.com, handles: [], complaint_themes: [], tier: lab}
+  - {name: InsideTracker, aliases: [Inside Tracker], categories: [lab], website: store.insidetracker.com, handles: [], complaint_themes: [], tier: lab}
+  - {name: Labcorp OnDemand, aliases: [Labcorp On Demand], categories: [lab], website: ondemand.labcorp.com, handles: [], complaint_themes: [], tier: lab}
+  - {name: Quest Health, aliases: [questhealth.com], categories: [lab], website: questhealth.com, handles: [], complaint_themes: [], tier: lab}
+  - {name: Everlywell, aliases: [Everly Well], categories: [lab], website: everlywell.com, handles: [], complaint_themes: [], tier: lab}
+  - {name: LetsGetChecked, aliases: [Lets Get Checked], categories: [lab], website: letsgetchecked.com, handles: [], complaint_themes: [], tier: lab}
+  - {name: Paloma Health, aliases: [], categories: [lab], website: palomahealth.com, handles: [], complaint_themes: [], tier: lab}
+  - {name: Siphox Health, aliases: [Siphox], categories: [lab], website: siphoxhealth.com, handles: [], complaint_themes: [], tier: lab}
+  - {name: myLAB Box, aliases: [mylabbox], categories: [lab], website: mylabbox.com, handles: [], complaint_themes: [], tier: lab}
+  - {name: imaware, aliases: [], categories: [lab], website: imaware.health, handles: [], complaint_themes: [], tier: lab}
+  - {name: DiscountedLabs.com, aliases: [DiscountedLabs, Discounted Labs], categories: [lab], website: discountedlabs.com, handles: [], complaint_themes: [], tier: lab}
+  - {name: Private MD Labs, aliases: [PrivateMDLabs], categories: [lab], website: privatemdlabs.com, handles: [], complaint_themes: [], tier: lab}
+  - {name: HealthLabs.com, aliases: [HealthLabs], categories: [lab], website: healthlabs.com, handles: [], complaint_themes: [], tier: lab}
+  - {name: Life Extension, aliases: [], categories: [lab], website: lifeextension.com, handles: [], complaint_themes: [], tier: lab}
+  - {name: Ulta Lab Tests, aliases: [], categories: [lab], website: ultalabtests.com, handles: [], complaint_themes: [], tier: lab}
+  - {name: Walk-In Lab, aliases: [Walk In Lab], categories: [lab], website: walkinlab.com, handles: [], complaint_themes: [], tier: lab}
+  - {name: Getlabs / Sprinter Health, aliases: [Getlabs, Sprinter Health], categories: [lab], website: sprinterhealth.com, handles: [], complaint_themes: [], tier: lab}

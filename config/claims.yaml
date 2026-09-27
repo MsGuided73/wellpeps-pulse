@@ -1,0 +1,134 @@
+# Source: C:\dev\hyperagents\wellpeps\registry\reply-compliance-rules.md
+#         (registry built 2026-09-27). Wording below is quoted verbatim from the
+#         rules file, which quotes the WellPeps playbook / compliance spec.
+# Generated: 2026-09-27 for WellPeps Pulse Phase 2.
+# Approved Claims Library SEED. Do not add internal costs, prices WellPeps pays,
+# or partner pharmacy names.
+#
+# EVERY CLAIM NEEDS COMPLIANCE AND PHYSICIAN SIGN-OFF before it can be published.
+# Claims with approved_by: PENDING are usable only in drafts and are NEVER
+# publishable ("no claim ID, no publish"). To approve, a named compliance owner
+# sets approved_by, approved_at (YYYY-MM-DD) and, if time-limited, expires.
+# Do not invent new claim wording here; add only wording from approved material.
+#
+# Fields: id, text, products (product names from products.yaml, or ["*"]),
+# tier (green|yellow per R10), approved_by, approved_at, expires, source.
+
+claims:
+  - id: CLM-R3-DISCLOSURE
+    text: "Disclosure: I work with WellPeps, so I am not neutral."
+    products: ["*"]
+    tier: green
+    approved_by: PENDING
+    approved_at: null
+    expires: null
+    source: "reply-compliance-rules.md R3 ([PB] §04-05)"
+
+  - id: CLM-R3-BIO
+    text: "Helping answer general questions about telehealth and patient education. I work with WellPeps. Not individual medical advice."
+    products: ["*"]
+    tier: green
+    approved_by: PENDING
+    approved_at: null
+    expires: null
+    source: "reply-compliance-rules.md R3 (suggested bio)"
+
+  - id: CLM-R7-PROVIDER-CHECKLIST
+    text: "A few things worth checking with any provider are whether you are actually reviewed by a licensed clinician, what follow-up is included, how dose adjustments are handled, and which pharmacy dispenses the medication."
+    products: ["*"]
+    tier: green
+    approved_by: PENDING
+    approved_at: null
+    expires: null
+    source: "reply-compliance-rules.md R7 ([PB] §05 GREEN)"
+
+  - id: CLM-R8-OFFER-LINK
+    text: "If it would be useful, I can share the link."
+    products: ["*"]
+    tier: green
+    approved_by: PENDING
+    approved_at: null
+    expires: null
+    source: "reply-compliance-rules.md R8 ([PB] §05-06)"
+
+  - id: CLM-R15-COMPOUNDED-DISCLOSURE
+    text: "Compounded medications are not FDA-approved finished drug products. A licensed healthcare provider determines whether a particular treatment and formulation may be appropriate for an individual patient."
+    products: [Compounded Semaglutide, Compounded Tirzepatide, Oral Semaglutide, Oral Tirzepatide, Sermorelin, NAD+, Glutathione, MIC + B12, Lipo-C, Methylene Blue]
+    tier: yellow
+    approved_by: PENDING
+    approved_at: null
+    expires: null
+    source: "reply-compliance-rules.md R15 ([CS] Rule 4)"
+
+  - id: CLM-R16-NOT-AFFILIATED
+    text: "WellPeps is not affiliated with the manufacturer."
+    products: ["*"]
+    tier: yellow
+    approved_by: PENDING
+    approved_at: null
+    expires: null
+    source: "reply-compliance-rules.md R16 ([CS] Rule 4-5)"
+
+  - id: CLM-R18-NAD-MECHANISM
+    text: "NAD+ is a naturally occurring coenzyme that plays an essential role in cellular energy metabolism"
+    products: [NAD+]
+    tier: yellow
+    approved_by: PENDING
+    approved_at: null
+    expires: null
+    source: "reply-compliance-rules.md R18 ([CS] Rule 6); names a molecule, so blocked while the R38 toggle is on"
+
+  - id: CLM-R22-PROVIDER-DETERMINES
+    text: "A licensed healthcare provider determines whether treatment is appropriate."
+    products: ["*"]
+    tier: green
+    approved_by: PENDING
+    approved_at: null
+    expires: null
+    source: "reply-compliance-rules.md R22 ([CS] Rule 2-3)"
+
+  - id: CLM-R28-LAB-PROCESSING
+    text: "Processed by a CLIA-certified, CAP-accredited laboratory."
+    products: ["*"]
+    tier: yellow
+    approved_by: PENDING
+    approved_at: null
+    expires: null
+    source: "reply-compliance-rules.md R28 ([LA] Summary)"
+
+  - id: CLM-R29-US-SOURCING
+    text: "When applicable, sourced from trusted U.S. pharmacies and manufacturers."
+    products: ["*"]
+    tier: yellow
+    approved_by: PENDING
+    approved_at: null
+    expires: null
+    source: "reply-compliance-rules.md R29 ([SC] Made in America)"
+
+  # --- Generic, non-clinical service statements (verbatim fragments) ---------
+  - id: CLM-R9-TALK-TO-PROVIDER
+    text: "talk to a healthcare provider"
+    products: ["*"]
+    tier: green
+    approved_by: PENDING
+    approved_at: null
+    expires: null
+    source: "reply-compliance-rules.md R9 ([SC] Community replies)"
+
+  - id: CLM-R3-NOT-MEDICAL-ADVICE
+    text: "Not individual medical advice."
+    products: ["*"]
+    tier: green
+    approved_by: PENDING
+    approved_at: null
+    expires: null
+    source: "reply-compliance-rules.md R3 (suggested bio)"
+
+  - id: CLM-R17-RESULTS-VARY
+    text: "individual results vary"
+    products: ["*"]
+    tier: yellow
+    approved_by: PENDING
+    approved_at: null
+    expires: null
+    source: "reply-compliance-rules.md R17 ([CS] Rule 5); never rescues a claim (R26)"

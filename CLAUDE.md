@@ -7,8 +7,9 @@ and drafts replies that humans review. It is **not** a sales or outreach
 tool.
 
 The roadmap and data model are in `docs/PLAN.md`. Read it before changing
-behavior. Current status: **Phase 1 skeleton**. The data layer, config,
-idle heartbeat, and minimal dashboard exist. Later phases add everything
+behavior. Current status: **Phase 2 complete**. The data layer, config, idle
+heartbeat, minimal dashboard, knowledge files (`config/*.yaml`) and the
+deterministic compliance filter (`harvey/compliance.py`) exist. Later phases add everything
 else. Don't build ahead of the phase you've been asked to do.
 
 ## Hard rules (never break these)
