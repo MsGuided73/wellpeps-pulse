@@ -18,7 +18,9 @@ usage:
   # an agent or agent.task; the more specific one wins. Unlisted calls use
   # the CLI's default model.
   models:
-    triager: haiku
+    triager: haiku        # classification: a small model is plenty
+    drafter: sonnet       # reply drafting from approved claims
+    reviewer: sonnet      # adversarial compliance review; never haiku (config rejects it)
   # Drafting and briefs pause in quiet hours. Escalations never do.
   quiet_hours:
     start: "22:00"

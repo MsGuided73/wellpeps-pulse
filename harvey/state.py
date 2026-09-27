@@ -35,6 +35,14 @@ from harvey.urls import normalize_url
 # How long (seconds) a connection waits on a locked database before failing.
 BUSY_TIMEOUT_SECONDS = 30.0
 
+# Triage categories that go to a named owner, never to the reply queue
+# (mirrors harvey.agents.triager.SEVERE_CATEGORIES; tested).
+NO_DRAFT_CATEGORIES = ("adverse_event", "legal_regulatory", "privacy", "billing_fraud")
+_DRAFTABLE_WHERE = (
+    "m.status = 'triaged' AND t.relevant = 1 AND t.reply_appropriate = 1 "
+    f"AND t.category NOT IN ({', '.join(repr(c) for c in NO_DRAFT_CATEGORIES)})"
+)
+
 # Allowed mention status transitions. Anything not listed raises ValueError.
 # Terminal states (rejected, posted, dropped) have no outgoing edges.
 ALLOWED_TRANSITIONS: dict[MentionStatus, frozenset[MentionStatus]] = {
@@ -606,6 +614,28 @@ class StateManager:
                 rows = await cursor.fetchall()
         return [self._mention_from_row(r) for r in rows]
 
+    async def list_draftable_mentions(self, limit: int = 10) -> list[Mention]:
+        """Triaged, reply-appropriate, non-severe mentions, oldest first."""
+        async with self._connect() as db:
+            db.row_factory = aiosqlite.Row
+            async with db.execute(
+                f"SELECT m.* FROM mentions m JOIN triage t ON t.mention_id = m.id "
+                f"WHERE {_DRAFTABLE_WHERE} "
+                f"ORDER BY m.collected_at ASC, m.id ASC LIMIT ?",
+                (max(int(limit), 0),),
+            ) as cursor:
+                rows = await cursor.fetchall()
+        return [self._mention_from_row(r) for r in rows]
+
+    async def count_draftable(self) -> int:
+        async with self._connect() as db:
+            async with db.execute(
+                f"SELECT COUNT(*) FROM mentions m JOIN triage t ON t.mention_id = m.id "
+                f"WHERE {_DRAFTABLE_WHERE}"
+            ) as cursor:
+                (count,) = await cursor.fetchone()
+        return count
+
     async def set_mention_status(self, mention_id: int, status: MentionStatus | str):
         """Move a mention along its lifecycle.
 
@@ -997,7 +1027,8 @@ class StateManager:
 
     async def get_state_summary(self) -> dict:
         """Mention counts per status (every status present, zero-filled),
-        open escalations, and today's Claude call count."""
+        open escalations, mentions waiting for a draft, and today's Claude
+        call count."""
         counts = {s.value: 0 for s in MentionStatus}
         async with self._connect() as db:
             async with db.execute(
@@ -1013,5 +1044,6 @@ class StateManager:
             "mentions": counts,
             "total": sum(counts.values()),
             "open_escalations": open_escalations,
+            "draftable": await self.count_draftable(),
             "usage_today": await self.get_usage_today(),
         }

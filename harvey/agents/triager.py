@@ -20,14 +20,13 @@ Flow for ``Triager.triage``:
 
 import inspect
 import logging
-import re
-import secrets
 from dataclasses import dataclass
 from typing import Awaitable, Callable, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from harvey import knowledge
+from harvey.agents import prompting
 from harvey.escalation import escalation_kind
 from harvey.models import (
     AuditEvent,
@@ -38,18 +37,16 @@ from harvey.models import (
     Triage,
     Urgency,
 )
-from harvey.paths import PROJECT_ROOT
 
 logger = logging.getLogger("harvey.agents.triager")
 
-PROMPT_PATH = PROJECT_ROOT / "prompts" / "triage.md"
+PROMPT_PATH = prompting.PROMPTS_DIR / "triage.md"
 AGENT = "triager"
 TASK = "classify"
 
 MAX_ATTEMPTS = 2           # first try + one retry
 MAX_PHRASES = 5
 MAX_PHRASE_CHARS = 120
-MAX_MENTION_CHARS = 4000   # bound prompt size; triage never needs more
 FALLBACK_REASON = "triage_failed"
 
 # Categories that go to a named human owner, never to the reply queue.
@@ -94,25 +91,18 @@ def _name_lists() -> dict[str, str]:
     }
 
 
-def _mention_block(mention: Mention) -> str:
-    text = mention.text[:MAX_MENTION_CHARS]
-    return f"Title: {mention.title}\n\n{text}" if mention.title else text
-
-
 def build_prompt(mention: Mention, nonce: str | None = None) -> str:
     """Fill prompts/triage.md for one mention.
 
     Substitution is single-pass, so placeholders inside the mention text are
     left as literal text rather than expanded.
     """
-    template = PROMPT_PATH.read_text(encoding="utf-8")
-    values = {
+    return prompting.render(PROMPT_PATH, {
         **_name_lists(),
-        "nonce": nonce or secrets.token_hex(8),
+        "nonce": nonce or prompting.new_nonce(),
         "platform": mention.platform.value,
-        "mention": _mention_block(mention),
-    }
-    return re.sub(r"\{\{(\w+)\}\}", lambda m: values.get(m.group(1), m.group(0)), template)
+        "mention": prompting.mention_block(mention),
+    })
 
 
 # --- Safety net (pure) -----------------------------------------------------------

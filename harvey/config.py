@@ -56,10 +56,13 @@ class QuietHoursConfig(BaseModel):
         return v
 
 
-# Structured-output calls where a small model is plenty. Drafting (added in a
-# later phase) stays on the default, stronger model.
+# Triage is structured classification, where a small model is plenty.
+# Drafting and the adversarial review need a stronger model; the reviewer
+# may never run on haiku (enforced below).
 DEFAULT_MODELS = {
     "triager": "haiku",
+    "drafter": "sonnet",
+    "reviewer": "sonnet",
 }
 
 
@@ -79,6 +82,15 @@ class UsageConfig(BaseModel):
         blank = [key for key, model in v.items() if not model.strip()]
         if blank:
             raise ValueError(f"models has an empty model name for: {', '.join(blank)}")
+        weak_review = [
+            key for key, model in v.items()
+            if (key == "reviewer" or key.startswith("reviewer.")) and "haiku" in model.lower()
+        ]
+        if weak_review:
+            raise ValueError(
+                f"the adversarial reviewer must not run on haiku ({', '.join(weak_review)}); "
+                "use sonnet or stronger"
+            )
         return {key: model.strip() for key, model in v.items()}
 
     @field_validator("max_daily_claude_percent")

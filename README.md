@@ -14,7 +14,7 @@ Pulse never posts on its own, and nothing clinical is ever auto-published.
 
 ## Status
 
-**Phase 5 complete.** Harvey's sales functionality is gone. What's here:
+**Phase 6 complete.** Harvey's sales functionality is gone. What's here:
 
 - a data layer with mentions, triage, drafts, escalations, and an append-only audit log
 - config, plus WellPeps knowledge in `config/*.yaml` (competitors, products, keywords, compliance rules, a seed claims library pending sign-off)
@@ -22,10 +22,11 @@ Pulse never posts on its own, and nothing clinical is ever auto-published.
 - a collector framework (`harvey/collectors/`) with a JSONL fixture collector, and `pulse ingest --fixture [DIR]` to store mentions with dedupe, run records, and `collected` audit events
 - a triage agent (`harvey/agents/triager.py`, prompt in `prompts/triage.md`) that classifies each new mention on a small model, with a deterministic keyword override that forces adverse-event, legal, privacy, and billing-fraud posts to urgent and routes them to `escalated`
 - escalations (`harvey/escalation.py`): each urgent mention gets an owner, a 15-minute SLA, and a Slack page (`harvey/notify/slack.py`) that carries a link and a category only, never post text or handles. Every heartbeat sweeps open escalations, re-pages SLA breaches (with the backup owner), and retries pages that didn't go out. `pulse escalations` lists them; `pulse ack <id> --by NAME` acknowledges one
-- a heartbeat loop that sweeps escalations and triages new mentions (both even in quiet hours), and wakes every 5 minutes while an escalation is open
+- reply drafting (`harvey/drafting.py`): a drafter (`harvey/agents/drafter.py`, `prompts/draft.md`) writes one reply per reply-appropriate mention using only approved claims (by id); the deterministic compliance filter checks it; an adversarial reviewer (`harvey/agents/reviewer.py`, `prompts/review.md`) looks for rule violations and never rewrites (skipped when the filter is red). Every draft lands in `in_review` with its tier, verdict, and a `drafted → filtered → reviewed` audit trail. Nothing is approved or posted automatically
+- a heartbeat loop that sweeps escalations and triages new mentions (both even in quiet hours), drafts when nothing is waiting for triage (not in quiet hours, within budget), and wakes every 5 minutes while an escalation is open
 - a local dashboard with a mention feed and Claude usage
 
-Real collectors, drafting, auth, and briefs
+Real collectors, the review desk (approve/edit), auth, and briefs
 arrive in later phases. The full roadmap is in [docs/PLAN.md](docs/PLAN.md).
 
 ## Quick start

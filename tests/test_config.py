@@ -27,7 +27,9 @@ def test_defaults():
     assert config.organization.name == "WellPeps"
     assert config.organization.market == "US"
     assert config.usage.heartbeat_interval_minutes == 15
-    assert config.usage.models == DEFAULT_MODELS == {"triager": "haiku"}
+    assert config.usage.models == DEFAULT_MODELS == {
+        "triager": "haiku", "drafter": "sonnet", "reviewer": "sonnet",
+    }
     assert config.escalation.sla_minutes == 15
     assert config.escalation.clinical_owner == ""
     assert config.notify.slack_webhook_env == "SLACK_WEBHOOK_URL"

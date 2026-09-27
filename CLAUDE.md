@@ -7,7 +7,7 @@ and drafts replies that humans review. It is **not** a sales or outreach
 tool.
 
 The roadmap and data model are in `docs/PLAN.md`. Read it before changing
-behavior. Current status: **Phase 5 complete**. The data layer, config, idle
+behavior. Current status: **Phase 6 complete**. The data layer, config, idle
 heartbeat, minimal dashboard, knowledge files (`config/*.yaml`) and the
 deterministic compliance filter (`harvey/compliance.py`) exist.
 - Phase 3: collector registry + JSONL fixture collector (`harvey/collectors/`)
@@ -18,6 +18,13 @@ deterministic compliance filter (`harvey/compliance.py`) exist.
   `escalation.sla_minutes`) and `harvey/notify/slack.py`. Every Slack
   message is built by `escalation.build_page`; keep it link + category only.
   The sweep runs every cycle; `pulse escalations`, `pulse ack`.
+- Phase 6: drafter (`harvey/agents/drafter.py`, `prompts/draft.md`),
+  adversarial reviewer (`harvey/agents/reviewer.py`, `prompts/review.md`),
+  shared rule list `prompts/reply_rules.md`, and `harvey/drafting.py`
+  (draft -> compliance filter -> reviewer -> `in_review`). Prompt plumbing
+  (nonce delimiters, single-pass `{{placeholders}}`) is in
+  `harvey/agents/prompting.py`. The reviewer must never run on haiku.
+  Real use is blocked until `config/claims.yaml` is compliance-signed.
 
 Later phases add everything else. Don't build ahead of the phase you've
 been asked to do.

@@ -5,8 +5,10 @@ summary, decide the next action, gate it on quiet hours (triage is exempt),
 run it with per-task error isolation, log, and sleep. While any escalation
 is open the sleep is capped at ``usage.urgent_tick_minutes`` so SLA breaches
 are re-paged promptly. Triage checks the Claude budget before every mention.
-The full step order lives in docs/PLAN.md §3; later phases add collectors,
-drafting, and briefs.
+Drafting (draft -> compliance filter -> adversarial review -> in_review)
+runs when nothing is waiting for triage, respecting quiet hours and the
+budget. The full step order lives in docs/PLAN.md §3; later phases add
+collectors and briefs.
 """
 
 import asyncio
@@ -17,9 +19,12 @@ from datetime import datetime, time, timedelta
 
 import pytz
 
+from harvey.agents.drafter import Drafter
+from harvey.agents.reviewer import Reviewer
 from harvey.agents.triager import Triager, triage_batch
 from harvey.brain import Brain
 from harvey.config import ConfigError, PulseConfig, load_config
+from harvey.drafting import draft_batch
 from harvey.escalation import SweepReport, escalate, sweep
 from harvey.notify import SlackNotifier
 from harvey.state import StateManager
@@ -38,6 +43,8 @@ ERROR_BACKOFF_CAP = 900
 QUIET_HOURS_EXEMPT = frozenset({"triage"})
 # Mentions triaged per heartbeat cycle.
 TRIAGE_BATCH_LIMIT = 25
+# Mentions drafted (and reviewed) per heartbeat cycle.
+DRAFT_BATCH_LIMIT = 10
 
 
 def in_quiet_hours(config: PulseConfig) -> bool:
@@ -78,15 +85,20 @@ async def decide_next_action(
 ) -> str:
     """Decide what the heartbeat should do next.
 
-    PLAN.md §3 order: escalation sweep -> due collectors -> triage batch ->
-    draft/filter/review -> briefs -> idle. Implemented so far: triage when
-    any mention is still ``new``, otherwise idle.
+    PLAN.md §3 order: escalation sweep (every cycle, outside this
+    decision) -> due collectors -> triage batch -> draft/filter/review ->
+    briefs -> idle. Implemented so far: triage when any mention is still
+    ``new``, else draft when triaged mentions await a reply, else idle.
     """
     if summary is None and state is not None:
         summary = await state.get_state_summary()
-    new_count = int(((summary or {}).get("mentions") or {}).get("new", 0) or 0)
+    summary = summary or {}
+    new_count = int((summary.get("mentions") or {}).get("new", 0) or 0)
+    draftable = int(summary.get("draftable", 0) or 0)
     if new_count > 0:
         action, reason = "triage", f"{new_count} new mention(s)"
+    elif draftable > 0:
+        action, reason = "draft", f"{draftable} mention(s) awaiting a draft"
     else:
         action, reason = "idle", "nothing to do"
     logger.info(f"Decision: {action} ({reason})")
@@ -134,12 +146,17 @@ async def _interruptible_sleep(seconds: float, stop_event: asyncio.Event) -> boo
 
 def _tasks_for(
     action: str, state=None, triager=None, budget_ok=None, escalate_hook=None,
+    drafter=None, reviewer=None,
 ) -> list[tuple[str, object]]:
     """Coroutines to run for an action."""
     if action == "triage" and state is not None and triager is not None:
         return [("triage", triage_batch(
             state, triager, limit=TRIAGE_BATCH_LIMIT, budget_ok=budget_ok,
             escalate=escalate_hook,
+        ))]
+    if action == "draft" and state is not None and drafter is not None and reviewer is not None:
+        return [("draft", draft_batch(
+            state, drafter, reviewer, limit=DRAFT_BATCH_LIMIT, budget_ok=budget_ok,
         ))]
     return []
 
@@ -163,6 +180,8 @@ async def heartbeat(stop_event: asyncio.Event | None = None):
     state = StateManager()
     brain = Brain(state, models=config.usage.models)
     triager = Triager(brain)
+    drafter = Drafter(brain)
+    reviewer = Reviewer(brain)
     notifier = SlackNotifier.from_config(config)
 
     await state.init_db()
@@ -194,17 +213,17 @@ async def heartbeat(stop_event: asyncio.Event | None = None):
             )
             decided = await decide_next_action(brain, state, config, summary=summary)
 
-            # 2. Quiet hours: triage (and later escalation) still runs.
+            # 2. Quiet hours: triage still runs; drafting waits.
             action = apply_quiet_hours(decided, in_quiet_hours(config))
             if action != decided:
                 logger.info(f"Quiet hours: deferring '{decided}'.")
 
             # 3. Execute — independent tasks in parallel, errors isolated
             # per task so one failure never takes down the cycle. Triage
-            # checks the Claude budget before each mention.
+            # and drafting check the Claude budget before each mention.
             tasks = _tasks_for(
                 action, state=state, triager=triager, budget_ok=budget_ok,
-                escalate_hook=escalate_hook,
+                escalate_hook=escalate_hook, drafter=drafter, reviewer=reviewer,
             )
             results = await asyncio.gather(
                 *[t[1] for t in tasks], return_exceptions=True
