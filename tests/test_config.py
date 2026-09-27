@@ -28,7 +28,7 @@ def test_defaults():
     assert config.organization.market == "US"
     assert config.usage.heartbeat_interval_minutes == 15
     assert config.usage.models == DEFAULT_MODELS == {
-        "triager": "haiku", "drafter": "sonnet", "reviewer": "sonnet",
+        "triager": "haiku", "safety": "haiku", "drafter": "sonnet", "reviewer": "sonnet",
     }
     assert config.escalation.sla_minutes == 15
     assert config.escalation.clinical_owner == ""
@@ -173,3 +173,24 @@ def test_env_example_has_no_values():
     ]
     assert assignments, ".env.example should list the supported keys"
     assert all(line.rstrip().endswith("=") for line in assignments)
+
+
+def test_mutable_defaults_are_not_shared_between_instances():
+    from harvey.config import DEFAULT_MODELS, EscalationConfig, UsageConfig
+
+    a, b = UsageConfig(), UsageConfig()
+    assert a.models == DEFAULT_MODELS
+    assert a.models is not b.models and a.models is not DEFAULT_MODELS
+    assert a.quiet_hours is not b.quiet_hours
+    a.models["triager"] = "sonnet"
+    assert UsageConfig().models["triager"] == "haiku"
+    assert EscalationConfig().owners is not EscalationConfig().owners
+
+
+def test_config_sections_use_default_factories():
+    from harvey.config import PulseConfig, UsageConfig
+
+    for model in (PulseConfig, UsageConfig):
+        for name, field in model.model_fields.items():
+            if isinstance(field.default, (dict, list)) or hasattr(field.default, "model_fields"):
+                raise AssertionError(f"{model.__name__}.{name} has a shared mutable default")

@@ -33,7 +33,7 @@ def frozen_noon(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_decide_next_action_triages_when_new_mentions_exist():
-    action = await decide_next_action(None, None, PulseConfig(), summary={"mentions": {"new": 5}})
+    action = await decide_next_action(None, PulseConfig(), summary={"mentions": {"new": 5}})
 
     assert action == "triage"
 
@@ -42,18 +42,18 @@ async def test_decide_next_action_triages_when_new_mentions_exist():
 async def test_decide_next_action_idles_without_new_mentions():
     summary = {"mentions": {"new": 0, "triaged": 3}}
 
-    assert await decide_next_action(None, None, PulseConfig(), summary=summary) == "idle"
+    assert await decide_next_action(None, PulseConfig(), summary=summary) == "idle"
 
 
 @pytest.mark.asyncio
 async def test_decide_next_action_reads_state_when_no_summary(tmp_path):
     state = StateManager(str(tmp_path / "pulse.db"))
     await state.init_db()
-    assert await decide_next_action(None, state, PulseConfig()) == "idle"
+    assert await decide_next_action(state, PulseConfig()) == "idle"
 
     await state.upsert_mention(Mention(platform=Platform.WEB, url="https://example.invalid/1", text="hi"))
 
-    assert await decide_next_action(None, state, PulseConfig()) == "triage"
+    assert await decide_next_action(state, PulseConfig()) == "triage"
 
 
 def test_triage_ignores_quiet_hours():
@@ -149,3 +149,9 @@ async def test_heartbeat_sweeps_escalations_even_in_quiet_hours(tmp_path, monkey
     assert len(swept) == 1
     assert swept[0].enabled is False
     assert slept == [config.usage.urgent_tick_minutes * 60]
+
+
+def test_decide_next_action_takes_no_brain():
+    import inspect
+
+    assert "brain" not in inspect.signature(decide_next_action).parameters

@@ -12,6 +12,13 @@ from urllib.parse import urlsplit
 from pydantic import BaseModel, Field, field_validator
 
 
+# Upper bounds on stored mention text. Collectors may hand us anything; the
+# ingest step truncates before storing (harvey.collectors.base.bound_mention)
+# and every regex scan over mention text stops at the text limit.
+MAX_MENTION_TEXT_CHARS = 20000
+MAX_MENTION_TITLE_CHARS = 500
+
+
 def _utcnow() -> datetime:
     """Naive UTC now — matches how timestamps are stored in SQLite."""
     return datetime.now(timezone.utc).replace(tzinfo=None)

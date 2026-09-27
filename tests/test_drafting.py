@@ -37,7 +37,7 @@ class StubDrafter:
         self.proposals = proposals
         self.calls: list[int] = []
 
-    async def draft(self, mention, triage):
+    async def draft(self, mention, triage, feedback=None, max_calls=None):
         self.calls.append(mention.id)
         for key, proposal in self.proposals.items():
             if key in mention.text:
@@ -178,9 +178,11 @@ async def test_red_filter_skips_reviewer_and_rejects(state):
     assert any("R14" in hit for hit in draft.filter_hits)
     assert any("R14" in reason for reason in draft.review_reasons)
     audit = await state.list_audit(mid)
-    assert _events(audit) == [AuditEventType.DRAFTED, AuditEventType.FILTERED, AuditEventType.REVIEWED]
-    assert audit[2].verdict["verdict"] == "reject"
-    assert audit[2].verdict["reviewer"] == "skipped: filter red"
+    # Red once -> one redraft (the stub repeats itself) -> still red.
+    assert _events(audit) == [AuditEventType.DRAFTED, AuditEventType.FILTERED,
+                              AuditEventType.DRAFTED, AuditEventType.FILTERED, AuditEventType.REVIEWED]
+    assert audit[4].verdict["verdict"] == "reject"
+    assert audit[4].verdict["reviewer"] == "skipped: filter red"
     assert audit[1].filter_result["hits"][0]["rule_id"]
     assert (await state.get_mention(mid)).status is MentionStatus.IN_REVIEW
     assert report.filtered_red == 1 and report.rejected == 1
@@ -301,9 +303,9 @@ async def test_decide_prefers_triage_then_draft_then_idle():
     only_draft = {"mentions": {"new": 0}, "draftable": 3}
     nothing = {"mentions": {"new": 0}, "draftable": 0}
 
-    assert await decide_next_action(None, None, config, summary=both) == "triage"
-    assert await decide_next_action(None, None, config, summary=only_draft) == "draft"
-    assert await decide_next_action(None, None, config, summary=nothing) == "idle"
+    assert await decide_next_action(None, config, summary=both) == "triage"
+    assert await decide_next_action(None, config, summary=only_draft) == "draft"
+    assert await decide_next_action(None, config, summary=nothing) == "idle"
 
 
 def test_draft_respects_quiet_hours():
@@ -318,7 +320,7 @@ def test_no_draft_categories_match_triager_severe_set():
     assert set(NO_DRAFT_CATEGORIES) == {c.value for c in SEVERE_CATEGORIES}
 
 
-@pytest.mark.parametrize("name", ["triage.md", "draft.md", "review.md", "reply_rules.md"])
+@pytest.mark.parametrize("name", ["triage.md", "draft.md", "review.md", "reply_rules.md", "safety_screen.md"])
 def test_prompt_files_have_no_cost_or_supplier_data(name):
     import re
 

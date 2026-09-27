@@ -27,6 +27,9 @@ LOOPBACK_HOST = "127.0.0.1"
 PID_FILE = PROJECT_ROOT / "data" / "pulse.pid"
 LOG_FILE = PROJECT_ROOT / "data" / "pulse.log"
 MENTIONS_MAX_LIMIT = 500
+# The list endpoint returns a preview; full text will come from a detail
+# endpoint (Phase 7), so list responses stay small.
+MENTION_PREVIEW_CHARS = 2000
 
 app = FastAPI(title="WellPeps Pulse")
 
@@ -214,12 +217,15 @@ async def get_mentions(status: str | None = None, limit: int = 100):
             raise HTTPException(status_code=400, detail=f"unknown status '{status}'")
         where = "WHERE status = ?"
     params.append(max(1, min(int(limit), MENTIONS_MAX_LIMIT)))
-    return await query_db(
-        "SELECT id, platform, external_id, url, author_handle, title, text, "
+    rows = await query_db(
+        "SELECT id, platform, external_id, url, author_handle, title, "
+        f"substr(text, 1, {MENTION_PREVIEW_CHARS}) AS text, "
+        f"length(text) > {MENTION_PREVIEW_CHARS} AS text_truncated, "
         "lang, posted_at, collected_at, owned_channel, status "
         f"FROM mentions {where} ORDER BY collected_at DESC, id DESC LIMIT ?",
         tuple(params),
     )
+    return [{**row, "text_truncated": bool(row["text_truncated"])} for row in rows]
 
 
 @app.get("/api/summary")

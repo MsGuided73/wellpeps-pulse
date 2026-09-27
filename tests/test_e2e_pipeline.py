@@ -210,6 +210,10 @@ async def test_full_pipeline_on_the_sample_fixture(state):
         assert events[:2] == [E.COLLECTED, E.TRIAGED], text
         if mention.id in by_mention:
             assert events == [E.COLLECTED, E.TRIAGED, E.ESCALATED], text
+        elif any(marker in text for marker in (HYPE_Q, NOCLAIM_Q)):
+            # Red first draft -> one redraft (the fake repeats itself) -> still red.
+            assert events == [E.COLLECTED, E.TRIAGED, E.DRAFTED, E.FILTERED,
+                              E.DRAFTED, E.FILTERED, E.REVIEWED], text
         elif any(marker in text for marker in DRAFTED):
             assert events == [E.COLLECTED, E.TRIAGED, E.DRAFTED, E.FILTERED, E.REVIEWED], text
         else:

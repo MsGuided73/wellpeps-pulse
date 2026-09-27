@@ -17,6 +17,7 @@ from typing import Literal, NamedTuple
 
 from harvey import knowledge
 from harvey.models.knowledge import PatternRule
+from harvey.models.mention import MAX_MENTION_TEXT_CHARS
 
 TierName = Literal["green", "yellow", "red"]
 
@@ -95,7 +96,7 @@ def _medication_hits(text: str, forbid: bool) -> list[Hit]:
     return [Hit("R10", "medication_name", found.group(0), "medication name needs compliance review")]
 
 
-def _limit_hits(text: str, platform: str) -> list[Hit]:
+def _limit_hits(text: str, platform: str, length: int | None = None) -> list[Hit]:
     limits = knowledge.compliance_rules().limits
     hits = []
     links = _LINK_RE.findall(text)
@@ -106,8 +107,9 @@ def _limit_hits(text: str, platform: str) -> list[Hit]:
     if len(tags) > max_tags:
         hits.append(Hit("R37", "hashtags", " ".join(tags), f"{len(tags)} hashtags; max {max_tags} on {platform}"))
     max_chars = limits.max_chars_for(platform)
-    if len(text) > max_chars:
-        hits.append(Hit("LIMIT", "length", str(len(text)), f"{len(text)} chars; max {max_chars} on {platform}"))
+    length = len(text) if length is None else length
+    if length > max_chars:
+        hits.append(Hit("LIMIT", "length", str(length), f"{length} chars; max {max_chars} on {platform}"))
     return hits
 
 
@@ -118,7 +120,13 @@ def compliance_filter(
     *,
     require_publishable: bool = False,
 ) -> GateResult:
-    """Check a draft reply. Deterministic; no Claude calls."""
+    """Check a draft reply. Deterministic; no Claude calls.
+
+    Pattern scans see at most MAX_MENTION_TEXT_CHARS characters; the length
+    limit is checked on the full text (anything that long is red anyway).
+    """
+    full_text = text
+    text = text[:MAX_MENTION_TEXT_CHARS]
     rules = knowledge.compliance_rules()
     toggles = rules.toggles.model_dump()
     platform = platform.strip().lower()
@@ -129,7 +137,7 @@ def compliance_filter(
         *_pattern_hits(text, rules.prohibited, "prohibited", toggles),
         *_pattern_hits(text, rules.patient_confirmation, "patient_confirmation", toggles),
         *(_medication_hits(text, forbid_meds) if forbid_meds else []),
-        *_limit_hits(text, platform),
+        *_limit_hits(text, platform, length=len(full_text)),
     ]
     yellow = [
         *_pattern_hits(text, rules.yellow, "yellow", toggles),

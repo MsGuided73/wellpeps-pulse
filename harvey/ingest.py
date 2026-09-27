@@ -1,7 +1,8 @@
 """Ingest: run collectors and store what they find.
 
 For each collector: open a ``runs`` row (stage = collector name), make sure
-its ``sources`` row exists, upsert every mention (dedupe lives in the state
+its ``sources`` row exists, truncate oversized text (``bound_mention``),
+upsert every mention (dedupe lives in the state
 layer), and append a ``collected`` audit event for each mention that is new.
 A collector that raises is recorded as a failed run; the others still run.
 No model calls happen here.
@@ -11,7 +12,7 @@ import logging
 from dataclasses import dataclass, field
 from datetime import datetime
 
-from harvey.collectors.base import Collector
+from harvey.collectors.base import Collector, bound_mention
 from harvey.models import AuditEvent, AuditEventType
 from harvey.state import StateManager
 
@@ -74,7 +75,7 @@ async def _run_one(
 
     try:
         async for mention in collector.collect(since):
-            tagged = mention.model_copy(update={"source_id": source_id, "run_id": run_id})
+            tagged = bound_mention(mention).model_copy(update={"source_id": source_id, "run_id": run_id})
             try:
                 mention_id, is_new = await state.upsert_mention(tagged)
                 if is_new:

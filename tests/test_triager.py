@@ -487,3 +487,22 @@ async def test_sample_fixture_end_to_end_with_fake_brain(state):
     texts = " ".join(m.text for m in escalated)
     for marker in ("emergency room", "my lawyer", "HIPAA", "unauthorized charges"):
         assert marker in texts
+
+
+# --- Category-level relevance (live-test finding) -----------------------------------------
+
+
+def test_prompt_treats_category_discussion_as_relevant():
+    prompt = build_prompt(_mention(PRAISE))
+    lowered = prompt.lower()
+
+    for market in ("glp-1", "peptides", "hair loss", "sexual wellness", "trt"):
+        assert market in lowered, market
+    assert "`category`" in prompt and "subject_type" in prompt
+    assert "misinformation" in lowered
+    # Category-level misinformation is relevant but not for the bot to answer.
+    assert "research grade bpc-157" in lowered or "research-grade bpc-157" in lowered
+    assert "human decides" in lowered
+    # Only genuinely unrelated content is irrelevant.
+    for noise in ("sports team", "crypto"):
+        assert noise in lowered

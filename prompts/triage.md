@@ -30,11 +30,10 @@ Competitors (canonical names): {{competitors}}
 
 Return one JSON object with exactly these fields:
 
-- `relevant` (bool): true if the post is about WellPeps, a listed competitor,
-  a WellPeps product or its generic/brand-name equivalents, or the telehealth
-  categories above. False for spam, crypto promotions, unrelated uses of
-  similar words (a sports team, a username), and anything off-topic.
+- `relevant` (bool): see "What counts as relevant" below.
 - `subject_type`: one of `wellpeps`, `competitor`, `product`, `category`, `none`.
+  Use `category` for category-level discussion that names no brand or
+  WellPeps product.
 - `subject` (string): what the post is mainly about, in a few words.
 - `competitor` (string or null): the canonical competitor name from the list
   above if one is discussed, else null. Use the list spelling.
@@ -65,6 +64,33 @@ Return one JSON object with exactly these fields:
   EXACTLY, character for character, from the post text. Do not paraphrase,
   fix spelling, or invent phrases. Use an empty list if none stand out.
 
+## What counts as relevant
+
+A post is relevant (`relevant: true`) if it concerns any of:
+
+- WellPeps itself;
+- a listed competitor;
+- a WellPeps product, or its generic or brand-name equivalents;
+- category-level consumer discussion in WellPeps' markets, even when no
+  company or product is named (`subject_type: "category"`):
+  - GLP-1s and weight loss (semaglutide, tirzepatide, Ozempic, Wegovy,
+    Mounjaro, Zepbound, compounded versions, "the shot");
+  - peptides and longevity (BPC-157, sermorelin, NAD+, "research
+    peptides", biohacking);
+  - hair loss (minoxidil, finasteride, dutasteride);
+  - sexual wellness (ED, sildenafil, tadalafil);
+  - hormones and TRT (testosterone replacement, hormone optimization).
+
+Misinformation in these categories is relevant. For example, a post telling
+people to inject "research grade BPC-157" bought online is relevant
+(`category: misinformation`, `subject_type: category`) even though it names
+no brand. Set `reply_appropriate` to false for misinformation by default: a
+human decides whether and how the team responds.
+
+Only genuinely unrelated content is irrelevant (`relevant: false`,
+`subject_type: none`): a sports team, a username, crypto spam, other spam,
+or an unrelated use of a similar word.
+
 ## Urgency
 
 `urgent` means a human must look now. Use it for:
@@ -91,6 +117,7 @@ Set `reply_appropriate` to false when any of these hold:
 - the author appears to be a minor (under 18);
 - it comes from a community where brand replies are unwelcome (for example a
   support group or a subreddit that bans promotion);
+- the post is misinformation (a human decides how to respond);
 - the post is not relevant.
 
 ## Do not infer health facts

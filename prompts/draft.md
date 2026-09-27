@@ -48,6 +48,16 @@ The full rule list:
 
 {{rules}}
 
+## Never write these
+
+The compliance filter blocks any draft containing wording like the phrases
+below, so never write them or anything close to them. Pay special attention
+to the first group: never refer to the person's account, order, prescription,
+provider, or records (not even "we'll look into your account"), because that
+confirms they are a customer. Point them to support instead.
+
+{{never_write}}
+
 ## When no claim fits
 
 If no approved claim fits the post, or any honest reply would need medical

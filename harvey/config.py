@@ -59,22 +59,28 @@ class QuietHoursConfig(BaseModel):
 # Triage is structured classification, where a small model is plenty.
 # Drafting and the adversarial review need a stronger model; the reviewer
 # may never run on haiku (enforced below).
+# The safety screen asks one narrow yes/no question, so haiku is enough.
 DEFAULT_MODELS = {
     "triager": "haiku",
+    "safety": "haiku",
     "drafter": "sonnet",
     "reviewer": "sonnet",
 }
 
 
+def _default_models() -> dict[str, str]:
+    return dict(DEFAULT_MODELS)
+
+
 class UsageConfig(BaseModel):
     max_daily_claude_percent: float = 80.0
     heartbeat_interval_minutes: int = 15
-    quiet_hours: QuietHoursConfig = QuietHoursConfig()
+    quiet_hours: QuietHoursConfig = Field(default_factory=QuietHoursConfig)
     # Per-agent model routing, passed to `claude --model`. Keys are an agent
     # ("triager") or an agent.task ("triager.classify"); the more specific key
     # wins. Unlisted calls use the CLI's default model. Set `models: {}` to
     # run everything on the default model.
-    models: dict[str, str] = DEFAULT_MODELS
+    models: dict[str, str] = Field(default_factory=_default_models)
 
     @field_validator("models")
     @classmethod
@@ -143,6 +149,13 @@ class EscalationConfig(BaseModel):
         return {kind: (owner or "").strip() for kind, owner in v.items()}
 
 
+class TriageConfig(BaseModel):
+    # Independent safety-screen pass on health-related mentions (a second,
+    # narrow model call; see harvey/agents/safety_screen.py). Defense against
+    # a prompt-injected triage answer suppressing an escalation. Keep on.
+    safety_screen: bool = True
+
+
 class NotifyConfig(BaseModel):
     # Name of the env var holding the Slack webhook (never the URL itself).
     slack_webhook_env: str = "SLACK_WEBHOOK_URL"
@@ -154,10 +167,11 @@ class PulseConfig(BaseModel):
     # Unknown keys fail loudly, so a leftover sales-era harvey.yaml is caught.
     model_config = ConfigDict(extra="forbid")
 
-    organization: OrganizationConfig = OrganizationConfig()
-    usage: UsageConfig = UsageConfig()
-    escalation: EscalationConfig = EscalationConfig()
-    notify: NotifyConfig = NotifyConfig()
+    organization: OrganizationConfig = Field(default_factory=OrganizationConfig)
+    usage: UsageConfig = Field(default_factory=UsageConfig)
+    triage: TriageConfig = Field(default_factory=TriageConfig)
+    escalation: EscalationConfig = Field(default_factory=EscalationConfig)
+    notify: NotifyConfig = Field(default_factory=NotifyConfig)
     retention_days: int = Field(default=180, ge=1)
 
 

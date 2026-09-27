@@ -45,6 +45,14 @@ _DRAFTABLE_WHERE = (
 
 # Allowed mention status transitions. Anything not listed raises ValueError.
 # Terminal states (rejected, posted, dropped) have no outgoing edges.
+#
+# Escalation can happen after triage, not only from ``new``:
+# - triaged -> escalated: re-escalation of an already-triaged mention, e.g. a
+#   follow-up comment reveals an adverse event, or a viral negative (which
+#   stays ``triaged``) turns out to be a legal threat.
+# - drafted / in_review -> escalated: an editor escalates from the review
+#   desk (Phase 7), or a late signal arrives while a draft is pending. The
+#   draft is then moot; the escalation owner decides what happens next.
 ALLOWED_TRANSITIONS: dict[MentionStatus, frozenset[MentionStatus]] = {
     MentionStatus.NEW: frozenset({
         MentionStatus.TRIAGED, MentionStatus.DROPPED, MentionStatus.ESCALATED,
@@ -52,9 +60,10 @@ ALLOWED_TRANSITIONS: dict[MentionStatus, frozenset[MentionStatus]] = {
     MentionStatus.TRIAGED: frozenset({
         MentionStatus.DRAFTED, MentionStatus.DROPPED, MentionStatus.ESCALATED,
     }),
-    MentionStatus.DRAFTED: frozenset({MentionStatus.IN_REVIEW}),
+    MentionStatus.DRAFTED: frozenset({MentionStatus.IN_REVIEW, MentionStatus.ESCALATED}),
     MentionStatus.IN_REVIEW: frozenset({
         MentionStatus.APPROVED, MentionStatus.REJECTED, MentionStatus.DRAFTED,
+        MentionStatus.ESCALATED,
     }),
     MentionStatus.APPROVED: frozenset({MentionStatus.POSTED}),
     MentionStatus.ESCALATED: frozenset({MentionStatus.TRIAGED, MentionStatus.DROPPED}),

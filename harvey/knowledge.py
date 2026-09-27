@@ -19,6 +19,7 @@ from typing import Mapping, TypeVar
 import yaml
 from pydantic import BaseModel, ValidationError
 
+from harvey.models.mention import MAX_MENTION_TEXT_CHARS
 from harvey.models.knowledge import (
     Claim,
     ClaimsFile,
@@ -195,7 +196,11 @@ def medication_names() -> list[str]:
 
 
 def urgent_override(text: str) -> tuple[str, str] | None:
-    """First (category, pattern) whose regex matches ``text``, else None."""
+    """First (category, pattern) whose regex matches ``text``, else None.
+
+    Scans at most MAX_MENTION_TEXT_CHARS characters.
+    """
+    text = (text or "")[:MAX_MENTION_TEXT_CHARS]
     for category, pattern, compiled in _urgent_patterns(config_dir()):
         if compiled.search(text):
             return category, pattern

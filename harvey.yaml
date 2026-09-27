@@ -19,6 +19,7 @@ usage:
   # the CLI's default model.
   models:
     triager: haiku        # classification: a small model is plenty
+    safety: haiku         # independent safety screen: one narrow yes/no question
     drafter: sonnet       # reply drafting from approved claims
     reviewer: sonnet      # adversarial compliance review; never haiku (config rejects it)
   # Drafting and briefs pause in quiet hours. Escalations never do.
@@ -26,6 +27,12 @@ usage:
     start: "22:00"
     end: "07:00"
     timezone: "America/New_York"
+
+triage:
+  # Second, independent model call on health-related mentions that triage
+  # did not escalate: catches adverse events / self-harm a prompt-injected
+  # post might talk the triager out of. Costs one small call per such mention.
+  safety_screen: true
 
 escalation:
   # Who gets paged for adverse events and legal/regulatory mentions.

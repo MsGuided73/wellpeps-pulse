@@ -14,8 +14,11 @@ Flow for ``Triager.triage``:
    fall back to a conservative "needs a human" triage so nothing is dropped.
 3. Safety net (pure Python, always runs): canonicalize competitor/product
    names, keep only phrases copied verbatim, force urgent + no-reply when a
-   ``knowledge.urgent_override`` pattern matches, and never allow a reply on
+   ``knowledge.urgent_override`` pattern matches, force every severe
+   category to urgent (so it always escalates), and never allow a reply on
    severe or irrelevant mentions.
+4. In ``triage_batch``, an optional independent safety screen
+   (harvey/agents/safety_screen.py) re-checks health-related mentions.
 """
 
 import inspect
@@ -27,7 +30,8 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from harvey import knowledge
 from harvey.agents import prompting
-from harvey.escalation import escalation_kind
+from harvey.agents.safety_screen import ScreenResult, apply_screen, mentions_health_term
+from harvey.escalation import SEVERE_KINDS, escalation_kind
 from harvey.models import (
     AuditEvent,
     AuditEventType,
@@ -127,8 +131,17 @@ def _verbatim_phrases(phrases: list[str], text: str) -> list[str]:
     return kept
 
 
+SEVERE_REASON = "severe_category"
+
+
 def apply_safety_net(triage: Triage, text: str) -> Triage:
-    """Deterministic post-processing. Returns a new Triage."""
+    """Deterministic post-processing. Returns a new Triage.
+
+    A keyword override forces urgent + a severe category. Any severe
+    category, whether from a keyword or from the model, is then forced to
+    urgent with no reply, so a severe mention is always escalated (see
+    ``route_status``) and never sits in ``triaged`` where it can't be drafted.
+    """
     update: dict = {}
     hit = knowledge.urgent_override(text)
     if hit:
@@ -146,6 +159,12 @@ def apply_safety_net(triage: Triage, text: str) -> Triage:
             urgency_reason=reason,
         )
     merged = triage.model_copy(update=update)
+    if merged.relevant and merged.category in SEVERE_CATEGORIES and not hit:
+        model_reason = merged.urgency_reason.strip()
+        merged = merged.model_copy(update={
+            "urgency": Urgency.URGENT,
+            "urgency_reason": f"{SEVERE_REASON}: {model_reason}" if model_reason else SEVERE_REASON,
+        })
     if merged.category in SEVERE_CATEGORIES or not merged.relevant:
         merged = merged.model_copy(update={"reply_appropriate": False})
     return merged
@@ -252,15 +271,24 @@ class TriageReport:
     fallbacks: int = 0
     errors: int = 0
     paged: int = 0             # escalations whose Slack page went out
+    screened: int = 0          # mentions given the independent safety screen
     budget_exhausted: bool = False
 
 
 def route_status(triage: Triage) -> MentionStatus:
+    """Status after triage. ``escalation_kind`` is the single source of truth:
+    a severe kind leaves the reply queue; a viral negative is paged but stays
+    ``triaged`` (a reply may still be drafted for it)."""
     if not triage.relevant:
         return MentionStatus.DROPPED
-    if triage.urgency is Urgency.URGENT and triage.category in SEVERE_CATEGORIES:
+    if escalation_kind(triage) in SEVERE_KINDS:
         return MentionStatus.ESCALATED
     return MentionStatus.TRIAGED
+
+
+def needs_screen(triage: Triage, text: str) -> bool:
+    """Run the safety screen on health-related mentions not already escalated."""
+    return route_status(triage) is not MentionStatus.ESCALATED and mentions_health_term(text)
 
 
 async def _within_budget(hook: BudgetHook | None) -> bool:
@@ -272,8 +300,8 @@ async def _within_budget(hook: BudgetHook | None) -> bool:
     return bool(result)
 
 
-def _verdict(triage: Triage) -> dict:
-    return {
+def _verdict(triage: Triage, screen: ScreenResult | None = None) -> dict:
+    verdict = {
         "relevant": triage.relevant,
         "category": triage.category.value,
         "urgency": triage.urgency.value,
@@ -281,10 +309,14 @@ def _verdict(triage: Triage) -> dict:
         "reply_appropriate": triage.reply_appropriate,
         "model": triage.model,
     }
+    if screen is not None:
+        verdict["safety_screen"] = screen.as_dict()
+    return verdict
 
 
 async def _record(
-    state, mention: Mention, triage: Triage, escalate: EscalateHook | None = None
+    state, mention: Mention, triage: Triage, escalate: EscalateHook | None = None,
+    screen: ScreenResult | None = None,
 ) -> tuple[MentionStatus, object]:
     """Save, audit, escalate, then move the status.
 
@@ -295,7 +327,7 @@ async def _record(
     await state.save_triage(triage)
     await state.append_audit(AuditEvent(
         mention_id=mention.id, event=AuditEventType.TRIAGED, actor=AGENT,
-        verdict=_verdict(triage), permalink=mention.url,
+        verdict=_verdict(triage, screen), permalink=mention.url,
     ))
     status = route_status(triage)
     escalation = None
@@ -319,6 +351,7 @@ async def triage_batch(
     limit: int = 25,
     budget_ok: BudgetHook | None = None,
     escalate: EscalateHook | None = None,
+    screen=None,
 ) -> TriageReport:
     """Triage up to ``limit`` status=new mentions, oldest first.
 
@@ -326,6 +359,11 @@ async def triage_batch(
     (severe categories, and urgent complaints about WellPeps, which stay
     ``triaged``). main.py passes ``harvey.escalation.escalate`` bound to the
     state, notifier, and config.
+
+    ``screen`` (a ``SafetyScreen``, or None to skip) is a second, narrow
+    model call on every health-related mention that triage didn't already
+    escalate: a prompt-injected triage answer can't suppress an adverse
+    event escalation on its own. See harvey/agents/safety_screen.py.
 
     ``budget_ok`` is checked before each mention; when it returns False the
     batch stops and the rest stay ``new`` for the next cycle. A mention whose
@@ -340,7 +378,12 @@ async def triage_batch(
             break
         try:
             triage = await triager.triage(mention)
-            status, escalation = await _record(state, mention, triage, escalate)
+            screened = None
+            if screen is not None and needs_screen(triage, f"{mention.title}\n{mention.text}"):
+                screened = await screen.screen(mention)
+                triage = apply_screen(triage, screened)
+                report.screened += 1
+            status, escalation = await _record(state, mention, triage, escalate, screened)
         except Exception as exc:
             report.errors += 1
             logger.error(f"triage failed for mention {mention.id}: {exc}", exc_info=True)

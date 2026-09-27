@@ -19,6 +19,7 @@ import logging
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 
+from harvey.config import ESCALATION_KINDS
 from harvey.models import (
     AuditEvent,
     AuditEventType,
@@ -44,6 +45,25 @@ _KIND_BY_CATEGORY = {
     Category.PRIVACY: "privacy",
     Category.BILLING_FRAUD: "billing_fraud",
 }
+VIRAL_NEGATIVE = "viral_negative"
+# Kinds whose mention leaves the reply queue (status ``escalated``). A
+# viral negative is paged but stays ``triaged`` so a reply can be drafted.
+SEVERE_KINDS = frozenset(_KIND_BY_CATEGORY.values())
+
+
+def all_kinds() -> tuple[str, ...]:
+    """Every kind ``escalation_kind`` can return."""
+    return (*_KIND_BY_CATEGORY.values(), VIRAL_NEGATIVE)
+
+
+def _check_kinds_configured() -> None:
+    """Every kind we can page must have a config owner slot (fail at import)."""
+    missing = sorted(set(all_kinds()) - set(ESCALATION_KINDS))
+    if missing:
+        raise RuntimeError(f"escalation kinds missing from config.ESCALATION_KINDS: {missing}")
+
+
+_check_kinds_configured()
 
 
 def _utcnow() -> datetime:
@@ -56,9 +76,9 @@ def _utcnow() -> datetime:
 def escalation_kind(triage: Triage) -> str | None:
     """The escalation kind for a triage result, or None if it isn't one.
 
-    Severe categories escalate at any urgency (the triager already forces
-    their keyword matches to urgent). An urgent complaint about WellPeps
-    itself is a viral negative.
+    Severe categories escalate at any urgency (the triager's safety net
+    forces them to urgent). An urgent complaint about WellPeps itself is a
+    viral negative.
     """
     if not triage.relevant:
         return None
@@ -70,7 +90,7 @@ def escalation_kind(triage: Triage) -> str | None:
         and triage.urgency is Urgency.URGENT
         and triage.subject_type == "wellpeps"
     ):
-        return "viral_negative"
+        return VIRAL_NEGATIVE
     return None
 
 
@@ -86,6 +106,8 @@ def reason_code(triage: Triage) -> str:
     reason = triage.urgency_reason or ""
     if reason.startswith("override:"):
         return "keyword_override"
+    if reason.startswith("safety_screen:"):
+        return "safety_screen"
     if TRIAGE_FAILED in reason:
         return TRIAGE_FAILED
     return f"model_{triage.urgency.value}"

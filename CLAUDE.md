@@ -25,6 +25,13 @@ deterministic compliance filter (`harvey/compliance.py`) exist.
   (nonce delimiters, single-pass `{{placeholders}}`) is in
   `harvey/agents/prompting.py`. The reviewer must never run on haiku.
   Real use is blocked until `config/claims.yaml` is compliance-signed.
+- Hardening after review/live test: an independent safety screen
+  (`harvey/agents/safety_screen.py`, `prompts/safety_screen.md`, agent
+  `safety`) re-checks health-related mentions triage didn't escalate
+  (`triage.safety_screen` in harvey.yaml); every severe category escalates
+  (`escalation_kind` is the source of truth); red drafts get one rewrite
+  (max 2 drafter calls); the draft prompt's "never write" list comes from
+  `examples:` in `config/compliance_rules.yaml` (each must match its rule).
 
 Later phases add everything else. Don't build ahead of the phase you've
 been asked to do.

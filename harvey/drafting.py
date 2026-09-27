@@ -5,11 +5,17 @@ For each triaged, reply-appropriate, non-severe mention (oldest first):
 1. The drafter proposes a reply built from approved claims.
 2. ``compliance_filter`` checks it (drafts need known claim ids, not yet
    publishable ones; publishability is enforced at approval time).
-3. A red filter result skips the reviewer: the draft is recorded as
+3. A red result gets ONE rewrite: the drafter is re-prompted with the hit
+   reasons and the new draft is filtered again. Drafter calls per mention
+   are capped at ``MAX_DRAFTER_CALLS`` (2), so a first draft that already
+   needed a parse retry is not redrafted. Both attempts are kept: the first
+   as its own draft row, audited ``drafted`` + ``filtered`` (attempt 1).
+4. A draft that is still red skips the reviewer: it is recorded as
    ``reject`` with the filter hits as reasons. Otherwise the adversarial
    reviewer gives the verdict.
-4. The draft row is saved, then audit events ``drafted`` -> ``filtered`` ->
-   ``reviewed``, then the mention moves triaged -> drafted -> in_review.
+5. The draft row is saved, then audit events ``drafted`` -> ``filtered`` ->
+   ``reviewed`` (with the attempt number), then the mention moves
+   triaged -> drafted -> in_review.
 
 An empty reply (no claim fits) is saved as ``needs_human`` with the
 drafter's reason and goes to review too. Nothing here approves or posts:
@@ -39,6 +45,9 @@ FILTER_ACTOR = "compliance_filter"
 REVIEWER_ACTOR = "reviewer"
 SYSTEM_ACTOR = "system"
 SKIPPED_RED = "skipped: filter red"
+SUPERSEDED = "superseded: redrafted after a red filter result"
+# Drafter model calls per mention, retries and the redraft included.
+MAX_DRAFTER_CALLS = 2
 
 BudgetHook = Callable[[], bool | Awaitable[bool]]
 
@@ -48,7 +57,8 @@ class DraftReport:
     processed: int = 0
     drafted: int = 0          # drafts with text
     needs_human: int = 0      # verdict needs_human (incl. empty replies)
-    filtered_red: int = 0
+    filtered_red: int = 0     # final drafts that were still red
+    redrafted: int = 0        # mentions whose first draft was red and got one rewrite
     passed: int = 0
     rejected: int = 0
     errors: int = 0
@@ -94,7 +104,17 @@ async def _advance(state, mention_id: int):
     await state.set_mention_status(mention_id, MentionStatus.IN_REVIEW)
 
 
-async def _record_empty(state, mention: Mention, proposal) -> None:
+def _attempt_verdict(proposal, attempt: int, **extra) -> dict:
+    return {"model": proposal.model, "rationale": proposal.rationale,
+            "needs_human_reason": extra.pop("needs_human_reason", proposal.needs_human_reason),
+            "dropped_claim_ids": proposal.dropped_claim_ids, "attempt": attempt, **extra}
+
+
+def _filter_result(gate: GateResult, attempt: int) -> dict:
+    return {"ok": gate.ok, "tier": gate.tier, "hits": _hit_dicts(gate), "attempt": attempt}
+
+
+async def _record_empty(state, mention: Mention, proposal, attempt: int = 1) -> None:
     reason = proposal.needs_human_reason or "no reply drafted"
     draft_id = await state.add_draft(Draft(
         mention_id=mention.id, text="", claim_ids=[], model=proposal.model,
@@ -103,8 +123,7 @@ async def _record_empty(state, mention: Mention, proposal) -> None:
     await state.append_audit(AuditEvent(
         mention_id=mention.id, draft_id=draft_id, event=AuditEventType.DRAFTED,
         actor=DRAFTER_ACTOR,
-        verdict={"model": proposal.model, "needs_human_reason": reason, "rationale": proposal.rationale,
-                 "dropped_claim_ids": proposal.dropped_claim_ids},
+        verdict=_attempt_verdict(proposal, attempt, needs_human_reason=reason),
         permalink=mention.url,
     ))
     await state.append_audit(AuditEvent(
@@ -115,7 +134,29 @@ async def _record_empty(state, mention: Mention, proposal) -> None:
     await _advance(state, mention.id)
 
 
-async def _record_reply(state, mention: Mention, proposal, gate, verdict, lines, reviewer_label, raw) -> None:
+async def _record_superseded(state, mention: Mention, proposal, gate: GateResult) -> None:
+    """The red first attempt: kept as its own draft row, drafted + filtered."""
+    lines = [_hit_line(h) for h in gate.hits]
+    draft_id = await state.add_draft(Draft(
+        mention_id=mention.id, text=proposal.reply, claim_ids=proposal.claim_ids,
+        model=proposal.model, filter_ok=gate.ok, filter_hits=lines,
+        review_verdict=ReviewVerdict.REJECT, review_reasons=[SUPERSEDED, *lines], tier=gate.tier,
+    ))
+    common = {"mention_id": mention.id, "draft_id": draft_id, "permalink": mention.url}
+    await state.append_audit(AuditEvent(
+        **common, event=AuditEventType.DRAFTED, actor=DRAFTER_ACTOR,
+        claim_ids=proposal.claim_ids, final_text=proposal.reply,
+        verdict=_attempt_verdict(proposal, 1),
+    ))
+    await state.append_audit(AuditEvent(
+        **common, event=AuditEventType.FILTERED, actor=FILTER_ACTOR,
+        claim_ids=proposal.claim_ids,
+        filter_result={**_filter_result(gate, 1), "redrafted": True},
+    ))
+
+
+async def _record_reply(state, mention: Mention, proposal, gate, verdict, lines, reviewer_label, raw,
+                        attempt: int = 1) -> None:
     draft_id = await state.add_draft(Draft(
         mention_id=mention.id, text=proposal.reply, claim_ids=proposal.claim_ids,
         model=proposal.model, filter_ok=gate.ok, filter_hits=[_hit_line(h) for h in gate.hits],
@@ -126,13 +167,12 @@ async def _record_reply(state, mention: Mention, proposal, gate, verdict, lines,
         **common, event=AuditEventType.DRAFTED,
         actor=DRAFTER_ACTOR,
         claim_ids=proposal.claim_ids, final_text=proposal.reply,
-        verdict={"model": proposal.model, "rationale": proposal.rationale, "needs_human_reason": proposal.needs_human_reason,
-                 "dropped_claim_ids": proposal.dropped_claim_ids},
+        verdict=_attempt_verdict(proposal, attempt),
     ))
     await state.append_audit(AuditEvent(
         **common, event=AuditEventType.FILTERED, actor=FILTER_ACTOR,
         claim_ids=proposal.claim_ids,
-        filter_result={"ok": gate.ok, "tier": gate.tier, "hits": _hit_dicts(gate)},
+        filter_result=_filter_result(gate, attempt),
     ))
     await state.append_audit(AuditEvent(
         **common, event=AuditEventType.REVIEWED,
@@ -153,17 +193,47 @@ def _count(report: DraftReport, verdict: ReviewVerdict, tier: str | None) -> Non
         report.needs_human += 1
 
 
+def _filter(proposal, mention: Mention) -> GateResult:
+    return compliance_filter(proposal.reply, mention.platform.value, proposal.claim_ids,
+                             require_publishable=False)
+
+
+async def _redraft_if_red(drafter, mention, triage, proposal, report: DraftReport):
+    """(final proposal, its gate or None, superseded (proposal, gate) or None).
+
+    A red first draft gets exactly one rewrite with the filter's reasons,
+    within the MAX_DRAFTER_CALLS budget for the mention.
+    """
+    if not proposal.reply:
+        return proposal, None, None
+    gate = _filter(proposal, mention)
+    used = int(getattr(proposal, "calls", 1) or 1)
+    if gate.tier != "red" or used >= MAX_DRAFTER_CALLS:
+        return proposal, gate, None
+    feedback = [_hit_line(h) for h in gate.hits]
+    logger.info(f"draft for mention {mention.id} was red; redrafting once ({len(feedback)} reason(s))")
+    report.redrafted += 1
+    second = await drafter.draft(mention, triage, feedback=feedback, max_calls=MAX_DRAFTER_CALLS - used)
+    return second, (_filter(second, mention) if second.reply else None), (proposal, gate)
+
+
 async def _draft_one(state, drafter, reviewer, mention: Mention, report: DraftReport) -> None:
     triage = await state.get_triage(mention.id)
-    proposal = await drafter.draft(mention, triage)
+    first = await drafter.draft(mention, triage)
+    proposal, gate, superseded = await _redraft_if_red(drafter, mention, triage, first, report)
+    attempt = 2 if superseded else 1
     if not proposal.reply:
-        await _record_empty(state, mention, proposal)
+        if superseded:
+            await _record_superseded(state, mention, *superseded)
+        await _record_empty(state, mention, proposal, attempt)
         _count(report, ReviewVerdict.NEEDS_HUMAN, None)
         return
-    gate = compliance_filter(proposal.reply, mention.platform.value, proposal.claim_ids,
-                             require_publishable=False)
     verdict, lines, label, raw = await _review(reviewer, proposal, mention, gate)
-    await _record_reply(state, mention, proposal, gate, verdict, lines, label, raw)
+    # Nothing is stored until the review is done, so a crash leaves the
+    # mention ``triaged`` with no partial drafts; it is retried next cycle.
+    if superseded:
+        await _record_superseded(state, mention, *superseded)
+    await _record_reply(state, mention, proposal, gate, verdict, lines, label, raw, attempt)
     report.drafted += 1
     _count(report, verdict, gate.tier)
 

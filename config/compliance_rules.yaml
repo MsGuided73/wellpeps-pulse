@@ -11,6 +11,8 @@
 #   patient_confirmation  -> RED (R31: never confirm someone is a patient)
 #   yellow                -> needs human compliance review (R10 tiering), ok=True
 # unless_toggle: the entry is skipped when that toggle is true.
+# examples: plain phrases the pattern blocks (each must match it; checked on
+#   load). prompts/draft.md shows them to the drafter as its "never write" list.
 # Rules that are process-only or need context the filter cannot see (R1, R3-R6,
 # R9, R26, R27 in full, R33 in full, R35, R36) are enforced elsewhere (triage,
 # reviewer, human approval); see docs.
@@ -34,7 +36,7 @@ prohibited:
   # --- R2: approved, disclosed identities; the AI never poses as a clinician or customer
   - {id: R2, pattern: '(?:,|\s-|—|–)\s*(?:(?-i:MD|RN|NP|PA-C|PharmD)(?![\w-])|M\.D\.)', reason: "clinical credential sign-off; drafts must not carry MD/RN/NP titles", source: "R2 ([PB] §04-05)"}
   - {id: R2, pattern: '(?-i:\bDr\.?\s+[A-Z][a-z]+)', reason: "Dr. title in a reply; the AI never signs as a doctor", source: "R2 ([PB] §04)"}
-  - {id: R2, pattern: '\b(?:I.m|I\s+am)\s+(?:a|an|your)\s+(?:doctor|physician|nurse|pharmacist|clinician|MD|medical\s+provider)\b|\bas\s+a\s+(?:doctor|physician|nurse|pharmacist|clinician|medical\s+professional)\b', reason: "claims a clinical identity", source: "R2 ([PB] §04)"}
+  - {id: R2, pattern: '\b(?:I.m|I\s+am)\s+(?:a|an|your)\s+(?:doctor|physician|nurse|pharmacist|clinician|MD|medical\s+provider)\b|\bas\s+a\s+(?:doctor|physician|nurse|pharmacist|clinician|medical\s+professional)\b', reason: "claims a clinical identity", source: "R2 ([PB] §04)", examples: ["as a doctor", "I'm a nurse"]}
   - {id: R2, pattern: '\b(?:I.m|I\s+am)\s+(?:just\s+)?(?:a\s+)?(?:happy|satisfied|real|regular|independent)\s+(?:customer|patient|user)\b|\b(?:I.m|I\s+am)\s+not\s+(?:affiliated|sponsored|paid)\b', reason: "poses as an independent customer (astroturfing)", source: "R2 ([PB] §05, §14 RED)"}
 
   # --- R8: pre-certification CTA limits
@@ -55,7 +57,7 @@ prohibited:
   - {id: R12, pattern: '\bFDA[- ]?(?:approved|certified|registered|licensed)\s+(?:pharmac(?:y|ies)|compounding|compounders?)\b', reason: "pharmacies are not FDA-approved; false accreditation claim", source: "R12 + R27"}
 
   # --- R13: promised outcomes
-  - {id: R13, pattern: '\bguarantee(?:d|s)?\b', reason: "guaranteed outcome", source: "R13 ([CS] Rule 1)"}
+  - {id: R13, pattern: '\bguarantee(?:d|s)?\b', reason: "guaranteed outcome", source: "R13 ([CS] Rule 1)", examples: ["guaranteed results"]}
   - {id: R13, pattern: '\b(?:lose|drop|shed|losing|dropping)\s+(?:up\s+to\s+)?\d+(?:\.\d+)?\s*(?:%|(?:lbs?|pounds|kg|kilos|percent|(?:pant\s+|dress\s+)?sizes?)\b)', reason: "promised weight-loss amount", source: "R13 + R17 ([CS] Rule 1, 5)"}
   - {id: R13, pattern: '\b(?:rapid|fast|quick|effortless|easy)\s+weight[- ]loss\b', reason: "rapid/effortless weight loss", source: "R13"}
   - {id: R13, pattern: '\bfat[- ]burn(?:ing|ers?)?\b|\bburns?\s+fat\b', reason: "fat-burning claim", source: "R13"}
@@ -65,13 +67,13 @@ prohibited:
   - {id: R13, pattern: '\b(?:restore[sd]?|restoring|reverse[sd]?|reversing)\s+(?:your\s+)?(?:libido|youth|hair|hairline|aging)\b', reason: "restoration claim", source: "R13"}
 
   # --- R14: banned words
-  - {id: R14, pattern: '\bclinically\s+proven\b', reason: 'banned word "clinically proven"', source: "R14 ([CS] Rule 1; [CHS] §2)"}
+  - {id: R14, pattern: '\bclinically\s+proven\b', reason: 'banned word "clinically proven"', source: "R14 ([CS] Rule 1; [CHS] §2)", examples: ["clinically proven"]}
   - {id: R14, pattern: '\bproven\s+to\b', reason: 'banned word "proven to"', source: "R14"}
   - {id: R14, pattern: '\b(?:dramatic(?:ally)?|breakthrough|miracle|game[- ]chang(?:ing|er))\b', reason: "banned hype word", source: "R14"}
-  - {id: R14, pattern: '\brisk[- ]free\b|\bside[- ]effect[- ]free\b|\bno\s+side[- ]effects?\b', reason: "risk-free / no side effects", source: "R14 ([PB] §14 RED)"}
+  - {id: R14, pattern: '\brisk[- ]free\b|\bside[- ]effect[- ]free\b|\bno\s+side[- ]effects?\b', reason: "risk-free / no side effects", source: "R14 ([PB] §14 RED)", examples: ["risk-free", "no side effects"]}
   - {id: R14, pattern: '\bwill\s+(?:improve|restore|reverse)\b', reason: 'banned "will improve / restore / reverse"', source: "R14"}
   - {id: R14, pattern: '\b(?:really|actually|definitely|totally|100%)\s+works?\b|\bworks\s+(?:wonders|every\s+time|for\s+everyone|like\s+magic)\b', reason: 'efficacy use of "works"', source: "R14"}
-  - {id: R14, pattern: '\b(?:completely|totally|perfectly|absolutely|entirely)\s+safe\b|100%\s+safe\b|\bsafe\s+(?:and\s+effective|for\s+everyone)\b', reason: '"safe" as an absolute', source: "R14"}
+  - {id: R14, pattern: '\b(?:completely|totally|perfectly|absolutely|entirely)\s+safe\b|100%\s+safe\b|\bsafe\s+(?:and\s+effective|for\s+everyone)\b', reason: '"safe" as an absolute', source: "R14", examples: ["completely safe"]}
 
   # --- R15 / R16: FDA status and sameness
   - {id: R15, pattern: '\bgeneric\s+(?:Ozempic|Wegovy|Mounjaro|Zepbound|Rybelsus|Viagra|Cialis|Propecia|Rogaine|semaglutide|tirzepatide)\b', reason: 'compounded is never "generic" of a brand', source: "R15 ([CS] Rule 4; [CHS] §4)"}
@@ -109,17 +111,17 @@ prohibited:
   - {id: R22, pattern: '\bno\s+(?:doctor|provider|physician)(?:.s)?\s+(?:visit|appointment|consult(?:ation)?)\s+(?:needed|required|necessary)\b', reason: '"no doctor visit needed"', source: "R22"}
   - {id: R22, pattern: '\bapproved\s+in\s+(?:minutes|seconds|an?\s+hour|\d+\s*(?:min|minutes|hours?))\b', reason: '"approved in minutes"', source: "R22"}
   - {id: R22, pattern: '\bguaranteed?\s+(?:prescription|approval|Rx)\b', reason: "guaranteed prescription", source: "R22"}
-  - {id: R22, pattern: '\bour\s+(?:doctors|physicians|MDs)\b|\b(?:physician|doctor)\s+review(?:ed)?\b', reason: 'say "licensed healthcare provider", not "our doctors"', source: "R22"}
+  - {id: R22, pattern: '\bour\s+(?:doctors|physicians|MDs)\b|\b(?:physician|doctor)\s+review(?:ed)?\b', reason: 'say "licensed healthcare provider", not "our doctors"', source: "R22", examples: ["our doctors"]}
 
   # --- R23: WellPeps' role
-  - {id: R23, pattern: '\bour\s+(?:pharmacy|pharmacists|compounding)\b|\bwe\s+(?:compound|manufacture|prescribe|dispense)\b|\bWellPeps\s+(?:ships|compounds|manufactures|prescribes|dispenses)\b|\bwe\s+ship\s+your\s+(?:medication|meds|prescription)\b', reason: "WellPeps is a telehealth platform, not the pharmacy or prescriber", source: "R23 ([CS] Rule 11)"}
+  - {id: R23, pattern: '\bour\s+(?:pharmacy|pharmacists|compounding)\b|\bwe\s+(?:compound|manufacture|prescribe|dispense)\b|\bWellPeps\s+(?:ships|compounds|manufactures|prescribes|dispenses)\b|\bwe\s+ship\s+your\s+(?:medication|meds|prescription)\b', reason: "WellPeps is a telehealth platform, not the pharmacy or prescriber", source: "R23 ([CS] Rule 11)", examples: ["our pharmacy", "we prescribe"]}
 
   # --- R24: testimonials / before-after
   - {id: R24, pattern: '\bbefore\s*(?:and|&|/|-)\s*afters?\b', reason: "before/after content", source: "R24 ([CS] Rule 10; [PB] §14)"}
   - {id: R24, pattern: '\b(?:our|WellPeps|my|his|her)\s+(?:patients?|members?|customers?|clients?)\s+(?:have\s+|has\s+)?(?:lost|dropped|shed)\b|\b(?:I|we)\s+(?:lost|dropped|shed)\s+\d+', reason: "quoted patient outcome / testimonial", source: "R24"}
 
   # --- R25: disguised promotion
-  - {id: R25, pattern: '\bsign\s+up\s+(?:here|now|today|at)\b|\buse\s+(?:my|our|the)\s+(?:code|promo(?:\s+code)?|discount\s+code)\b|\bpromo\s+code\b|\bcoupon\b|\$\d+\s+off\b', reason: "sales pitch / promo in a community reply", source: "R25 ([PB] §05, §07, §14)"}
+  - {id: R25, pattern: '\bsign\s+up\s+(?:here|now|today|at)\b|\buse\s+(?:my|our|the)\s+(?:code|promo(?:\s+code)?|discount\s+code)\b|\bpromo\s+code\b|\bcoupon\b|\$\d+\s+off\b', reason: "sales pitch / promo in a community reply", source: "R25 ([PB] §05, §07, §14)", examples: ["sign up here", "use my code"]}
 
   # --- R28: labs
   - {id: R28, pattern: '\b(?:lab\s+(?:panel|test|kit)s?|at-home\s+(?:test|kit)s?|test\s+kits?|blood\s+tests?)\b[^.!?]{0,40}?(?<!\bnot\s)(?<!n.t\s)\bFDA[- ]?approved\b', reason: 'lab panels / at-home kits are never "FDA approved"', source: "R28 ([LA] FDA Status)"}
@@ -130,25 +132,25 @@ prohibited:
 
   # --- R30: individual dosing / clinical advice (escalate, never reply)
   - {id: R30, pattern: '\b\d+(?:\.\d+)?\s?(?:mg|mcg|ml|units?|iu|cc)\b', reason: "dose amount in a reply; dosing questions go to clinical escalation", source: "R30 ([PB] §04 step 7, §13)"}
-  - {id: R30, pattern: '\byou\s+should\s+(?:take|stop|start|increase|decrease|lower|raise|double|skip|switch|inject)\b', reason: "individual treatment recommendation", source: "R30 + R9"}
+  - {id: R30, pattern: '\byou\s+should\s+(?:take|stop|start|increase|decrease|lower|raise|double|skip|switch|inject)\b', reason: "individual treatment recommendation", source: "R30 + R9", examples: ["you should take", "you should stop"]}
   - {id: R30, pattern: '\b(?:increase|decrease|lower|raise|titrate|double)\s+(?:your|the)\s+dos(?:e|age)\b', reason: "dosing instruction", source: "R30"}
 
   # --- R32: never collect health information
-  - {id: R32, pattern: '\bwhat(?:.s|\s+is)\s+your\s+(?:current\s+|starting\s+)?(?:weight|BMI|A1C|dose|dosage|diagnosis)\b|\bwhat\s+(?:medications?|meds|conditions?)\s+(?:are\s+you|do\s+you)\b', reason: "asks for health information in public", source: "R32 (inferred from R9/R30, [CHS] §9)"}
-  - {id: R32, pattern: '\b(?:send|DM|message)\s+(?:us|me)\s+(?:a\s+|your\s+)?(?:photos?|pics?|pictures?|meds|medications?|labs?|lab\s+results|weight|health\s+details)\b', reason: "asks for health information or photos", source: "R32"}
+  - {id: R32, pattern: '\bwhat(?:.s|\s+is)\s+your\s+(?:current\s+|starting\s+)?(?:weight|BMI|A1C|dose|dosage|diagnosis)\b|\bwhat\s+(?:medications?|meds|conditions?)\s+(?:are\s+you|do\s+you)\b', reason: "asks for health information in public", source: "R32 (inferred from R9/R30, [CHS] §9)", examples: ["what's your current weight"]}
+  - {id: R32, pattern: '\b(?:send|DM|message)\s+(?:us|me)\s+(?:a\s+|your\s+)?(?:photos?|pics?|pictures?|meds|medications?|labs?|lab\s+results|weight|health\s+details)\b', reason: "asks for health information or photos", source: "R32", examples: ["DM us your photos"]}
 
   # --- R37: hashtags WellPeps must never use
   - {id: R37, pattern: '#(?:ozempic|semaglutide|tirzepatide|weightlossjourney)\b', reason: "banned hashtag", source: "R37 ([SC] Hashtags)"}
 
   # --- R39: urgency / countdown language
-  - {id: R39, pattern: '\b(?:spots?\s+(?:are\s+)?(?:limited|filling)|limited[- ]time|limited\s+(?:spots|availability|supply)|today\s+only|act\s+(?:now|fast)|hurry|while\s+(?:supplies|spots)\s+last|ends\s+(?:tonight|today|soon|at\s+midnight)|last\s+chance|don.?t\s+miss\s+out|only\s+\d+\s+(?:spots|left))\b', reason: "urgency language", source: "R39 (LegitScript Enterprise Fact Sheet p.2)"}
+  - {id: R39, pattern: '\b(?:spots?\s+(?:are\s+)?(?:limited|filling)|limited[- ]time|limited\s+(?:spots|availability|supply)|today\s+only|act\s+(?:now|fast)|hurry|while\s+(?:supplies|spots)\s+last|ends\s+(?:tonight|today|soon|at\s+midnight)|last\s+chance|don.?t\s+miss\s+out|only\s+\d+\s+(?:spots|left))\b', reason: "urgency language", source: "R39 (LegitScript Enterprise Fact Sheet p.2)", examples: ["limited-time", "act now"]}
 
 patient_confirmation:
-  - {id: R31, pattern: '\byour\s+(?:order|orders|prescription|prescriptions|Rx|account|shipment|package|refill|refills|chart|medical\s+records?|records|intake|treatment\s+plan|care\s+team|provider|WellPeps\s+provider|lab\s+results)\b', reason: "references the person's account, order, prescription or provider", source: "R31 ([CHS] §9; inferred)"}
-  - {id: R31, pattern: '\bas\s+(?:our|a\s+WellPeps)\s+(?:patient|customer|member|client)\b', reason: "confirms patient status", source: "R31"}
-  - {id: R31, pattern: '\b(?:you.re|you\s+are)\s+(?:a|an|one\s+of\s+our)\s+(?:existing\s+|current\s+)?(?:WellPeps\s+)?(?:patients?|customers?|members?|clients?)\b', reason: "confirms patient status", source: "R31"}
-  - {id: R31, pattern: '\bwe\s+(?:can\s+)?(?:see|noticed|checked|reviewed|looked\s+(?:at|into))\s+(?:that\s+)?(?:you|your)\b', reason: "implies access to the person's records", source: "R31"}
-  - {id: R31, pattern: '\b(?:our|the)\s+records\s+show\b|\bin\s+our\s+(?:system|records)\b|\bwe\s+(?:have|received)\s+your\b', reason: "implies access to the person's records", source: "R31"}
+  - {id: R31, pattern: '\byour\s+(?:order|orders|prescription|prescriptions|Rx|account|shipment|package|refill|refills|chart|medical\s+records?|records|intake|treatment\s+plan|care\s+team|provider|WellPeps\s+provider|lab\s+results)\b', reason: "references the person's account, order, prescription or provider", source: "R31 ([CHS] §9; inferred)", examples: ["we'll look into your account", "your order", "your prescription", "your provider", "your refill"]}
+  - {id: R31, pattern: '\bas\s+(?:our|a\s+WellPeps)\s+(?:patient|customer|member|client)\b', reason: "confirms patient status", source: "R31", examples: ["as our patient", "as a WellPeps customer"]}
+  - {id: R31, pattern: '\b(?:you.re|you\s+are)\s+(?:a|an|one\s+of\s+our)\s+(?:existing\s+|current\s+)?(?:WellPeps\s+)?(?:patients?|customers?|members?|clients?)\b', reason: "confirms patient status", source: "R31", examples: ["you're one of our patients", "you are an existing WellPeps member"]}
+  - {id: R31, pattern: '\bwe\s+(?:can\s+)?(?:see|noticed|checked|reviewed|looked\s+(?:at|into))\s+(?:that\s+)?(?:you|your)\b', reason: "implies access to the person's records", source: "R31", examples: ["we can see that you", "we checked your", "we looked into your"]}
+  - {id: R31, pattern: '\b(?:our|the)\s+records\s+show\b|\bin\s+our\s+(?:system|records)\b|\bwe\s+(?:have|received)\s+your\b', reason: "implies access to the person's records", source: "R31", examples: ["our records show", "in our system", "we received your"]}
 
 yellow:
   - {id: R10, pattern: '\$\s?\d', reason: "price mentioned (R11: approved pricing and contexts only)", source: "R10 + R11"}

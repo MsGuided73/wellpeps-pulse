@@ -20,6 +20,23 @@ never enter this repo or any prompt.**
 - Keep package name `harvey` through build; optional mechanical rename later.
 - Slack alerts carry **link + category only** (no post text) to limit PHI spread.
 - Escalation/urgent handling ignores quiet hours; urgent-capable sources tick every 5 min.
+- Independent safety-screen pass on health-related mentions (defense against
+  prompt-injected escalation suppression): a second, narrow haiku call
+  (`harvey/agents/safety_screen.py`, `prompts/safety_screen.md`) on every
+  mention that triage did not escalate and that names a medication, product,
+  or health term. Adverse event / self-harm -> escalate; minor -> no reply,
+  urgency >= high; unparseable -> no reply, urgency >= high, no page.
+  Toggle: `triage.safety_screen` (default on).
+- A severe triage category (adverse_event, legal_regulatory, privacy,
+  billing_fraud) always escalates, at any model urgency; `escalation_kind` is
+  the single source of truth. A viral negative is paged but stays `triaged`.
+- Category-level discussion in WellPeps' markets (GLP-1, peptides, hair,
+  sexual wellness, hormones/TRT) is relevant even when no brand is named;
+  misinformation there is relevant with no reply by default.
+- A red compliance-filter draft is re-prompted once with the hit reasons;
+  at most 2 drafter calls per mention. Both attempts are audited.
+- Mention text is capped at 20,000 chars (title 500) at ingest; the mentions
+  list API returns a 2,000-char preview.
 
 ## 1. Module fate
 | Module | Fate |
@@ -78,3 +95,8 @@ Steps 4–6 respect quiet hours and budget; 1–3 do not (triage has budget prio
 - Legal sign-off on Apify scraping; mention-text retention period (default 180 days).
 - R38 medication-name rule and LegitScript status (R12) → config toggles.
 - API mode: dollar budget instead of subscription quota throttle.
+- Minors: the safety screen flags a likely under-18 seeking prescription
+  weight-loss or sexual-wellness drugs, which blocks any reply and raises
+  urgency to at least high, but there is no `minor` escalation kind, owner,
+  or SLA yet. Decide who owns these, whether they page, and any R33 reporting
+  duty, then add the kind to `ESCALATION_KINDS`.

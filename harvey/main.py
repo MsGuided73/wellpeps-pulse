@@ -21,6 +21,7 @@ import pytz
 
 from harvey.agents.drafter import Drafter
 from harvey.agents.reviewer import Reviewer
+from harvey.agents.safety_screen import SafetyScreen
 from harvey.agents.triager import Triager, triage_batch
 from harvey.brain import Brain
 from harvey.config import ConfigError, PulseConfig, load_config
@@ -78,7 +79,6 @@ def seconds_until_quiet_hours_end(config: PulseConfig) -> int:
 
 
 async def decide_next_action(
-    brain: Brain | None,
     state: StateManager | None,
     config: PulseConfig,
     summary: dict | None = None,
@@ -103,6 +103,11 @@ async def decide_next_action(
         action, reason = "idle", "nothing to do"
     logger.info(f"Decision: {action} ({reason})")
     return action
+
+
+def build_safety_screen(brain, config: PulseConfig) -> SafetyScreen | None:
+    """The independent safety screen, unless ``triage.safety_screen`` is off."""
+    return SafetyScreen(brain) if config.triage.safety_screen else None
 
 
 def sleep_seconds(config: PulseConfig, open_escalations: int) -> int:
@@ -146,13 +151,13 @@ async def _interruptible_sleep(seconds: float, stop_event: asyncio.Event) -> boo
 
 def _tasks_for(
     action: str, state=None, triager=None, budget_ok=None, escalate_hook=None,
-    drafter=None, reviewer=None,
+    drafter=None, reviewer=None, screen=None,
 ) -> list[tuple[str, object]]:
     """Coroutines to run for an action."""
     if action == "triage" and state is not None and triager is not None:
         return [("triage", triage_batch(
             state, triager, limit=TRIAGE_BATCH_LIMIT, budget_ok=budget_ok,
-            escalate=escalate_hook,
+            escalate=escalate_hook, screen=screen,
         ))]
     if action == "draft" and state is not None and drafter is not None and reviewer is not None:
         return [("draft", draft_batch(
@@ -180,6 +185,7 @@ async def heartbeat(stop_event: asyncio.Event | None = None):
     state = StateManager()
     brain = Brain(state, models=config.usage.models)
     triager = Triager(brain)
+    screen = build_safety_screen(brain, config)
     drafter = Drafter(brain)
     reviewer = Reviewer(brain)
     notifier = SlackNotifier.from_config(config)
@@ -211,7 +217,7 @@ async def heartbeat(stop_event: asyncio.Event | None = None):
                 f"State: {summary['total']} mention(s), "
                 f"{summary['open_escalations']} open escalation(s)."
             )
-            decided = await decide_next_action(brain, state, config, summary=summary)
+            decided = await decide_next_action(state, config, summary=summary)
 
             # 2. Quiet hours: triage still runs; drafting waits.
             action = apply_quiet_hours(decided, in_quiet_hours(config))
@@ -224,6 +230,7 @@ async def heartbeat(stop_event: asyncio.Event | None = None):
             tasks = _tasks_for(
                 action, state=state, triager=triager, budget_ok=budget_ok,
                 escalate_hook=escalate_hook, drafter=drafter, reviewer=reviewer,
+                screen=screen,
             )
             results = await asyncio.gather(
                 *[t[1] for t in tasks], return_exceptions=True

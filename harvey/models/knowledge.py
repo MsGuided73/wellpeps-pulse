@@ -9,7 +9,7 @@ import re
 from datetime import date
 from typing import Annotated, Literal
 
-from pydantic import AfterValidator, BaseModel, ConfigDict, Field, field_validator
+from pydantic import AfterValidator, BaseModel, ConfigDict, Field, field_validator, model_validator
 
 
 def _check_regex(pattern: str) -> str:
@@ -149,6 +149,17 @@ class PatternRule(_Strict):
     reason: str
     source: str
     unless_toggle: str | None = None
+    # Plain, readable phrases the pattern blocks. They are shown to the
+    # drafter as a "never write" list, so each one must match the pattern.
+    examples: list[str] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def _examples_match(self) -> "PatternRule":
+        rx = re.compile(self.pattern, re.IGNORECASE)
+        stray = [e for e in self.examples if not rx.search(e)]
+        if stray:
+            raise ValueError(f"{self.id} examples don't match its pattern: {stray}")
+        return self
 
 
 class Toggles(_Strict):
