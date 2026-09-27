@@ -65,7 +65,9 @@ ALLOWED_TRANSITIONS: dict[MentionStatus, frozenset[MentionStatus]] = {
         MentionStatus.APPROVED, MentionStatus.REJECTED, MentionStatus.DRAFTED,
         MentionStatus.ESCALATED,
     }),
-    MentionStatus.APPROVED: frozenset({MentionStatus.POSTED}),
+    # approved -> in_review: a human edits an approved, not-yet-posted reply;
+    # the edit voids the approval and it must be approved again.
+    MentionStatus.APPROVED: frozenset({MentionStatus.POSTED, MentionStatus.IN_REVIEW}),
     MentionStatus.ESCALATED: frozenset({MentionStatus.TRIAGED, MentionStatus.DROPPED}),
 }
 
@@ -357,6 +359,13 @@ MIGRATIONS: list[str] = [
     ALTER TABLE triage ADD COLUMN drug TEXT DEFAULT '';
     CREATE INDEX IF NOT EXISTS idx_triage_drug ON triage(drug);
     """,
+    # ── v4: dashboard auth (Phase 7) ──
+    # sessions.id holds sha256(token), never the token. csrf_token is the
+    # per-session double-submit value returned by /api/me.
+    """
+    ALTER TABLE sessions ADD COLUMN csrf_token TEXT DEFAULT '';
+    ALTER TABLE users ADD COLUMN last_login_at TIMESTAMP;
+    """,
 ]
 
 
@@ -378,6 +387,10 @@ class StateManager:
             yield db
         finally:
             await db.close()
+
+    def connect(self):
+        """Public connection context for sibling modules (auth, review)."""
+        return self._connect()
 
     async def init_db(self):
         """Create/upgrade the schema. Safe to call on every startup."""
@@ -748,15 +761,22 @@ class StateManager:
             return cursor.lastrowid
 
     async def get_latest_draft(self, mention_id: int) -> Draft | None:
+        drafts = await self.list_drafts(mention_id, limit=1)
+        return drafts[0] if drafts else None
+
+    async def list_drafts(self, mention_id: int, limit: int = 50) -> list[Draft]:
+        """Draft versions for a mention, newest first."""
         async with self._connect() as db:
             db.row_factory = aiosqlite.Row
             async with db.execute(
-                "SELECT * FROM drafts WHERE mention_id = ? ORDER BY version DESC LIMIT 1",
-                (int(mention_id),),
+                "SELECT * FROM drafts WHERE mention_id = ? ORDER BY version DESC LIMIT ?",
+                (int(mention_id), max(int(limit), 0)),
             ) as cursor:
-                row = await cursor.fetchone()
-        if row is None:
-            return None
+                rows = await cursor.fetchall()
+        return [self._draft_from_row(r) for r in rows]
+
+    @staticmethod
+    def _draft_from_row(row: aiosqlite.Row) -> Draft:
         d = dict(row)
         d["claim_ids"] = _loads(d.pop("claim_ids_json", None), [])
         d["filter_hits"] = _loads(d.pop("filter_hits_json", None), [])

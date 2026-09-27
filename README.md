@@ -14,7 +14,7 @@ Pulse never posts on its own, and nothing clinical is ever auto-published.
 
 ## Status
 
-**Phase 6 complete.** Harvey's sales functionality is gone. What's here:
+**Phase 7 complete.** Harvey's sales functionality is gone. What's here:
 
 - a data layer with mentions, triage, drafts, escalations, and an append-only audit log
 - config, plus WellPeps knowledge in `config/*.yaml` (competitors, products, keywords, compliance rules, a seed claims library pending sign-off)
@@ -24,10 +24,11 @@ Pulse never posts on its own, and nothing clinical is ever auto-published.
 - escalations (`harvey/escalation.py`): each urgent mention gets an owner, a 15-minute SLA, and a Slack page (`harvey/notify/slack.py`) that carries a link and a category only, never post text or handles. Every heartbeat sweeps open escalations, re-pages SLA breaches (with the backup owner), and retries pages that didn't go out. `pulse escalations` lists them; `pulse ack <id> --by NAME` acknowledges one
 - reply drafting (`harvey/drafting.py`): a drafter (`harvey/agents/drafter.py`, `prompts/draft.md`) writes one reply per reply-appropriate mention using only approved claims (by id); the deterministic compliance filter checks it; an adversarial reviewer (`harvey/agents/reviewer.py`, `prompts/review.md`) looks for rule violations and never rewrites (skipped when the filter is red). Every draft lands in `in_review` with its tier, verdict, and a `drafted → filtered → reviewed` audit trail. Nothing is approved or posted automatically
 - a heartbeat loop that sweeps escalations and triages new mentions (both even in quiet hours), drafts when nothing is waiting for triage (not in quiet hours, within budget), and wakes every 5 minutes while an escalation is open
-- a local dashboard with a mention feed and Claude usage
+- triage records the `drug` discussed (semaglutide, tirzepatide, BPC-157, ...) separately from a WellPeps `product`, which is set only when the post is about WellPeps
+- a signed-in review dashboard (`harvey/dashboard.py`, `harvey/review.py`, `harvey/auth.py`): **Urgent** (open escalations with SLA countdowns, breached first, ack by role), **Review desk** (original post + permalink, triage tags, draft editor, claim chips, compliance tier and reviewer verdict, save/approve/reject, copy-and-open, mark posted, manual escalation; `j`/`k`/`e`/`a` keys), **Feed** (filters, search, detail drawer with the audit trail), **Usage**, **Users** (admin). Approval is refused while the filter is red, the draft cites no claim, or any cited claim is still PENDING sign-off. Pulse still posts nothing: a human copies the approved reply, posts it, and marks it posted
+- auth: argon2id passwords, HttpOnly SameSite=Strict session cookies (only a hash of the token is stored, 12 h sliding expiry), a CSRF header on every change, login throttling (5 failures / 15 min per email and per IP), roles viewer / reviewer / clinical / admin, a strict Content-Security-Policy, and a refusal to bind beyond 127.0.0.1 until an admin exists
 
-Real collectors, the review desk (approve/edit), auth, and briefs
-arrive in later phases. The full roadmap is in [docs/PLAN.md](docs/PLAN.md).
+Real collectors and briefs arrive in later phases. The full roadmap is in [docs/PLAN.md](docs/PLAN.md).
 
 ## Quick start
 
@@ -41,11 +42,32 @@ cp .env.example .env                        # every key is optional for now
 .venv/Scripts/python -m pytest -q           # run the tests
 pulse status                                # mention counts by status
 pulse ingest --fixture                      # load the sample fixture posts
-pulse dashboard                             # http://127.0.0.1:5555 (loopback only)
+pulse user add you@wellpeps.com --role admin --name "You"   # prompts for a password (min 12)
+pulse dashboard                             # http://127.0.0.1:5555, sign in
+pulse user list                             # users and roles; `pulse user disable EMAIL`
 pulse escalations                           # open escalations and SLA status
 pulse ack 3 --by "Nurse Jo"                 # acknowledge escalation #3
 pulse run                                   # heartbeat loop (triages new mentions)
 ```
+
+### Demo data
+
+`scripts/seed_demo.py` fills a throwaway database with **DEMO DATA** (the
+fixture posts run through the real pipeline with a deterministic fake
+brain; no Claude calls, no Slack):
+
+```bash
+export PULSE_DB_PATH=data/demo.db                 # PowerShell: $env:PULSE_DB_PATH="data/demo.db"
+.venv/Scripts/python scripts/seed_demo.py
+.venv/Scripts/python -m harvey user add demo@pulse.test --role admin --name Demo
+.venv/Scripts/python -m harvey dashboard          # http://127.0.0.1:5555
+```
+
+Roles: viewer (read), reviewer (edit, approve, reject, copy, mark posted,
+escalate, ack non-clinical escalations), clinical (read, ack any escalation
+including adverse events), admin (everything, users, heartbeat start/stop).
+Serving beyond loopback (`pulse dashboard --host 0.0.0.0`) needs an admin
+and HTTPS in front, with `dashboard.secure_cookies: true` in harvey.yaml.
 
 `harvey` is still installed as an alias for `pulse`. Configuration lives in
 `harvey.yaml`, and `harvey.local.yaml` (gitignored) overrides it. State is
@@ -55,7 +77,7 @@ stored in `data/pulse.db`, or wherever `PULSE_DB_PATH` points.
 
 - Collectors read public data only, keep only minimal author info, and store a permalink for every mention.
 - Claude calls are tool-less text in and text out, through `harvey/brain.py`.
-- No autonomous posting. A human approves every reply.
+- No autonomous posting. A human approves every reply, with signed-off claims, and posts it by hand.
 - The audit log is append-only. SQLite triggers reject UPDATE and DELETE on it.
 - Supplier costs never enter this repo or any prompt.
 

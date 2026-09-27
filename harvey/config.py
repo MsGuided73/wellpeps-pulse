@@ -163,6 +163,23 @@ class NotifyConfig(BaseModel):
     dashboard_url: str = ""
 
 
+class DashboardConfig(BaseModel):
+    # Set true whenever the dashboard is served over HTTPS (any non-loopback
+    # deployment): the session cookie then carries the Secure flag.
+    secure_cookies: bool = False
+    # Idle session lifetime; every authenticated request slides it forward.
+    session_hours: int = Field(default=12, ge=1, le=24 * 30)
+
+
+class ReviewConfig(BaseModel):
+    # Re-run the adversarial reviewer (a Claude call) on every human edit.
+    # Off by default: the deterministic compliance filter always re-runs.
+    rerun_reviewer_on_edit: bool = False
+    # Approval needs every cited claim to be publishable (signed off, not
+    # expired) in config/claims.yaml. Keep true in production.
+    require_publishable_claims: bool = True
+
+
 class PulseConfig(BaseModel):
     # Unknown keys fail loudly, so a leftover sales-era harvey.yaml is caught.
     model_config = ConfigDict(extra="forbid")
@@ -172,6 +189,8 @@ class PulseConfig(BaseModel):
     triage: TriageConfig = Field(default_factory=TriageConfig)
     escalation: EscalationConfig = Field(default_factory=EscalationConfig)
     notify: NotifyConfig = Field(default_factory=NotifyConfig)
+    dashboard: DashboardConfig = Field(default_factory=DashboardConfig)
+    review: ReviewConfig = Field(default_factory=ReviewConfig)
     retention_days: int = Field(default=180, ge=1)
 
 

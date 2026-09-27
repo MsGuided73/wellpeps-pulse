@@ -1,10 +1,12 @@
-"""WellPeps Pulse CLI: run, dashboard, status, ingest, usage, escalations, ack.
+"""WellPeps Pulse CLI: run, dashboard, status, ingest, usage, escalations, ack,
+user.
 
 Installed as both `pulse` and `harvey` (same entry point).
 """
 
 import argparse
 import asyncio
+import getpass
 import sys
 
 
@@ -16,14 +18,66 @@ def cmd_run(args):
 
 
 def cmd_dashboard(args):
-    """Launch the local web dashboard (loopback only)."""
-    from harvey.dashboard import start_dashboard
+    """Launch the web dashboard (127.0.0.1 unless --host and an admin exists)."""
+    from harvey import dashboard
 
     if not 1 <= args.port <= 65535:
         print(f"  Invalid port: {args.port}. Must be 1-65535.")
         sys.exit(2)
 
-    start_dashboard(port=args.port)
+    dashboard.start_dashboard(port=args.port, host=args.host)
+
+
+def _auth_store():
+    from harvey.auth import AuthStore
+    from harvey.state import StateManager
+
+    async def _open():
+        state = StateManager()
+        await state.init_db()
+        return AuthStore(state)
+
+    return asyncio.run(_open())
+
+
+def cmd_user_add(args):
+    """Create a dashboard user; the password is read with getpass, twice."""
+    from harvey.auth import MIN_PASSWORD_LENGTH, check_password_policy
+
+    password = getpass.getpass(f"  Password for {args.email} (min {MIN_PASSWORD_LENGTH} chars): ")
+    confirm = getpass.getpass("  Confirm password: ")
+    if password != confirm:
+        print("\n  Passwords do not match; no user created.\n")
+        sys.exit(1)
+    try:
+        check_password_policy(password)
+        store = _auth_store()
+        asyncio.run(store.create_user(args.email, password, args.role, name=args.name))
+    except ValueError as exc:
+        print(f"\n  {exc}; no user created.\n")
+        sys.exit(1)
+    print(f"\n  User {args.email.strip().lower()} created with role {args.role}.\n")
+
+
+def cmd_user_list(args):
+    """List dashboard users (never their password hashes)."""
+    users = asyncio.run(_auth_store().list_users())
+    print("\n  Dashboard users")
+    print("  " + "=" * 60)
+    if not users:
+        print("  No users. Create one with `pulse user add EMAIL --role admin --name NAME`.")
+    for user in users:
+        state = "active" if user["active"] else "disabled"
+        print(f"  {user['email']:<32} {user['role']:<10} {state:<9} {user['display_name']}")
+    print()
+
+
+def cmd_user_disable(args):
+    """Disable a user and end their sessions."""
+    if not asyncio.run(_auth_store().disable_user(args.email)):
+        print(f"\n  No user {args.email}.\n")
+        sys.exit(1)
+    print(f"\n  User {args.email.strip().lower()} disabled; their sessions are ended.\n")
 
 
 def cmd_status(args):
@@ -209,9 +263,28 @@ def build_parser() -> argparse.ArgumentParser:
     sub = subparsers.add_parser("run", help="Start the heartbeat loop")
     sub.set_defaults(func=cmd_run)
 
-    sub = subparsers.add_parser("dashboard", help="Open the local web dashboard (127.0.0.1)")
+    sub = subparsers.add_parser("dashboard", help="Open the web dashboard (default 127.0.0.1)")
     sub.add_argument("--port", type=int, default=5555, help="Port (default: 5555)")
+    sub.add_argument(
+        "--host", default="127.0.0.1",
+        help="Bind address (default 127.0.0.1). Anything else needs an active admin user.",
+    )
     sub.set_defaults(func=cmd_dashboard)
+
+    from harvey.auth import ROLES
+
+    user = subparsers.add_parser("user", help="Manage dashboard users")
+    user_sub = user.add_subparsers(dest="user_command", required=True)
+    sub = user_sub.add_parser("add", help="Create a user (prompts for the password)")
+    sub.add_argument("email")
+    sub.add_argument("--role", required=True, choices=ROLES)
+    sub.add_argument("--name", required=True, help="Display name")
+    sub.set_defaults(func=cmd_user_add)
+    sub = user_sub.add_parser("list", help="List users")
+    sub.set_defaults(func=cmd_user_list)
+    sub = user_sub.add_parser("disable", help="Disable a user and end their sessions")
+    sub.add_argument("email")
+    sub.set_defaults(func=cmd_user_disable)
 
     sub = subparsers.add_parser("status", help="Show mention counts by status")
     sub.set_defaults(func=cmd_status)

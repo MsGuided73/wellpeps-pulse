@@ -55,5 +55,19 @@ notify:
   # Optional dashboard base URL, linked from Slack pages.
   dashboard_url: ""
 
+dashboard:
+  # Set true when the dashboard is served over HTTPS (required for any
+  # non-loopback deployment): the session cookie gets the Secure flag.
+  secure_cookies: false
+  session_hours: 12       # idle session lifetime (sliding)
+
+review:
+  # Re-run the adversarial reviewer (one Claude call) after each human edit.
+  # The deterministic compliance filter always re-runs.
+  rerun_reviewer_on_edit: false
+  # Approval requires every cited claim to be signed off in
+  # config/claims.yaml ("no claim ID, no publish"). Keep true.
+  require_publishable_claims: true
+
 # Days to keep mention text before purging (pending legal sign-off).
 retention_days: 180

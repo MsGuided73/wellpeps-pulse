@@ -37,6 +37,14 @@ never enter this repo or any prompt.**
   at most 2 drafter calls per mention. Both attempts are audited.
 - Mention text is capped at 20,000 chars (title 500) at ingest; the mentions
   list API returns a 2,000-char preview.
+- Triage keeps `drug` (generic/category term discussed) apart from `product`
+  (a WellPeps SKU, only when the post is about WellPeps).
+- Phase 7 auth: argon2id (argon2-cffi); sessions are sha256(token) rows with
+  a per-session CSRF token and 12 h sliding expiry; login throttle is
+  in-memory (single dashboard process). Roles: viewer, reviewer, clinical
+  (ack any escalation, no draft actions: separation of duties), admin.
+  Approval needs a non-red filter, >= 1 claim, and (default) publishable
+  claims; editing an approved reply voids the approval (approved -> in_review).
 
 ## 1. Module fate
 | Module | Fate |

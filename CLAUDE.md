@@ -7,7 +7,7 @@ and drafts replies that humans review. It is **not** a sales or outreach
 tool.
 
 The roadmap and data model are in `docs/PLAN.md`. Read it before changing
-behavior. Current status: **Phase 6 complete**. The data layer, config, idle
+behavior. Current status: **Phase 7 complete**. The data layer, config, idle
 heartbeat, minimal dashboard, knowledge files (`config/*.yaml`) and the
 deterministic compliance filter (`harvey/compliance.py`) exist.
 - Phase 3: collector registry + JSONL fixture collector (`harvey/collectors/`)
@@ -32,6 +32,20 @@ deterministic compliance filter (`harvey/compliance.py`) exist.
   (`escalation_kind` is the source of truth); red drafts get one rewrite
   (max 2 drafter calls); the draft prompt's "never write" list comes from
   `examples:` in `config/compliance_rules.yaml` (each must match its rule).
+
+- Pre-7 fix: triage has `drug` (generic/category term discussed,
+  normalized via `knowledge.drug_lookup`); `product` (a WellPeps SKU) is
+  set only when the mention is about WellPeps.
+- Phase 7: `harvey/auth.py` (argon2id passwords, sha256-hashed session
+  tokens in an HttpOnly SameSite=Strict cookie, per-session CSRF header,
+  in-memory login throttle, roles viewer/reviewer/clinical/admin in
+  `PERMISSIONS`, admin bootstrap from env, bind guard), `harvey/review.py`
+  (urgent/feed/detail reads; edit/approve/reject/copied/mark-posted/manual
+  escalate), `harvey/dashboard.py` (routes + auth/CSRF/security-header
+  middleware), `pulse user add|list|disable`, `scripts/seed_demo.py`
+  (DEMO DATA into a throwaway `PULSE_DB_PATH`). The UI (`harvey/web/`)
+  runs under a strict CSP: no inline script/style, no `on*=` handlers;
+  render server data only through `escHtml`/`safeHref`.
 
 Later phases add everything else. Don't build ahead of the phase you've
 been asked to do.
@@ -64,9 +78,14 @@ Also:
 
 - Tests: `.venv/Scripts/python -m pytest -q`. Work test-first.
 - Imports smoke check: `.venv/Scripts/python -c "import harvey.main, harvey.dashboard, harvey.cli, harvey.state"`
-- CLI: `pulse run | dashboard | status | ingest | usage | escalations | ack`
-  (`harvey` is an alias).
-- The dashboard binds to 127.0.0.1 only until auth lands in Phase 7.
+- CLI: `pulse run | dashboard [--host H] | status | ingest | usage |
+  escalations | ack | user add|list|disable` (`harvey` is an alias).
+- The dashboard binds to 127.0.0.1 by default; `--host` anything else is
+  refused until an active admin exists. Every /api route except /api/login
+  needs a session; every POST needs X-CSRF-Token. Approval needs a non-red
+  filter result and publishable claims (`review.require_publishable_claims`).
+  Nothing posts automatically: "copied" / "mark posted" only record what a
+  human did by hand.
 - The DB is `data/pulse.db`, and `PULSE_DB_PATH` overrides it. Schema
   changes are appended to `MIGRATIONS` in `harvey/state.py`. Never edit a
   released migration.

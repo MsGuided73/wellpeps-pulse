@@ -108,6 +108,8 @@ def reason_code(triage: Triage) -> str:
         return "keyword_override"
     if reason.startswith("safety_screen:"):
         return "safety_screen"
+    if reason.startswith("manual:"):
+        return "manual"
     if TRIAGE_FAILED in reason:
         return TRIAGE_FAILED
     return f"model_{triage.urgency.value}"

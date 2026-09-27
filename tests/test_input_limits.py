@@ -5,7 +5,6 @@ import asyncio
 from datetime import datetime
 
 import pytest
-from fastapi.testclient import TestClient
 
 import harvey.dashboard as dashboard
 from harvey import knowledge
@@ -87,21 +86,22 @@ def test_compliance_regexes_scan_at_most_the_limit():
 
 @pytest.fixture
 def client(tmp_path, monkeypatch):
-    db_path = tmp_path / "pulse.db"
+    from tests.dashboard_helpers import VIEWER, client_for, setup_app, teardown_app
+
+    state, _ = setup_app(tmp_path, monkeypatch)
 
     async def seed():
-        state = StateManager(str(db_path))
-        await state.init_db()
         await state.upsert_mention(_mention(text="L" * 5000, n=1))
         await state.upsert_mention(_mention(text="short text", n=2))
 
     asyncio.run(seed())
-    monkeypatch.setattr(dashboard, "DB_PATH", db_path)
-    return TestClient(dashboard.app)
+    client, _ = client_for(VIEWER)
+    yield client
+    teardown_app()
 
 
 def test_mentions_api_returns_a_text_preview(client):
-    rows = {r["external_id"]: r for r in client.get("/api/mentions").json()}
+    rows = {r["external_id"]: r for r in client.get("/api/mentions").json()["items"]}
 
     assert len(rows["x1"]["text"]) == dashboard.MENTION_PREVIEW_CHARS == 2000
     assert rows["x1"]["text_truncated"] is True

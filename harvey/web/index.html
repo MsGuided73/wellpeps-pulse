@@ -21,50 +21,109 @@
       <span class="status-dot stopped" id="header-dot"></span>
       <span id="header-status-text">Checking…</span>
     </div>
-    <button class="icon-btn" id="theme-btn" onclick="cycleTheme()"
+    <div class="user-chip" id="user-chip"></div>
+    <button class="icon-btn" id="theme-btn" data-action="theme"
             title="Appearance: follows your system until you pick one">auto</button>
-    <button class="refresh-btn" onclick="loadCurrentTab()">Refresh</button>
+    <button class="refresh-btn" data-action="refresh">Refresh</button>
+    <button class="refresh-btn" data-action="logout">Sign out</button>
   </div>
 </header>
 
 <nav>
-  <button class="active" onclick="showTab('feed', this)">Feed<span class="nav-count" id="nav-feed"></span></button>
-  <button onclick="showTab('usage', this)">Usage</button>
-  <button onclick="showTab('controls', this)">Controls</button>
+  <button class="active" data-tab="urgent">Urgent<span class="nav-count" id="nav-urgent"></span></button>
+  <button data-tab="review">Review desk<span class="nav-count" id="nav-review"></span></button>
+  <button data-tab="feed">Feed</button>
+  <button data-tab="usage">Usage</button>
+  <button data-tab="users" class="hidden" id="nav-users">Users</button>
+  <button data-tab="controls">Controls</button>
 </nav>
 
 <main>
 
-<!-- Feed: collected mentions, newest first -->
-<div id="feed" class="section active">
-  <div class="section-head" style="display:flex;align-items:flex-end;justify-content:space-between;gap:16px">
-    <div>
-      <h2>Feed</h2>
-      <p>Public mentions Pulse has collected, newest first. Every row links to its source post.</p>
-    </div>
-    <div class="form-group" style="flex-shrink:0">
-      <label class="form-label" for="feed-status">Status</label>
-      <select class="form-input" id="feed-status" onchange="loadFeed()">
-        <option value="">All</option>
-      </select>
-    </div>
+<!-- Urgent: open escalations, breached first -->
+<div id="urgent" class="section active">
+  <div class="section-head">
+    <h2>Urgent</h2>
+    <p>Open escalations, breached first, then the soonest SLA. Adverse events are acknowledged by the clinical owner. Refreshes every 30 seconds.</p>
   </div>
-  <div id="feed-summary" class="breakdown" style="margin-bottom:16px"></div>
+  <div id="urgent-list"></div>
+</div>
+
+<!-- Review desk: drafts waiting on a human, and approved replies to post by hand -->
+<div id="review" class="section">
+  <div class="section-head">
+    <h2>Review desk</h2>
+    <p>Every reply needs a human approval with signed-off claims. Pulse never posts: copy an approved reply, post it yourself, then mark it posted.</p>
+  </div>
+  <div class="desk">
+    <div class="desk-list" id="review-list"></div>
+    <div class="desk-pane" id="review-pane"></div>
+  </div>
+  <p class="kbd-hint"><kbd>j</kbd>/<kbd>k</kbd> next/previous &middot; <kbd>e</kbd> edit &middot; <kbd>a</kbd> approve</p>
+</div>
+
+<!-- Feed: every collected mention -->
+<div id="feed" class="section">
+  <div class="section-head">
+    <h2>Feed</h2>
+    <p>Public mentions Pulse has collected, newest first. Click a row for its full record and audit trail.</p>
+  </div>
+  <form class="form-row" id="feed-filters">
+    <div class="form-group"><label class="form-label" for="f-q">Search text</label>
+      <input class="form-input" id="f-q" name="q" type="search" placeholder="contains…"></div>
+    <div class="form-group"><label class="form-label" for="f-status">Status</label>
+      <select class="form-input" id="f-status" name="status"><option value="">All</option></select></div>
+    <div class="form-group"><label class="form-label" for="f-platform">Platform</label>
+      <select class="form-input" id="f-platform" name="platform"><option value="">All</option></select></div>
+    <div class="form-group"><label class="form-label" for="f-category">Category</label>
+      <select class="form-input" id="f-category" name="category"><option value="">All</option></select></div>
+    <div class="form-group"><label class="form-label" for="f-urgency">Urgency</label>
+      <select class="form-input" id="f-urgency" name="urgency"><option value="">All</option></select></div>
+    <div class="form-group"><label class="form-label" for="f-drug">Drug</label>
+      <input class="form-input" id="f-drug" name="drug" placeholder="semaglutide"></div>
+    <div class="form-group"><label class="form-label" for="f-product">WellPeps product</label>
+      <input class="form-input" id="f-product" name="product"></div>
+    <div class="form-group"><label class="form-label" for="f-competitor">Competitor</label>
+      <input class="form-input" id="f-competitor" name="competitor"></div>
+    <div class="form-group"><button class="btn btn-secondary" type="submit">Apply</button></div>
+  </form>
+  <div id="feed-summary" class="breakdown"></div>
   <div id="feed-list"></div>
+  <div class="pager" id="feed-pager"></div>
 </div>
 
 <!-- Usage -->
 <div id="usage" class="section">
   <div class="section-head"><h2>Usage</h2><p>Actual Claude usage — your subscription quota, calls, and tokens per agent and task. Subscription plans aren't billed per token, so no dollar costs here.</p></div>
-  <div id="usage-quota" class="card" style="display:none"></div>
+  <div id="usage-quota" class="card hidden"></div>
   <div class="stats-grid" id="usage-stats"></div>
-  <div class="card" id="usage-daily" style="display:none"></div>
+  <div class="card hidden" id="usage-daily"></div>
   <div id="usage-tables"></div>
+</div>
+
+<!-- Users (admin) -->
+<div id="users" class="section">
+  <div class="section-head"><h2>Users</h2><p>Who can sign in. Viewers read; reviewers edit, approve and acknowledge non-clinical escalations; clinical acknowledges any escalation; admins do everything.</p></div>
+  <form class="card form-row" id="user-form">
+    <div class="form-group"><label class="form-label" for="u-email">Email</label>
+      <input class="form-input" id="u-email" name="email" type="email" required></div>
+    <div class="form-group"><label class="form-label" for="u-name">Name</label>
+      <input class="form-input" id="u-name" name="name" required></div>
+    <div class="form-group"><label class="form-label" for="u-role">Role</label>
+      <select class="form-input" id="u-role" name="role">
+        <option value="viewer">viewer</option><option value="reviewer">reviewer</option>
+        <option value="clinical">clinical</option><option value="admin">admin</option>
+      </select></div>
+    <div class="form-group"><label class="form-label" for="u-password">Password (min 12)</label>
+      <input class="form-input" id="u-password" name="password" type="password" minlength="12" autocomplete="new-password" required></div>
+    <div class="form-group"><button class="btn btn-primary" type="submit">Add user</button></div>
+  </form>
+  <div id="users-list"></div>
 </div>
 
 <!-- Controls -->
 <div id="controls" class="section">
-  <div class="section-head"><h2>Controls</h2><p>Start and stop the heartbeat loop, and watch what it's doing.</p></div>
+  <div class="section-head"><h2>Controls</h2><p>Start and stop the heartbeat loop (admins), and watch what it's doing.</p></div>
   <div class="control-panel">
     <div class="card">
       <h2>Heartbeat</h2>
@@ -74,21 +133,23 @@
       </div>
       <div class="status-meta" id="control-meta"></div>
       <div class="btn-group">
-        <button class="btn btn-primary" id="btn-start" onclick="startHarvey()">Start</button>
-        <button class="btn btn-danger" id="btn-stop" onclick="stopHarvey()" style="display:none">Stop</button>
+        <button class="btn btn-primary" id="btn-start" data-action="start">Start</button>
+        <button class="btn btn-danger hidden" id="btn-stop" data-action="stop">Stop</button>
       </div>
     </div>
     <div class="card">
       <h2>Recent Logs</h2>
       <div class="log-viewer" id="log-viewer">No logs yet. Start the heartbeat to see activity.</div>
       <div class="btn-group">
-        <button class="btn btn-secondary btn-sm" onclick="loadLogs()">Refresh Logs</button>
+        <button class="btn btn-secondary btn-sm" data-action="logs">Refresh Logs</button>
       </div>
     </div>
   </div>
 </div>
 
 </main>
+
+<aside class="drawer hidden" id="drawer" aria-label="Mention detail"></aside>
 
 <script src="/static/app.js"></script>
 </body>
