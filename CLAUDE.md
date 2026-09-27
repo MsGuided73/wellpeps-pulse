@@ -7,14 +7,17 @@ and drafts replies that humans review. It is **not** a sales or outreach
 tool.
 
 The roadmap and data model are in `docs/PLAN.md`. Read it before changing
-behavior. Current status: **Phase 4 complete**. The data layer, config, idle
+behavior. Current status: **Phase 5 complete**. The data layer, config, idle
 heartbeat, minimal dashboard, knowledge files (`config/*.yaml`) and the
 deterministic compliance filter (`harvey/compliance.py`) exist.
 - Phase 3: collector registry + JSONL fixture collector (`harvey/collectors/`)
   and `harvey/ingest.py` (`pulse ingest --fixture [DIR]`).
 - Phase 4: triage agent (`harvey/agents/triager.py`, `prompts/triage.md`)
   with the `knowledge.urgent_override` safety net, wired into the heartbeat.
-  Escalation rows and Slack paging are Phase 5 (see the TODO there).
+- Phase 5: `harvey/escalation.py` (escalate / sweep / ack, SLA from
+  `escalation.sla_minutes`) and `harvey/notify/slack.py`. Every Slack
+  message is built by `escalation.build_page`; keep it link + category only.
+  The sweep runs every cycle; `pulse escalations`, `pulse ack`.
 
 Later phases add everything else. Don't build ahead of the phase you've
 been asked to do.
@@ -47,7 +50,8 @@ Also:
 
 - Tests: `.venv/Scripts/python -m pytest -q`. Work test-first.
 - Imports smoke check: `.venv/Scripts/python -c "import harvey.main, harvey.dashboard, harvey.cli, harvey.state"`
-- CLI: `pulse run | dashboard | status | ingest | usage` (`harvey` is an alias).
+- CLI: `pulse run | dashboard | status | ingest | usage | escalations | ack`
+  (`harvey` is an alias).
 - The dashboard binds to 127.0.0.1 only until auth lands in Phase 7.
 - The DB is `data/pulse.db`, and `PULSE_DB_PATH` overrides it. Schema
   changes are appended to `MIGRATIONS` in `harvey/state.py`. Never edit a

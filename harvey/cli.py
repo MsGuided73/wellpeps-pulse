@@ -1,4 +1,4 @@
-"""WellPeps Pulse CLI: run, dashboard, status, ingest, usage.
+"""WellPeps Pulse CLI: run, dashboard, status, ingest, usage, escalations, ack.
 
 Installed as both `pulse` and `harvey` (same entry point).
 """
@@ -139,6 +139,67 @@ def cmd_ingest(args):
     asyncio.run(_ingest())
 
 
+def _sla_status(escalation, now) -> str:
+    if escalation.breached:
+        return "BREACHED"
+    if escalation.sla_due_at is None:
+        return "no SLA"
+    minutes = int((escalation.sla_due_at - now).total_seconds() // 60)
+    return f"due in {minutes}m" if minutes >= 0 else f"OVERDUE {-minutes}m"
+
+
+async def escalation_lines(state, now=None) -> list[str]:
+    """One line per open escalation: id, kind, owner, SLA, paging. No post text."""
+    from datetime import datetime, timezone
+
+    now = now or datetime.now(timezone.utc).replace(tzinfo=None)
+    open_escalations = await state.list_open_escalations()
+    if not open_escalations:
+        return ["No open escalations."]
+    lines = []
+    for esc in open_escalations:
+        mention = await state.get_mention(esc.mention_id)
+        paged = "paged" if esc.notified_at else "not paged"
+        lines.append(
+            f"#{esc.id:<5} {esc.kind:<15} {esc.owner or 'UNASSIGNED':<20} "
+            f"{_sla_status(esc, now):<14} {paged:<10} {mention.url if mention else ''}"
+        )
+    return lines
+
+
+def cmd_escalations(args):
+    """List open escalations with their SLA status."""
+    from harvey.state import StateManager
+
+    async def _list():
+        state = StateManager()
+        await state.init_db()
+        print("\n  Open escalations")
+        print("  " + "=" * 60)
+        for line in await escalation_lines(state):
+            print(f"  {line}")
+        print()
+
+    asyncio.run(_list())
+
+
+def cmd_ack(args):
+    """Acknowledge an escalation."""
+    from harvey.escalation import ack
+    from harvey.state import StateManager
+
+    async def _ack():
+        state = StateManager()
+        await state.init_db()
+        if await ack(state, args.id, args.by):
+            print(f"\n  Escalation #{args.id} acknowledged by {args.by.strip()}.\n")
+        else:
+            print(f"\n  Escalation #{args.id} not found or already acknowledged.\n")
+            sys.exit(1)
+
+    asyncio.run(_ack())
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="WellPeps Pulse: social listening with human-reviewed replies.",
@@ -161,6 +222,14 @@ def build_parser() -> argparse.ArgumentParser:
         help="Replay JSONL fixture posts (default dir: tests/fixtures/mentions)",
     )
     sub.set_defaults(func=cmd_ingest)
+
+    sub = subparsers.add_parser("escalations", help="List open escalations and their SLA status")
+    sub.set_defaults(func=cmd_escalations)
+
+    sub = subparsers.add_parser("ack", help="Acknowledge an escalation")
+    sub.add_argument("id", type=int, help="Escalation id (see `pulse escalations`)")
+    sub.add_argument("--by", required=True, help="Who is taking it")
+    sub.set_defaults(func=cmd_ack)
 
     sub = subparsers.add_parser("usage", help="Show Claude usage and quota")
     sub.add_argument("--days", type=int, default=30, help="Breakdown window (default: 30)")

@@ -1,10 +1,12 @@
 """WellPeps Pulse heartbeat loop.
 
-Each cycle: read the state summary, decide the next action, gate it on
-quiet hours (triage is exempt), run it with per-task error isolation, log,
-and sleep. Triage checks the Claude budget before every mention. The full
-step order lives in docs/PLAN.md §3; later phases add escalation sweeps,
-collectors, drafting, and briefs.
+Each cycle: sweep escalations (always, quiet hours or not), read the state
+summary, decide the next action, gate it on quiet hours (triage is exempt),
+run it with per-task error isolation, log, and sleep. While any escalation
+is open the sleep is capped at ``usage.urgent_tick_minutes`` so SLA breaches
+are re-paged promptly. Triage checks the Claude budget before every mention.
+The full step order lives in docs/PLAN.md §3; later phases add collectors,
+drafting, and briefs.
 """
 
 import asyncio
@@ -18,6 +20,8 @@ import pytz
 from harvey.agents.triager import Triager, triage_batch
 from harvey.brain import Brain
 from harvey.config import ConfigError, PulseConfig, load_config
+from harvey.escalation import SweepReport, escalate, sweep
+from harvey.notify import SlackNotifier
 from harvey.state import StateManager
 
 logging.basicConfig(
@@ -89,6 +93,26 @@ async def decide_next_action(
     return action
 
 
+def sleep_seconds(config: PulseConfig, open_escalations: int) -> int:
+    """Heartbeat sleep; capped at the urgent tick while escalations are open."""
+    minutes = config.usage.heartbeat_interval_minutes
+    if open_escalations > 0:
+        minutes = min(minutes, config.usage.urgent_tick_minutes)
+    return minutes * 60
+
+
+async def run_sweep(state, notifier, config: PulseConfig) -> SweepReport | None:
+    """Escalation sweep for one cycle. Logs and swallows errors."""
+    try:
+        report = await sweep(state, notifier, config)
+    except Exception as e:
+        logger.error(f"Escalation sweep failed: {e}", exc_info=True)
+        return None
+    if report.breached or report.paged or report.failed or report.errors:
+        logger.info(f"Escalation sweep: {report}")
+    return report
+
+
 def apply_quiet_hours(action: str, quiet: bool) -> str:
     """During quiet hours only exempt actions run; the rest become idle."""
     if quiet and action not in QUIET_HOURS_EXEMPT:
@@ -108,11 +132,14 @@ async def _interruptible_sleep(seconds: float, stop_event: asyncio.Event) -> boo
         return False
 
 
-def _tasks_for(action: str, state=None, triager=None, budget_ok=None) -> list[tuple[str, object]]:
+def _tasks_for(
+    action: str, state=None, triager=None, budget_ok=None, escalate_hook=None,
+) -> list[tuple[str, object]]:
     """Coroutines to run for an action."""
     if action == "triage" and state is not None and triager is not None:
         return [("triage", triage_batch(
             state, triager, limit=TRIAGE_BATCH_LIMIT, budget_ok=budget_ok,
+            escalate=escalate_hook,
         ))]
     return []
 
@@ -136,13 +163,16 @@ async def heartbeat(stop_event: asyncio.Event | None = None):
     state = StateManager()
     brain = Brain(state, models=config.usage.models)
     triager = Triager(brain)
+    notifier = SlackNotifier.from_config(config)
 
     await state.init_db()
     logger.info(f"Database initialized at {state.db_path}.")
 
-    interval = config.usage.heartbeat_interval_minutes * 60
     max_calls = max(int(200 * (config.usage.max_daily_claude_percent / 100)), 1)
     consecutive_errors = 0
+
+    async def escalate_hook(mention, triage):
+        return await escalate(state, notifier, mention, triage, config)
 
     def budget_ok():
         # Real subscription quota when readable, else our own call counter.
@@ -152,6 +182,10 @@ async def heartbeat(stop_event: asyncio.Event | None = None):
 
     while not stop_event.is_set():
         try:
+            # 0. Escalation sweep: every cycle, regardless of quiet hours,
+            # budget, or what gets decided below.
+            await run_sweep(state, notifier, config)
+
             # 1. Decide
             summary = await state.get_state_summary()
             logger.info(
@@ -168,7 +202,10 @@ async def heartbeat(stop_event: asyncio.Event | None = None):
             # 3. Execute — independent tasks in parallel, errors isolated
             # per task so one failure never takes down the cycle. Triage
             # checks the Claude budget before each mention.
-            tasks = _tasks_for(action, state=state, triager=triager, budget_ok=budget_ok)
+            tasks = _tasks_for(
+                action, state=state, triager=triager, budget_ok=budget_ok,
+                escalate_hook=escalate_hook,
+            )
             results = await asyncio.gather(
                 *[t[1] for t in tasks], return_exceptions=True
             )
@@ -188,11 +225,11 @@ async def heartbeat(stop_event: asyncio.Event | None = None):
 
             consecutive_errors = 0
 
-            # 5. Sleep until next heartbeat
-            logger.info(
-                f"Cycle complete. Sleeping for {config.usage.heartbeat_interval_minutes} minutes."
-            )
-            if await _interruptible_sleep(interval, stop_event):
+            # 5. Sleep until next heartbeat (shorter while escalations are open)
+            open_now = (await state.get_state_summary())["open_escalations"]
+            pause = sleep_seconds(config, open_now)
+            logger.info(f"Cycle complete. Sleeping for {pause // 60} minute(s).")
+            if await _interruptible_sleep(pause, stop_event):
                 break
 
         except (KeyboardInterrupt, asyncio.CancelledError):

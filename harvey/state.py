@@ -776,13 +776,65 @@ class StateManager:
             await db.commit()
             return cursor.lastrowid
 
-    async def ack_escalation(self, escalation_id: int, acked_by: str) -> bool:
+    @staticmethod
+    def _escalation_from_row(row: aiosqlite.Row) -> Escalation:
+        d = dict(row)
+        d["breached"] = bool(d["breached"])
+        d["acked_by"] = d["acked_by"] or ""
+        return Escalation(**d)
+
+    async def get_escalation(self, escalation_id: int) -> Escalation | None:
+        async with self._connect() as db:
+            db.row_factory = aiosqlite.Row
+            async with db.execute(
+                "SELECT * FROM escalations WHERE id = ?", (int(escalation_id),)
+            ) as cursor:
+                row = await cursor.fetchone()
+        return self._escalation_from_row(row) if row else None
+
+    async def get_open_escalation(self, mention_id: int) -> Escalation | None:
+        """The oldest unacknowledged escalation for a mention, if any."""
+        async with self._connect() as db:
+            db.row_factory = aiosqlite.Row
+            async with db.execute(
+                "SELECT * FROM escalations WHERE mention_id = ? AND acked_at IS NULL "
+                "ORDER BY id ASC LIMIT 1",
+                (int(mention_id),),
+            ) as cursor:
+                row = await cursor.fetchone()
+        return self._escalation_from_row(row) if row else None
+
+    async def mark_escalation_notified(self, escalation_id: int, at: datetime) -> bool:
+        """Record the first successful page. False if it was already set."""
+        async with self._connect() as db:
+            cursor = await db.execute(
+                "UPDATE escalations SET notified_at = ? "
+                "WHERE id = ? AND notified_at IS NULL",
+                (_ts(at), int(escalation_id)),
+            )
+            await db.commit()
+            return cursor.rowcount > 0
+
+    async def mark_escalation_breached(self, escalation_id: int) -> bool:
+        """Flag an open escalation as past its SLA. False if already flagged."""
+        async with self._connect() as db:
+            cursor = await db.execute(
+                "UPDATE escalations SET breached = 1 "
+                "WHERE id = ? AND breached = 0 AND acked_at IS NULL",
+                (int(escalation_id),),
+            )
+            await db.commit()
+            return cursor.rowcount > 0
+
+    async def ack_escalation(
+        self, escalation_id: int, acked_by: str, at: datetime | None = None
+    ) -> bool:
         """Acknowledge an open escalation. False if missing or already acked."""
         async with self._connect() as db:
             cursor = await db.execute(
                 "UPDATE escalations SET acked_at = ?, acked_by = ? "
                 "WHERE id = ? AND acked_at IS NULL",
-                (_ts(_utcnow()), acked_by, int(escalation_id)),
+                (_ts(at or _utcnow()), acked_by, int(escalation_id)),
             )
             await db.commit()
             return cursor.rowcount > 0
@@ -796,13 +848,7 @@ class StateManager:
                 "ORDER BY sla_due_at IS NULL, sla_due_at ASC, id ASC"
             ) as cursor:
                 rows = await cursor.fetchall()
-        result = []
-        for row in rows:
-            d = dict(row)
-            d["breached"] = bool(d["breached"])
-            d["acked_by"] = d["acked_by"] or ""
-            result.append(Escalation(**d))
-        return result
+        return [self._escalation_from_row(r) for r in rows]
 
     # ── Usage Tracking ──
 

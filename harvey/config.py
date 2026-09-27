@@ -95,6 +95,19 @@ class UsageConfig(BaseModel):
             raise ValueError("heartbeat_interval_minutes must be at least 1")
         return v
 
+    # While any escalation is open the heartbeat wakes at least this often,
+    # so SLA breaches are re-paged promptly (docs/PLAN.md decisions).
+    urgent_tick_minutes: int = Field(default=5, ge=1)
+
+
+# Escalation kinds (harvey/escalation.py derives one per urgent mention).
+ESCALATION_KINDS = ("adverse_event", "legal", "privacy", "billing_fraud", "viral_negative")
+
+
+def _default_owners() -> dict[str, str]:
+    # adverse_event always goes to clinical_owner; the rest are named here.
+    return {"legal": "", "privacy": "", "billing_fraud": "", "viral_negative": ""}
+
 
 class EscalationConfig(BaseModel):
     # Named humans who get paged for adverse events / legal-regulatory
@@ -102,11 +115,27 @@ class EscalationConfig(BaseModel):
     clinical_owner: str = ""
     backup_owner: str = ""
     sla_minutes: int = Field(default=15, ge=1)
+    # kind -> owner for everything that isn't an adverse event. A blank owner
+    # is allowed, but the Slack page then says UNASSIGNED.
+    owners: dict[str, str] = Field(default_factory=_default_owners)
+
+    @field_validator("owners")
+    @classmethod
+    def _known_kinds(cls, v: dict[str, str]) -> dict[str, str]:
+        unknown = sorted(set(v) - set(ESCALATION_KINDS))
+        if unknown:
+            raise ValueError(
+                f"unknown escalation kind(s) in owners: {', '.join(unknown)}; "
+                f"use {', '.join(ESCALATION_KINDS)}"
+            )
+        return {kind: (owner or "").strip() for kind, owner in v.items()}
 
 
 class NotifyConfig(BaseModel):
     # Name of the env var holding the Slack webhook (never the URL itself).
     slack_webhook_env: str = "SLACK_WEBHOOK_URL"
+    # Optional base URL of the dashboard, linked from Slack pages.
+    dashboard_url: str = ""
 
 
 class PulseConfig(BaseModel):

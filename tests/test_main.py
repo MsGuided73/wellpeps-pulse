@@ -76,3 +76,76 @@ def test_seconds_until_quiet_hours_end_is_at_least_a_minute(frozen_noon):
     config = PulseConfig(usage={"quiet_hours": {"start": "00:00", "end": "23:59", "timezone": "UTC"}})
 
     assert seconds_until_quiet_hours_end(config) >= 60
+
+
+# --- Phase 5: sweep every cycle, urgent tick -------------------------------------
+
+
+def test_sleep_uses_heartbeat_without_open_escalations():
+    from harvey.main import sleep_seconds
+
+    config = PulseConfig(usage={"heartbeat_interval_minutes": 15, "urgent_tick_minutes": 5})
+
+    assert sleep_seconds(config, open_escalations=0) == 15 * 60
+
+
+def test_sleep_uses_urgent_tick_when_escalations_are_open():
+    from harvey.main import sleep_seconds
+
+    config = PulseConfig(usage={"heartbeat_interval_minutes": 15, "urgent_tick_minutes": 5})
+
+    assert sleep_seconds(config, open_escalations=2) == 5 * 60
+
+
+def test_urgent_tick_never_lengthens_the_heartbeat():
+    from harvey.main import sleep_seconds
+
+    config = PulseConfig(usage={"heartbeat_interval_minutes": 2, "urgent_tick_minutes": 5})
+
+    assert sleep_seconds(config, open_escalations=1) == 2 * 60
+
+
+def test_urgent_tick_defaults_to_five_minutes():
+    assert PulseConfig().usage.urgent_tick_minutes == 5
+
+
+@pytest.mark.asyncio
+async def test_heartbeat_sweeps_escalations_even_in_quiet_hours(tmp_path, monkeypatch, frozen_noon):
+    import asyncio
+
+    import harvey.main as main_mod
+    from harvey.escalation import SweepReport
+
+    config = PulseConfig(usage={"quiet_hours": {"start": "00:00", "end": "23:59", "timezone": "UTC"}})
+    db_path = str(tmp_path / "pulse.db")
+    swept = []
+    slept = []
+
+    async def fake_sweep(state, notifier, cfg, now=None):
+        swept.append(notifier)
+        return SweepReport(open=1)
+
+    async def fake_sleep(seconds, stop_event):
+        slept.append(seconds)
+        stop_event.set()
+        return True
+
+    from harvey.models import Escalation
+
+    seeded = StateManager(db_path)
+    await seeded.init_db()
+    mid, _ = await seeded.upsert_mention(Mention(platform=Platform.WEB, url="https://example.invalid/e", text="x"))
+    await seeded.set_mention_status(mid, "escalated")  # nothing to triage: no Claude calls
+    await seeded.create_escalation(Escalation(mention_id=mid, kind="legal"))
+
+    monkeypatch.setattr(main_mod, "load_config", lambda: config)
+    monkeypatch.setattr(main_mod, "StateManager", lambda: StateManager(db_path))
+    monkeypatch.setattr(main_mod, "sweep", fake_sweep)
+    monkeypatch.setattr(main_mod.SlackNotifier, "from_config", classmethod(lambda cls, cfg: cls(None)))
+    monkeypatch.setattr(main_mod, "_interruptible_sleep", fake_sleep)
+
+    await main_mod.heartbeat(asyncio.Event())
+
+    assert len(swept) == 1
+    assert swept[0].enabled is False
+    assert slept == [config.usage.urgent_tick_minutes * 60]

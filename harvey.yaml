@@ -11,6 +11,9 @@ usage:
   # once any quota window passes this percentage.
   max_daily_claude_percent: 80
   heartbeat_interval_minutes: 15
+  # While any escalation is open, wake at least this often so SLA breaches
+  # are re-paged promptly.
+  urgent_tick_minutes: 5
   # Which Claude model each agent uses (any `claude --model` value). Keys are
   # an agent or agent.task; the more specific one wins. Unlisted calls use
   # the CLI's default model.
@@ -25,14 +28,23 @@ usage:
 escalation:
   # Who gets paged for adverse events and legal/regulatory mentions.
   # Must be named before launch (docs/PLAN.md §5).
-  clinical_owner: ""
-  backup_owner: ""
+  clinical_owner: ""      # owns adverse_event escalations
+  backup_owner: ""        # also paged when an SLA is breached
   sla_minutes: 15         # acknowledge within this many minutes, or re-page
+  # Owners for the other escalation kinds. A blank owner still pages, but the
+  # Slack message says "UNASSIGNED — set an owner in harvey.yaml".
+  owners:
+    legal: ""
+    privacy: ""
+    billing_fraud: ""
+    viral_negative: ""    # urgent negative post about WellPeps
 
 notify:
   # Name of the env var that holds the Slack webhook URL (never the URL).
   # Alerts carry a link + category only, never post text.
   slack_webhook_env: SLACK_WEBHOOK_URL
+  # Optional dashboard base URL, linked from Slack pages.
+  dashboard_url: ""
 
 # Days to keep mention text before purging (pending legal sign-off).
 retention_days: 180

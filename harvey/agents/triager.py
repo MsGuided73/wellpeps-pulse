@@ -28,6 +28,7 @@ from typing import Awaitable, Callable, Literal
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from harvey import knowledge
+from harvey.escalation import escalation_kind
 from harvey.models import (
     AuditEvent,
     AuditEventType,
@@ -248,6 +249,8 @@ class Triager:
 # --- Batch ------------------------------------------------------------------------
 
 BudgetHook = Callable[[], bool | Awaitable[bool]]
+# Opens/pages an escalation for (mention, triage); see harvey.escalation.escalate.
+EscalateHook = Callable[[Mention, Triage], Awaitable[object]]
 
 
 @dataclass
@@ -258,6 +261,7 @@ class TriageReport:
     escalated: int = 0
     fallbacks: int = 0
     errors: int = 0
+    paged: int = 0             # escalations whose Slack page went out
     budget_exhausted: bool = False
 
 
@@ -289,30 +293,49 @@ def _verdict(triage: Triage) -> dict:
     }
 
 
-async def _record(state, mention: Mention, triage: Triage) -> MentionStatus:
+async def _record(
+    state, mention: Mention, triage: Triage, escalate: EscalateHook | None = None
+) -> tuple[MentionStatus, object]:
+    """Save, audit, escalate, then move the status.
+
+    The escalation runs before the status change: if it fails, the mention
+    stays ``new`` and the whole thing is retried next cycle (escalate is
+    idempotent, so a retry never double-pages).
+    """
     await state.save_triage(triage)
     await state.append_audit(AuditEvent(
         mention_id=mention.id, event=AuditEventType.TRIAGED, actor=AGENT,
         verdict=_verdict(triage), permalink=mention.url,
     ))
     status = route_status(triage)
-    await state.set_mention_status(mention.id, status)
-    if status is MentionStatus.ESCALATED:
-        # TODO(Phase 5): create the escalations row (owner, SLA) and send the
-        # Slack page (link + category only) here. Until then the status and
-        # this audit event are the whole escalation.
+    escalation = None
+    if escalate is not None and status is not MentionStatus.DROPPED and escalation_kind(triage):
+        escalation = await escalate(mention, triage)
+    elif status is MentionStatus.ESCALATED:
+        # No escalation hook (tests, one-off tools): the status and this
+        # audit event are the whole escalation.
         await state.append_audit(AuditEvent(
             mention_id=mention.id, event=AuditEventType.ESCALATED, actor=AGENT,
             verdict={"kind": triage.category.value, "reason": triage.urgency_reason},
             permalink=mention.url,
         ))
-    return status
+    await state.set_mention_status(mention.id, status)
+    return status, escalation
 
 
 async def triage_batch(
-    state, triager: Triager, limit: int = 25, budget_ok: BudgetHook | None = None
+    state,
+    triager: Triager,
+    limit: int = 25,
+    budget_ok: BudgetHook | None = None,
+    escalate: EscalateHook | None = None,
 ) -> TriageReport:
     """Triage up to ``limit`` status=new mentions, oldest first.
+
+    ``escalate`` is called for every mention that needs an escalation
+    (severe categories, and urgent complaints about WellPeps, which stay
+    ``triaged``). main.py passes ``harvey.escalation.escalate`` bound to the
+    state, notifier, and config.
 
     ``budget_ok`` is checked before each mention; when it returns False the
     batch stops and the rest stay ``new`` for the next cycle. A mention whose
@@ -327,13 +350,14 @@ async def triage_batch(
             break
         try:
             triage = await triager.triage(mention)
-            status = await _record(state, mention, triage)
+            status, escalation = await _record(state, mention, triage, escalate)
         except Exception as exc:
             report.errors += 1
             logger.error(f"triage failed for mention {mention.id}: {exc}", exc_info=True)
             continue
         report.processed += 1
         report.fallbacks += int(FALLBACK_REASON in triage.urgency_reason)
+        report.paged += int(getattr(escalation, "notified_at", None) is not None)
         if status is MentionStatus.DROPPED:
             report.dropped += 1
         elif status is MentionStatus.ESCALATED:
