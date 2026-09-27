@@ -117,12 +117,13 @@ class Mention(BaseModel):
 class Triage(BaseModel):
     mention_id: int
     relevant: bool = True
-    subject_type: str = ""   # brand | competitor | category | other
+    subject_type: str = ""   # wellpeps | competitor | product | category | none
     subject: str = ""
-    competitor: str = ""
-    product: str = ""
+    competitor: str = ""     # canonical competitor name, "" when none/unknown
+    product: str = ""        # canonical WellPeps product name, "" when none/unknown
     category: Category = Category.OTHER
     sentiment: str = ""      # positive | neutral | negative | mixed
+    sentiment_score: float = 0.0  # -1.0 (very negative) .. 1.0 (very positive)
     urgency: Urgency = Urgency.NORMAL
     urgency_reason: str = ""
     reply_appropriate: bool = False

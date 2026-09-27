@@ -7,11 +7,14 @@ and drafts replies that humans review. It is **not** a sales or outreach
 tool.
 
 The roadmap and data model are in `docs/PLAN.md`. Read it before changing
-behavior. Current status: **Phase 3 complete**. The data layer, config, idle
+behavior. Current status: **Phase 4 complete**. The data layer, config, idle
 heartbeat, minimal dashboard, knowledge files (`config/*.yaml`) and the
 deterministic compliance filter (`harvey/compliance.py`) exist.
 - Phase 3: collector registry + JSONL fixture collector (`harvey/collectors/`)
   and `harvey/ingest.py` (`pulse ingest --fixture [DIR]`).
+- Phase 4: triage agent (`harvey/agents/triager.py`, `prompts/triage.md`)
+  with the `knowledge.urgent_override` safety net, wired into the heartbeat.
+  Escalation rows and Slack paging are Phase 5 (see the TODO there).
 
 Later phases add everything else. Don't build ahead of the phase you've
 been asked to do.

@@ -330,6 +330,11 @@ MIGRATIONS: list[str] = [
     CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id);
     CREATE INDEX IF NOT EXISTS idx_sessions_expires ON sessions(expires_at);
     """,
+    # ── v2: numeric sentiment from the triage agent (Phase 4) ──
+    # ALTER TABLE has no IF NOT EXISTS; user_version guarantees it runs once.
+    """
+    ALTER TABLE triage ADD COLUMN sentiment_score REAL DEFAULT 0.0;
+    """,
 ]
 
 
@@ -578,8 +583,10 @@ class StateManager:
         status: MentionStatus | str | None = None,
         limit: int = 100,
         platform: str | None = None,
+        oldest_first: bool = False,
     ) -> list[Mention]:
-        """Mentions newest first, optionally filtered by status/platform."""
+        """Mentions newest first (oldest first when asked), optionally
+        filtered by status/platform."""
         where, params = [], []
         if status:
             where.append("status = ?")
@@ -590,7 +597,8 @@ class StateManager:
         sql = "SELECT * FROM mentions"
         if where:
             sql += " WHERE " + " AND ".join(where)
-        sql += " ORDER BY collected_at DESC, id DESC LIMIT ?"
+        order = "ASC" if oldest_first else "DESC"
+        sql += f" ORDER BY collected_at {order}, id {order} LIMIT ?"
         params.append(max(int(limit), 0))
         async with self._connect() as db:
             db.row_factory = aiosqlite.Row
@@ -634,14 +642,15 @@ class StateManager:
             await db.execute(
                 """INSERT OR REPLACE INTO triage
                    (mention_id, relevant, subject_type, subject, competitor,
-                    product, category, sentiment, urgency, urgency_reason,
-                    reply_appropriate, phrases_json, model, created_at)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                    product, category, sentiment, sentiment_score, urgency,
+                    urgency_reason, reply_appropriate, phrases_json, model,
+                    created_at)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (
                     triage.mention_id, 1 if triage.relevant else 0,
                     triage.subject_type, triage.subject, triage.competitor,
                     triage.product, triage.category.value, triage.sentiment,
-                    triage.urgency.value, triage.urgency_reason,
+                    float(triage.sentiment_score), triage.urgency.value, triage.urgency_reason,
                     1 if triage.reply_appropriate else 0,
                     json.dumps(triage.phrases), triage.model,
                     _ts(triage.created_at),
@@ -662,6 +671,7 @@ class StateManager:
         d["phrases"] = _loads(d.pop("phrases_json", None), [])
         d["relevant"] = bool(d["relevant"])
         d["reply_appropriate"] = bool(d["reply_appropriate"])
+        d["sentiment_score"] = float(d.get("sentiment_score") or 0.0)
         return Triage(**d)
 
     # ── Drafts ──

@@ -101,6 +101,25 @@ def _competitor_lookup(directory: Path) -> Mapping[str, str]:
 
 
 @lru_cache(maxsize=None)
+def _product_lookup(directory: Path) -> Mapping[str, str]:
+    """Lower-cased product name/alias -> canonical product name.
+
+    An alias shared by two products is ambiguous, so it maps to neither.
+    """
+    lookup: dict[str, str] = {}
+    ambiguous: set[str] = set()
+    for product in _products(directory).products:
+        for term in (product.name, *(a.term for a in product.aliases)):
+            key = term.strip().lower()
+            owner = lookup.setdefault(key, product.name)
+            if owner != product.name:
+                ambiguous.add(key)
+    for key in ambiguous:
+        del lookup[key]
+    return MappingProxyType(lookup)
+
+
+@lru_cache(maxsize=None)
 def _urgent_patterns(directory: Path) -> tuple[tuple[str, str, re.Pattern[str]], ...]:
     overrides = _keywords(directory).urgent_overrides
     return tuple(
@@ -110,7 +129,10 @@ def _urgent_patterns(directory: Path) -> tuple[tuple[str, str, re.Pattern[str]],
     )
 
 
-_CACHED = (_competitors, _products, _keywords, _compliance_rules, _claims, _competitor_lookup, _urgent_patterns)
+_CACHED = (
+    _competitors, _products, _keywords, _compliance_rules, _claims,
+    _competitor_lookup, _product_lookup, _urgent_patterns,
+)
 
 
 def reload() -> None:
@@ -155,6 +177,11 @@ def publishable_claim_ids(today: date | None = None) -> set[str]:
 def competitor_lookup() -> Mapping[str, str]:
     """Lower-cased name/alias -> canonical competitor name (incl. adjacent)."""
     return _competitor_lookup(config_dir())
+
+
+def product_lookup() -> Mapping[str, str]:
+    """Lower-cased WellPeps product name/alias -> canonical product name."""
+    return _product_lookup(config_dir())
 
 
 def medication_names() -> list[str]:

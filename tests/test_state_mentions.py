@@ -412,3 +412,30 @@ async def test_state_summary_counts_mentions_and_open_escalations(state):
     assert set(summary["mentions"]) == {s.value for s in MentionStatus}
     assert summary["open_escalations"] == 1
     assert summary["usage_today"] == 0
+
+
+# ── Phase 4 additions ──
+
+
+@pytest.mark.asyncio
+async def test_triage_sentiment_score_round_trips(state):
+    mention_id = await _new_mention_id(state)
+
+    await state.save_triage(Triage(mention_id=mention_id, sentiment="negative", sentiment_score=-0.8))
+    stored = await state.get_triage(mention_id)
+
+    assert stored.sentiment == "negative"
+    assert stored.sentiment_score == pytest.approx(-0.8)
+
+
+@pytest.mark.asyncio
+async def test_list_mentions_oldest_first(state):
+    base = datetime(2026, 9, 27, 12, 0)
+    late = await _new_mention_id(state, external_id="late", url="https://r.example/late", collected_at=base)
+    early = await _new_mention_id(
+        state, external_id="early", url="https://r.example/early", collected_at=base - timedelta(hours=1)
+    )
+
+    oldest = await state.list_mentions(status=MentionStatus.NEW, oldest_first=True)
+
+    assert [m.id for m in oldest] == [early, late]

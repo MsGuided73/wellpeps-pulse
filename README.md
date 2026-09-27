@@ -14,16 +14,17 @@ Pulse never posts on its own, and nothing clinical is ever auto-published.
 
 ## Status
 
-**Phase 3 complete.** Harvey's sales functionality is gone. What's here:
+**Phase 4 complete.** Harvey's sales functionality is gone. What's here:
 
 - a data layer with mentions, triage, drafts, escalations, and an append-only audit log
 - config, plus WellPeps knowledge in `config/*.yaml` (competitors, products, keywords, compliance rules, a seed claims library pending sign-off)
 - a deterministic compliance filter for draft replies (`harvey/compliance.py`)
 - a collector framework (`harvey/collectors/`) with a JSONL fixture collector, and `pulse ingest --fixture [DIR]` to store mentions with dedupe, run records, and `collected` audit events
-- a heartbeat loop that starts, logs, and idles
+- a triage agent (`harvey/agents/triager.py`, prompt in `prompts/triage.md`) that classifies each new mention on a small model, with a deterministic keyword override that forces adverse-event, legal, privacy, and billing-fraud posts to urgent and routes them to `escalated`
+- a heartbeat loop that triages new mentions (even in quiet hours) and otherwise idles
 - a local dashboard with a mention feed and Claude usage
 
-Real collectors, triage, drafting, escalation paging, auth, and briefs
+Real collectors, drafting, escalation paging, auth, and briefs
 arrive in later phases. The full roadmap is in [docs/PLAN.md](docs/PLAN.md).
 
 ## Quick start
@@ -39,7 +40,7 @@ cp .env.example .env                        # every key is optional for now
 pulse status                                # mention counts by status
 pulse ingest --fixture                      # load the sample fixture posts
 pulse dashboard                             # http://127.0.0.1:5555 (loopback only)
-pulse run                                   # heartbeat loop (idles in Phase 1)
+pulse run                                   # heartbeat loop (triages new mentions)
 ```
 
 `harvey` is still installed as an alias for `pulse`. Configuration lives in
