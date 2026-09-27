@@ -127,7 +127,11 @@ class Triage(BaseModel):
     subject_type: str = ""   # wellpeps | competitor | product | category | none
     subject: str = ""
     competitor: str = ""     # canonical competitor name, "" when none/unknown
-    product: str = ""        # canonical WellPeps product name, "" when none/unknown
+    # Canonical WellPeps product (SKU) name. Set only when the mention is
+    # about WellPeps (subject_type "wellpeps" or the text names WellPeps);
+    # a post about semaglutide in general is not about a WellPeps SKU.
+    product: str = ""
+    drug: str = ""           # generic/category drug discussed, e.g. "semaglutide", "BPC-157"
     category: Category = Category.OTHER
     sentiment: str = ""      # positive | neutral | negative | mixed
     sentiment_score: float = 0.0  # -1.0 (very negative) .. 1.0 (very positive)

@@ -38,7 +38,14 @@ Return one JSON object with exactly these fields:
 - `competitor` (string or null): the canonical competitor name from the list
   above if one is discussed, else null. Use the list spelling.
 - `product` (string or null): the canonical WellPeps product name from the
-  list above if one is discussed, else null.
+  list above, only when the post is about WellPeps (it names WellPeps, or
+  `subject_type` is `wellpeps`). A post about a drug in general is not about
+  a WellPeps product: "my semaglutide dose" with no mention of WellPeps gets
+  `product: null` and `drug: "semaglutide"`.
+- `drug` (string or null): the generic drug or category term the post
+  actually discusses, e.g. `semaglutide`, `tirzepatide`, `BPC-157`,
+  `minoxidil`, `tadalafil`. Use the generic name when a brand is named
+  (Ozempic -> `semaglutide`). null when no drug is discussed.
 - `category`: one of {{categories}}.
   - `complaint`: unhappy with service, shipping, support, price changes.
   - `question`: asking how something works or for information.

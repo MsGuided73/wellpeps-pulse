@@ -130,9 +130,49 @@ def _urgent_patterns(directory: Path) -> tuple[tuple[str, str, re.Pattern[str]],
     )
 
 
+@lru_cache(maxsize=None)
+def _drug_lookup(directory: Path) -> Mapping[str, str]:
+    """Lower-cased drug term -> canonical generic/category name.
+
+    Sources, first spelling wins: generic names in products.yaml, the
+    never-offered list (BPC-157 etc.), and keywords.yaml generics. Brand
+    equivalents map to their generic when every product listing that brand
+    agrees on a single generic (Ozempic -> semaglutide; Rogaine, listed with
+    several generics, maps to nothing).
+    """
+    prods = _products(directory)
+    lookup: dict[str, str] = {}
+    terms = [
+        *(n for p in prods.products for n in p.generic_names),
+        *prods.never_offered,
+        *_keywords(directory).products.generics,
+    ]
+    for term in terms:
+        lookup.setdefault(term.strip().lower(), term.strip())
+    brands: dict[str, set[str]] = {}
+    for product in prods.products:
+        generic = product.generic_names[0] if len(product.generic_names) == 1 else None
+        for brand in product.brand_equivalents:
+            brands.setdefault(brand.strip().lower(), set()).add(generic or "")
+    for key, generics in brands.items():
+        if len(generics) == 1 and "" not in generics:
+            lookup.setdefault(key, lookup.get(next(iter(generics)).lower(), next(iter(generics))))
+    return MappingProxyType(lookup)
+
+
+@lru_cache(maxsize=None)
+def _wellpeps_rx(directory: Path) -> re.Pattern[str]:
+    brand = _keywords(directory).brand
+    names = sorted({t.strip() for t in (*brand.exact, *brand.variants) if t.strip()},
+                   key=len, reverse=True)
+    alternation = "|".join(re.escape(n) for n in names)
+    return re.compile(rf"(?<!\w)(?:{alternation})(?!\w)", re.IGNORECASE)
+
+
 _CACHED = (
     _competitors, _products, _keywords, _compliance_rules, _claims,
-    _competitor_lookup, _product_lookup, _urgent_patterns,
+    _competitor_lookup, _product_lookup, _urgent_patterns, _drug_lookup,
+    _wellpeps_rx,
 )
 
 
@@ -183,6 +223,17 @@ def competitor_lookup() -> Mapping[str, str]:
 def product_lookup() -> Mapping[str, str]:
     """Lower-cased WellPeps product name/alias -> canonical product name."""
     return _product_lookup(config_dir())
+
+
+def drug_lookup() -> Mapping[str, str]:
+    """Lower-cased drug term (generic, never-offered, or brand) -> canonical
+    generic/category name."""
+    return _drug_lookup(config_dir())
+
+
+def names_wellpeps(text: str) -> bool:
+    """True if ``text`` names WellPeps (brand terms from keywords.yaml)."""
+    return bool(_wellpeps_rx(config_dir()).search((text or "")[:MAX_MENTION_TEXT_CHARS]))
 
 
 def medication_names() -> list[str]:

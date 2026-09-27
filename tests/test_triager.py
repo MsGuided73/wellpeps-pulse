@@ -506,3 +506,77 @@ def test_prompt_treats_category_discussion_as_relevant():
     # Only genuinely unrelated content is irrelevant.
     for noise in ("sports team", "crypto"):
         assert noise in lowered
+
+
+# --- Drug vs WellPeps product (pre-Phase-7 fix) -------------------------------------
+
+SEMA_ER = ("Third week on semaglutide and I ended up in the emergency room last night "
+           "with severe vomiting.")
+
+
+@pytest.mark.asyncio
+async def test_product_is_blank_when_the_post_is_not_about_wellpeps():
+    """Live bug: a semaglutide post was tagged with a WellPeps SKU although
+    the author never mentioned WellPeps. The drug is recorded instead."""
+    brain = FakeBrain({"Third week": [_answer(
+        subject_type="category", subject="semaglutide side effects",
+        product="Oral Semaglutide", drug="semaglutide", category="adverse_event",
+        urgency="urgent", reply_appropriate=False)]})
+
+    triage = await Triager(brain).triage(_mention(SEMA_ER))
+
+    assert triage.product == ""
+    assert triage.drug == "semaglutide"
+
+
+@pytest.mark.asyncio
+async def test_product_kept_when_text_names_wellpeps():
+    text = "Started Compounded Tirzepatide through WellPeps last month"
+    brain = FakeBrain({"Started": [_answer(
+        subject_type="product", product="compounded tirzepatide", drug="tirzepatide")]})
+
+    triage = await Triager(brain).triage(_mention(text))
+
+    assert triage.product == "Compounded Tirzepatide"
+    assert triage.drug == "tirzepatide"
+
+
+@pytest.mark.asyncio
+async def test_product_kept_when_subject_type_is_wellpeps():
+    text = "Their oral sema pills have been fine for me so far"
+    brain = FakeBrain({"oral sema": [_answer(subject_type="wellpeps", product="Oral Semaglutide")]})
+
+    triage = await Triager(brain).triage(_mention(text))
+
+    assert triage.product == "Oral Semaglutide"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "text,given,expected",
+    [
+        ("my semaglutide dose", "Semaglutide", "semaglutide"),
+        ("started Ozempic last week", "Ozempic", "semaglutide"),
+        ("Mounjaro side effects", "mounjaro", "tirzepatide"),
+        ("injecting bpc 157 daily", "bpc-157", "BPC-157"),
+        ("minoxidil shed is real", "Minoxidil", "minoxidil"),
+        ("daily tadalafil works", "TADALAFIL", "tadalafil"),
+        ("trying retaglutide-x next", "Retaglutide-X", "retaglutide-x"),
+        ("nothing drug related here", "made-up-drug", ""),
+        ("plain text", None, ""),
+        ("plain text", "", ""),
+    ],
+)
+async def test_drug_is_normalized(text, given, expected):
+    brain = FakeBrain({text: [_answer(subject_type="category", drug=given)]})
+
+    triage = await Triager(brain).triage(_mention(text))
+
+    assert triage.drug == expected
+
+
+def test_prompt_asks_for_drug_and_restricts_product():
+    prompt = build_prompt(_mention(PRAISE))
+
+    assert "`drug`" in prompt
+    assert "only when" in prompt.lower()

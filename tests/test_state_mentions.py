@@ -439,3 +439,34 @@ async def test_list_mentions_oldest_first(state):
     oldest = await state.list_mentions(status=MentionStatus.NEW, oldest_first=True)
 
     assert [m.id for m in oldest] == [early, late]
+
+
+@pytest.mark.asyncio
+async def test_triage_drug_roundtrips(state):
+    mention_id = await _new_mention_id(state)
+    await state.save_triage(Triage(mention_id=mention_id, drug="semaglutide"))
+
+    stored = await state.get_triage(mention_id)
+
+    assert stored.drug == "semaglutide"
+    assert stored.product == ""
+
+
+@pytest.mark.asyncio
+async def test_v2_database_migrates_to_add_triage_drug(tmp_path):
+    from harvey.state import MIGRATIONS
+
+    path = str(tmp_path / "old.db")
+    async with aiosqlite.connect(path) as db:
+        for script in MIGRATIONS[:2]:
+            await db.executescript(script)
+        await db.execute("PRAGMA user_version = 2")
+        await db.commit()
+
+    sm = StateManager(path)
+    await sm.init_db()
+
+    async with aiosqlite.connect(path) as db:
+        async with db.execute("PRAGMA table_info(triage)") as cur:
+            columns = {row[1] for row in await cur.fetchall()}
+    assert "drug" in columns

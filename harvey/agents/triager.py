@@ -13,7 +13,8 @@ Flow for ``Triager.triage``:
 2. Ask the brain for JSON and validate it. One retry on invalid output; then
    fall back to a conservative "needs a human" triage so nothing is dropped.
 3. Safety net (pure Python, always runs): canonicalize competitor/product
-   names, keep only phrases copied verbatim, force urgent + no-reply when a
+   names (``product`` is a WellPeps SKU and is kept only when the mention is
+   about WellPeps; ``drug`` is the generic/category drug discussed), keep only phrases copied verbatim, force urgent + no-reply when a
    ``knowledge.urgent_override`` pattern matches, force every severe
    category to urgent (so it always escalates), and never allow a reply on
    severe or irrelevant mentions.
@@ -72,6 +73,7 @@ class TriageAnswer(BaseModel):
     subject: str = ""
     competitor: str | None = None
     product: str | None = None
+    drug: str | None = None
     category: Category
     sentiment: float = Field(ge=-1.0, le=1.0)
     sentiment_label: Literal["positive", "neutral", "negative", "mixed"]
@@ -116,6 +118,38 @@ def _canonical(name: str | None, lookup) -> str:
     if not name or not isinstance(name, str):
         return ""
     return lookup.get(name.strip().lower(), "")
+
+
+MAX_DRUG_CHARS = 60
+
+
+def _drug(name: str | None, text: str) -> str:
+    """Canonical generic/category drug name.
+
+    Known terms (products.yaml generics, never-offered peptides, keywords
+    generics, and unambiguous brand names) map to their canonical spelling.
+    An unknown term is kept, lower-cased, only if it appears in the post.
+    """
+    if not name or not isinstance(name, str):
+        return ""
+    key = name.strip().lower()
+    if not key:
+        return ""
+    known = knowledge.drug_lookup().get(key)
+    if known:
+        return known
+    if len(key) <= MAX_DRUG_CHARS and key in (text or "").lower():
+        return key
+    return ""
+
+
+def _post_text(mention: Mention) -> str:
+    return f"{mention.title}\n{mention.text}"
+
+
+def _about_wellpeps(answer: "TriageAnswer", mention: Mention) -> bool:
+    return answer.subject_type == "wellpeps" or knowledge.names_wellpeps(
+        _post_text(mention))
 
 
 def _verbatim_phrases(phrases: list[str], text: str) -> list[str]:
@@ -180,7 +214,11 @@ def _to_triage(answer: TriageAnswer, mention: Mention, model: str) -> Triage:
         subject_type=answer.subject_type,
         subject=answer.subject.strip()[:200],
         competitor=_canonical(answer.competitor, knowledge.competitor_lookup()),
-        product=_canonical(answer.product, knowledge.product_lookup()),
+        # A WellPeps SKU only when the mention is about WellPeps; otherwise
+        # "semaglutide" in a post is the drug, not our Oral Semaglutide.
+        product=(_canonical(answer.product, knowledge.product_lookup())
+                 if _about_wellpeps(answer, mention) else ""),
+        drug=_drug(answer.drug, _post_text(mention)),
         category=answer.category,
         sentiment=answer.sentiment_label,
         sentiment_score=answer.sentiment,

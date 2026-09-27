@@ -352,6 +352,11 @@ MIGRATIONS: list[str] = [
     """
     ALTER TABLE triage ADD COLUMN sentiment_score REAL DEFAULT 0.0;
     """,
+    # ── v3: the drug discussed, separate from the WellPeps product (SKU) ──
+    """
+    ALTER TABLE triage ADD COLUMN drug TEXT DEFAULT '';
+    CREATE INDEX IF NOT EXISTS idx_triage_drug ON triage(drug);
+    """,
 ]
 
 
@@ -681,14 +686,14 @@ class StateManager:
             await db.execute(
                 """INSERT OR REPLACE INTO triage
                    (mention_id, relevant, subject_type, subject, competitor,
-                    product, category, sentiment, sentiment_score, urgency,
+                    product, drug, category, sentiment, sentiment_score, urgency,
                     urgency_reason, reply_appropriate, phrases_json, model,
                     created_at)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (
                     triage.mention_id, 1 if triage.relevant else 0,
                     triage.subject_type, triage.subject, triage.competitor,
-                    triage.product, triage.category.value, triage.sentiment,
+                    triage.product, triage.drug, triage.category.value, triage.sentiment,
                     float(triage.sentiment_score), triage.urgency.value, triage.urgency_reason,
                     1 if triage.reply_appropriate else 0,
                     json.dumps(triage.phrases), triage.model,
@@ -711,6 +716,7 @@ class StateManager:
         d["relevant"] = bool(d["relevant"])
         d["reply_appropriate"] = bool(d["reply_appropriate"])
         d["sentiment_score"] = float(d.get("sentiment_score") or 0.0)
+        d["drug"] = d.get("drug") or ""
         return Triage(**d)
 
     # ── Drafts ──
