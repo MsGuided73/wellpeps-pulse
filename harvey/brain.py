@@ -21,6 +21,14 @@ DEFAULT_TIMEOUT_SECONDS = 300  # a single Claude call should never hang forever
 DEFAULT_MAX_RETRIES = 2  # retries on transient failures (non-zero exit, timeout)
 RETRY_BASE_DELAY = 5.0  # seconds; doubles per attempt
 
+# Replaces Claude Code's default (coding-agent) system prompt. Each agent's
+# real instructions live in prompts/*.md and arrive in the user prompt.
+SYSTEM_PROMPT = (
+    "You are the reasoning engine for Harvey, a sales agent. You have no "
+    "tools. Follow the instructions in the prompt exactly and return only "
+    "the requested output."
+)
+
 # stderr fragments that indicate retrying is pointless
 _NON_RETRYABLE_PATTERNS = (
     "not logged in",
@@ -31,11 +39,19 @@ _NON_RETRYABLE_PATTERNS = (
 
 
 class Brain:
-    def __init__(self, state: StateManager):
+    def __init__(self, state: StateManager, models: dict[str, str] | None = None):
         self.state = state
+        # usage.models from harvey.yaml: "agent" or "agent.task" -> model.
+        self.models = dict(models or {})
         # Lazy import avoids a cycle (quota -> usage -> state).
         from harvey.integrations.quota import QuotaClient
         self.quota = QuotaClient()
+
+    def model_for(self, agent: str, task: str) -> str | None:
+        """The configured model for a call; an agent.task key beats agent."""
+        if agent and task and f"{agent}.{task}" in self.models:
+            return self.models[f"{agent}.{task}"]
+        return self.models.get(agent) if agent else None
 
     async def think(
         self,
@@ -61,7 +77,23 @@ class Brain:
             # JSON output carries exact token/cost accounting per call.
             "--output-format", "json",
             "--dangerously-skip-permissions",
+            # Harvey's calls are pure text-in/text-out (Python does all web
+            # work), so strip everything the CLI would otherwise load into
+            # context: tools, MCP servers, skills, the user's settings/plugins/
+            # rules, and Claude Code's own system prompt. ~84k -> ~300 tokens
+            # of overhead per call. (--bare would do this but forbids OAuth,
+            # i.e. subscription billing.)
+            "--tools", "",
+            "--strict-mcp-config",
+            "--disable-slash-commands",
+            "--setting-sources", "",
+            "--system-prompt", SYSTEM_PROMPT,
+            "--exclude-dynamic-system-prompt-sections",
+            "--no-session-persistence",
         ]
+        model = self.model_for(agent, task)
+        if model:
+            cmd.extend(["--model", model])
         if session_id:
             # The CLI only accepts UUIDs for --session-id; callers pass
             # friendly names ("harvey-scout") purely as a debug label, and
@@ -332,7 +364,7 @@ class Brain:
         """Load a prompt template from the prompts/ directory and fill in variables."""
         prompt_file = PROMPTS_DIR / f"{prompt_name}.md"
         try:
-            template = prompt_file.read_text()
+            template = prompt_file.read_text(encoding="utf-8")
         except FileNotFoundError:
             logger.warning(f"Prompt file not found: {prompt_file}")
             return ""
@@ -353,7 +385,7 @@ class Brain:
         """Load a skill knowledge file from the skills/ directory."""
         skill_file = SKILLS_DIR / f"{skill_name}.md"
         try:
-            return skill_file.read_text()
+            return skill_file.read_text(encoding="utf-8")
         except FileNotFoundError:
             logger.warning(f"Skill file not found: {skill_file}")
             return ""

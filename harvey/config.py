@@ -132,10 +132,32 @@ class QuietHoursConfig(BaseModel):
         return v
 
 
+# Structured-output calls where a small model is plenty. Prospect-facing
+# writing (writer, handler.generate_response) stays on the default model.
+DEFAULT_MODELS = {
+    "scout": "haiku",
+    "handler.classify_intent": "haiku",
+}
+
+
 class UsageConfig(BaseModel):
     max_daily_claude_percent: float = 80.0
     heartbeat_interval_minutes: int = 15
     quiet_hours: QuietHoursConfig = QuietHoursConfig()
+    # Per-agent model routing, passed to `claude --model`. Keys are an agent
+    # ("scout") or an agent.task ("handler.classify_intent"); the more
+    # specific key wins. Unlisted calls use the CLI's default model. Applied
+    # when the key is absent (trainer/setup rewrite `usage:` without it);
+    # set `models: {}` to run everything on the default model.
+    models: dict[str, str] = DEFAULT_MODELS
+
+    @field_validator("models")
+    @classmethod
+    def _valid_models(cls, v: dict[str, str]) -> dict[str, str]:
+        blank = [key for key, model in v.items() if not model.strip()]
+        if blank:
+            raise ValueError(f"models has an empty model name for: {', '.join(blank)}")
+        return {key: model.strip() for key, model in v.items()}
 
     @field_validator("max_daily_claude_percent")
     @classmethod
@@ -203,7 +225,7 @@ def load_config(config_path: str | None = None) -> HarveyConfig:
         config_path = _find_config_file()
 
     try:
-        with open(config_path) as f:
+        with open(config_path, encoding="utf-8") as f:
             data = yaml.safe_load(f)
     except FileNotFoundError:
         raise ConfigFileNotFoundError(

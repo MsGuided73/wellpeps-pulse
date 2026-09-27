@@ -492,7 +492,7 @@ class SetupWizard:
         """Write the .env file, preserving any existing variables we didn't touch."""
         existing: dict[str, str] = {}
         if ENV_FILE.exists():
-            for line in ENV_FILE.read_text().splitlines():
+            for line in ENV_FILE.read_text(encoding="utf-8").splitlines():
                 line = line.strip()
                 if line and not line.startswith("#") and "=" in line:
                     key, _, value = line.partition("=")
@@ -506,7 +506,7 @@ class SetupWizard:
                 merged[key] = value
 
         lines = [f"{key}={value}" for key, value in merged.items()]
-        ENV_FILE.write_text("\n".join(lines) + "\n")
+        ENV_FILE.write_text("\n".join(lines) + "\n", encoding="utf-8")
         try:
             ENV_FILE.chmod(0o600)  # credentials — owner read/write only
         except OSError:
@@ -516,13 +516,13 @@ class SetupWizard:
     def _write_config(self):
         """Write harvey.yaml (only if we have manual config — trainer writes its own)."""
         if self.config and not CONFIG_FILE.exists():
-            with open(CONFIG_FILE, "w") as f:
+            with open(CONFIG_FILE, "w", encoding="utf-8") as f:
                 yaml.dump(self.config, f, default_flow_style=False, sort_keys=False)
             logger.info(f"Wrote {CONFIG_FILE}")
         elif self.config:
             # Config already exists (from trainer), update behavior settings only
             try:
-                with open(CONFIG_FILE) as f:
+                with open(CONFIG_FILE, encoding="utf-8") as f:
                     existing = yaml.safe_load(f) or {}
                 existing["usage"] = self.config.get("usage", existing.get("usage", {}))
                 if "channels" in self.config:
@@ -532,7 +532,7 @@ class SetupWizard:
                         existing["channels"]["email"]["max_daily_sends"] = (
                             self.config["channels"]["email"].get("max_daily_sends", 50)
                         )
-                with open(CONFIG_FILE, "w") as f:
+                with open(CONFIG_FILE, "w", encoding="utf-8") as f:
                     yaml.dump(existing, f, default_flow_style=False, sort_keys=False)
             except Exception:
                 pass

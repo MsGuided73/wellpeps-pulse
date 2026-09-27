@@ -122,7 +122,7 @@ async def heartbeat(stop_event: asyncio.Event | None = None):
         return
     env = load_env()
     state = StateManager()
-    brain = Brain(state)
+    brain = Brain(state, models=config.usage.models)
 
     await state.init_db()
     logger.info("Database initialized.")
@@ -272,7 +272,7 @@ def _needs_setup() -> bool:
     # If config still has placeholder values, needs setup
     if config_file.exists():
         try:
-            with open(config_file) as f:
+            with open(config_file, encoding="utf-8") as f:
                 import yaml
                 config = yaml.safe_load(f)
             if not isinstance(config, dict):

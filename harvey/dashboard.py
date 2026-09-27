@@ -69,7 +69,7 @@ def _read_env_file() -> dict[str, str]:
     """Read .env file and return as dict."""
     env_vars = {}
     if ENV_FILE.exists():
-        for line in ENV_FILE.read_text().splitlines():
+        for line in ENV_FILE.read_text(encoding="utf-8").splitlines():
             line = line.strip()
             if line and not line.startswith("#") and "=" in line:
                 key, _, value = line.partition("=")
@@ -82,7 +82,7 @@ def _write_env_file(updates: dict[str, str]):
     existing = _read_env_file()
     existing.update(updates)
     lines = [f"{k}={v}" for k, v in existing.items()]
-    ENV_FILE.write_text("\n".join(lines) + "\n")
+    ENV_FILE.write_text("\n".join(lines) + "\n", encoding="utf-8")
     load_dotenv(str(ENV_FILE), override=True)
 
 
@@ -93,7 +93,7 @@ def _check_harvey_pid() -> int | None:
         return _harvey_process.pid
     if PID_FILE.exists():
         try:
-            pid = int(PID_FILE.read_text().strip())
+            pid = int(PID_FILE.read_text(encoding="utf-8").strip())
             os.kill(pid, 0)  # Check if process exists
             return pid
         except (ValueError, ProcessLookupError, PermissionError):
@@ -166,7 +166,7 @@ async def get_setup_status():
     config_valid = False
     if CONFIG_FILE.exists():
         try:
-            with open(CONFIG_FILE) as f:
+            with open(CONFIG_FILE, encoding="utf-8") as f:
                 cfg = yaml.safe_load(f)
             company = cfg.get("persona", {}).get("company", "")
             product = cfg.get("product", {}).get("name", "")
@@ -226,7 +226,7 @@ async def get_setup_status():
 def _current_provider() -> str:
     """Read channels.email.provider from harvey.yaml (best-effort)."""
     try:
-        with open(CONFIG_FILE) as f:
+        with open(CONFIG_FILE, encoding="utf-8") as f:
             cfg = yaml.safe_load(f) or {}
         return ((cfg.get("channels") or {}).get("email") or {}).get("provider", "instantly")
     except Exception:
@@ -432,7 +432,7 @@ async def start_harvey():
     (PROJECT_ROOT / "data").mkdir(parents=True, exist_ok=True)
 
     try:
-        log_handle = open(LOG_FILE, "a")
+        log_handle = open(LOG_FILE, "a", encoding="utf-8")
         try:
             _harvey_process = subprocess.Popen(
                 [sys.executable, "-m", "harvey"],
@@ -451,7 +451,7 @@ async def start_harvey():
 
     # Write PID file
     try:
-        PID_FILE.write_text(str(_harvey_process.pid))
+        PID_FILE.write_text(str(_harvey_process.pid), encoding="utf-8")
     except OSError as e:
         logger.warning("Could not write PID file: %s", e)
 
@@ -1252,7 +1252,7 @@ async def static_file(path: str):
             headers={"Cache-Control": "public, max-age=604800"},
         )
     return PlainTextResponse(
-        target.read_text(),
+        target.read_text(encoding="utf-8"),
         media_type=TEXT_TYPES.get(target.suffix, "text/plain"),
         headers={"Cache-Control": "no-store"},
     )
@@ -1260,7 +1260,7 @@ async def static_file(path: str):
 
 @app.get("/", response_class=HTMLResponse)
 async def dashboard():
-    return (WEB_DIR / "index.html").read_text()
+    return (WEB_DIR / "index.html").read_text(encoding="utf-8")
 
 
 def start_dashboard(host: str = "127.0.0.1", port: int = 5555):

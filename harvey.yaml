@@ -60,6 +60,13 @@ channels:
 usage:
   max_daily_claude_percent: 80
   heartbeat_interval_minutes: 15
+  # Which Claude model each agent uses (any `claude --model` value: haiku,
+  # sonnet, opus, or a full model id). Keys are an agent or agent.task; the
+  # more specific one wins. Anything unlisted — the writer, reply drafting,
+  # training — uses your default model, because that text reaches prospects.
+  models:
+    scout: haiku                    # scores contacts against the ICP
+    handler.classify_intent: haiku  # labels a reply's intent
   quiet_hours:
     start: "22:00"
     end: "07:00"
