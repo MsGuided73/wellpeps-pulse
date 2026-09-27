@@ -7,10 +7,14 @@ and drafts replies that humans review. It is **not** a sales or outreach
 tool.
 
 The roadmap and data model are in `docs/PLAN.md`. Read it before changing
-behavior. Current status: **Phase 2 complete**. The data layer, config, idle
+behavior. Current status: **Phase 3 complete**. The data layer, config, idle
 heartbeat, minimal dashboard, knowledge files (`config/*.yaml`) and the
-deterministic compliance filter (`harvey/compliance.py`) exist. Later phases add everything
-else. Don't build ahead of the phase you've been asked to do.
+deterministic compliance filter (`harvey/compliance.py`) exist.
+- Phase 3: collector registry + JSONL fixture collector (`harvey/collectors/`)
+  and `harvey/ingest.py` (`pulse ingest --fixture [DIR]`).
+
+Later phases add everything else. Don't build ahead of the phase you've
+been asked to do.
 
 ## Hard rules (never break these)
 
@@ -40,7 +44,7 @@ Also:
 
 - Tests: `.venv/Scripts/python -m pytest -q`. Work test-first.
 - Imports smoke check: `.venv/Scripts/python -c "import harvey.main, harvey.dashboard, harvey.cli, harvey.state"`
-- CLI: `pulse run | dashboard | status | usage` (`harvey` is an alias).
+- CLI: `pulse run | dashboard | status | ingest | usage` (`harvey` is an alias).
 - The dashboard binds to 127.0.0.1 only until auth lands in Phase 7.
 - The DB is `data/pulse.db`, and `PULSE_DB_PATH` overrides it. Schema
   changes are appended to `MIGRATIONS` in `harvey/state.py`. Never edit a

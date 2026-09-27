@@ -8,3 +8,10 @@ Rules every collector follows:
   dedupe key and the only way a reviewer can check the source.
 - No model calls: collection is free and repeatable. Triage happens later.
 """
+
+from harvey.collectors.base import REGISTRY, Collector, get_collector, register
+
+# Import concrete collectors so they register themselves.
+from harvey.collectors import fixture  # noqa: E402,F401
+
+__all__ = ["REGISTRY", "Collector", "get_collector", "register"]

@@ -461,6 +461,57 @@ class StateManager:
             )
             await db.commit()
 
+    # ── Sources (one row per collector feed) ──
+
+    async def ensure_source(
+        self, collector: str, name: str = "", config: dict | None = None,
+        owned: bool = False,
+    ) -> int:
+        """Id of the source row for ``collector``, creating it on first use."""
+        existing = await self.get_source_by_collector(collector)
+        if existing:
+            return existing["id"]
+        async with self._connect() as db:
+            cursor = await db.execute(
+                "INSERT INTO sources (collector, name, config_json, owned) "
+                "VALUES (?, ?, ?, ?)",
+                (collector, name or collector, json.dumps(config or {}),
+                 1 if owned else 0),
+            )
+            await db.commit()
+            return cursor.lastrowid
+
+    async def get_source_by_collector(self, collector: str) -> dict | None:
+        async with self._connect() as db:
+            db.row_factory = aiosqlite.Row
+            async with db.execute(
+                "SELECT * FROM sources WHERE collector = ? ORDER BY id LIMIT 1",
+                (collector,),
+            ) as cursor:
+                row = await cursor.fetchone()
+        return dict(row) if row else None
+
+    async def list_sources(self) -> list[dict]:
+        async with self._connect() as db:
+            db.row_factory = aiosqlite.Row
+            async with db.execute("SELECT * FROM sources ORDER BY id") as cursor:
+                return [dict(r) for r in await cursor.fetchall()]
+
+    async def touch_source(self, source_id: int, cursor_value: str | None = None):
+        """Stamp last_run_at (and optionally the collector's cursor)."""
+        async with self._connect() as db:
+            if cursor_value is None:
+                await db.execute(
+                    "UPDATE sources SET last_run_at = ? WHERE id = ?",
+                    (_ts(_utcnow()), int(source_id)),
+                )
+            else:
+                await db.execute(
+                    "UPDATE sources SET last_run_at = ?, last_cursor = ? WHERE id = ?",
+                    (_ts(_utcnow()), cursor_value, int(source_id)),
+                )
+            await db.commit()
+
     # ── Mentions ──
 
     @staticmethod

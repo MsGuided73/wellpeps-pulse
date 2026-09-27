@@ -1,4 +1,4 @@
-"""WellPeps Pulse CLI: run, dashboard, status, usage.
+"""WellPeps Pulse CLI: run, dashboard, status, ingest, usage.
 
 Installed as both `pulse` and `harvey` (same entry point).
 """
@@ -110,6 +110,35 @@ def cmd_usage(args):
     asyncio.run(_usage())
 
 
+def cmd_ingest(args):
+    """Run collectors once and print what they stored."""
+    if args.fixture is None:
+        print(
+            "\n  Nothing to ingest: pass --fixture [DIR]. "
+            "Real collectors arrive in a later phase.\n"
+        )
+        sys.exit(2)
+
+    from harvey.collectors import get_collector
+    from harvey.ingest import run_collectors
+    from harvey.state import StateManager
+
+    cfg = {"directory": args.fixture} if args.fixture else {}
+    collector = get_collector("fixture", **cfg)
+
+    async def _ingest():
+        state = StateManager()
+        await state.init_db()
+        report = await run_collectors(state, [collector])
+        print("\n  Ingest report")
+        print("  " + "=" * 52)
+        for line in report.lines():
+            print(f"  {line}")
+        print(f"  total: {report.created} created, {report.duplicates} duplicates\n")
+
+    asyncio.run(_ingest())
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="WellPeps Pulse: social listening with human-reviewed replies.",
@@ -125,6 +154,13 @@ def build_parser() -> argparse.ArgumentParser:
 
     sub = subparsers.add_parser("status", help="Show mention counts by status")
     sub.set_defaults(func=cmd_status)
+
+    sub = subparsers.add_parser("ingest", help="Run collectors once and store new mentions")
+    sub.add_argument(
+        "--fixture", nargs="?", const="", default=None, metavar="DIR",
+        help="Replay JSONL fixture posts (default dir: tests/fixtures/mentions)",
+    )
+    sub.set_defaults(func=cmd_ingest)
 
     sub = subparsers.add_parser("usage", help="Show Claude usage and quota")
     sub.add_argument("--days", type=int, default=30, help="Breakdown window (default: 30)")
