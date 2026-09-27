@@ -1,9 +1,10 @@
-"""Collectors — deterministic gatherers that emit observations.
+"""Mention collectors — deterministic gatherers that emit mentions.
 
-Each collector is independently runnable and re-runnable, states its cost up
-front, and writes observations in batches (a long run that dies must not lose
-what it already learned). Collectors only emit signals the user has CONFIRMED.
-
-Rule of thumb from the method this implements: if a fact can be obtained
-deterministically, do not spend a model call on it.
+Rules every collector follows:
+- Public data only. Nothing behind a login the brand does not own, no DMs.
+- Minimal author info: a public handle at most. No names, photos, locations,
+  or profile scraping — a mention is about what was said, not who said it.
+- Every mention keeps its permalink (``Mention.url`` is required); it is the
+  dedupe key and the only way a reviewer can check the source.
+- No model calls: collection is free and repeatable. Triage happens later.
 """

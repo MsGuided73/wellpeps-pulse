@@ -1,4 +1,4 @@
-"""Harvey — an autonomous sales agent that runs on your Claude subscription."""
+"""WellPeps Pulse — social listening with human-reviewed replies (fork of Harvey)."""
 
 import sys
 
@@ -7,7 +7,7 @@ import sys
 # the single most likely first-run problem.
 if sys.version_info < (3, 11):  # pragma: no cover - version guard
     raise RuntimeError(
-        f"Harvey needs Python 3.11+, but this is "
+        f"WellPeps Pulse needs Python 3.11+, but this is "
         f"{sys.version_info.major}.{sys.version_info.minor} "
         f"({sys.executable}). On macOS `python3` is the system 3.9 — rebuild "
         f"the venv from a newer Python:\n"
@@ -15,5 +15,3 @@ if sys.version_info < (3, 11):  # pragma: no cover - version guard
         f"    rm -rf .venv && $(brew --prefix)/bin/python3.13 -m venv .venv\n"
         f"    source .venv/bin/activate && pip install -e ."
     )
-
-"""Harvey — Autonomous Sales Agent. Always Be Closing."""

@@ -1,4 +1,4 @@
-"""Configuration loader for Harvey. Reads harvey.yaml + .env."""
+"""Configuration loader for WellPeps Pulse. Reads harvey.yaml + .env."""
 
 import logging
 import os
@@ -7,7 +7,7 @@ from pathlib import Path
 
 import yaml
 from dotenv import load_dotenv
-from pydantic import BaseModel, ValidationError, field_validator
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 
 from harvey.paths import PROJECT_ROOT
 
@@ -15,93 +15,17 @@ logger = logging.getLogger("harvey.config")
 
 
 class ConfigError(Exception):
-    """Raised when Harvey's configuration is missing or invalid."""
+    """Raised when the configuration is missing or invalid."""
 
 
 class ConfigFileNotFoundError(ConfigError, FileNotFoundError):
     """Config file is missing. Subclasses FileNotFoundError for
-    backward compatibility with existing callers/tests."""
+    backward compatibility with existing callers."""
 
 
-class PersonaConfig(BaseModel):
-    name: str
-    company: str
-    role: str
-    email: str
-    linkedin: str
-    tone: str
-
-
-class OfferConfig(BaseModel):
-    primary: str = ""
-    entry: str = ""
-    goal: str = "book_call"  # book_call, start_trial, get_reply
-    booking_method: str = "calendar_link"  # calendar_link, suggest_times, ask_preference
-    booking_url: str = ""
-    meeting_duration: str = "15 minutes"
-    meeting_owner: str = ""
-
-
-class ProductConfig(BaseModel):
-    name: str
-    description: str
-    pricing: str
-    key_benefits: list[str]
-    objection_responses: dict[str, str]
-    offer: OfferConfig = OfferConfig()
-
-
-class ICPConfig(BaseModel):
-    industries: list[str]
-    company_size: str
-    titles: list[str]
-    geography: list[str]
-    # Role keywords that indicate a company is in-market right now (a company
-    # hiring a "Head of Growth" is buying growth tooling). Empty → falls back
-    # to `titles`. Used for careers-page scanning and job-board discovery.
-    hiring_signals: list[str] = []
-    # Discovery needs a radius, not a place name. Maps each entry in
-    # `geography` to "lat,lng,radius_km" — e.g.
-    #   "Denver, CO": "39.7392,-104.9903,50"
-    # Without one, listings providers can only match on the business name.
-    geo_coordinates: dict[str, str] = {}
-
-
-class EmailChannelConfig(BaseModel):
-    enabled: bool = True
-    # "instantly" (legacy), "gmail" (Gmail/Workspace via API — recommended),
-    # or "smtp" (any SMTP+IMAP mailbox: AgentMail, Fastmail, ...)
-    provider: str = "instantly"
-    max_daily_sends: int = 50
-    # When True, also send to catch-all ("risky") domains, not just verified
-    # mailboxes. Off by default — catch-alls accept everything, so a bad
-    # guess still bounces.
-    send_to_risky: bool = False
-    # Copilot mode (native providers): every outgoing email waits in the
-    # outbox for your approval (dashboard → Outbox, or `harvey outbox`).
-    # Set false for full autopilot once you trust the output.
-    require_approval: bool = True
-    # Kill switch: pause all sending when bounces exceed this fraction of
-    # sent mail (measured over the trailing sends). 0 disables the switch.
-    max_bounce_rate: float = 0.05
-
-    @field_validator("max_daily_sends")
-    @classmethod
-    def _sends_non_negative(cls, v: int) -> int:
-        if v < 0:
-            raise ValueError("max_daily_sends must be >= 0")
-        return v
-
-
-class LinkedInChannelConfig(BaseModel):
-    enabled: bool = True
-    max_daily_connections: int = 20
-    max_daily_messages: int = 10
-
-
-class ChannelsConfig(BaseModel):
-    email: EmailChannelConfig = EmailChannelConfig()
-    linkedin: LinkedInChannelConfig = LinkedInChannelConfig()
+class OrganizationConfig(BaseModel):
+    name: str = "WellPeps"
+    market: str = "US"
 
 
 class QuietHoursConfig(BaseModel):
@@ -132,11 +56,10 @@ class QuietHoursConfig(BaseModel):
         return v
 
 
-# Structured-output calls where a small model is plenty. Prospect-facing
-# writing (writer, handler.generate_response) stays on the default model.
+# Structured-output calls where a small model is plenty. Drafting (added in a
+# later phase) stays on the default, stronger model.
 DEFAULT_MODELS = {
-    "scout": "haiku",
-    "handler.classify_intent": "haiku",
+    "triager": "haiku",
 }
 
 
@@ -145,10 +68,9 @@ class UsageConfig(BaseModel):
     heartbeat_interval_minutes: int = 15
     quiet_hours: QuietHoursConfig = QuietHoursConfig()
     # Per-agent model routing, passed to `claude --model`. Keys are an agent
-    # ("scout") or an agent.task ("handler.classify_intent"); the more
-    # specific key wins. Unlisted calls use the CLI's default model. Applied
-    # when the key is absent (trainer/setup rewrite `usage:` without it);
-    # set `models: {}` to run everything on the default model.
+    # ("triager") or an agent.task ("triager.classify"); the more specific key
+    # wins. Unlisted calls use the CLI's default model. Set `models: {}` to
+    # run everything on the default model.
     models: dict[str, str] = DEFAULT_MODELS
 
     @field_validator("models")
@@ -174,37 +96,57 @@ class UsageConfig(BaseModel):
         return v
 
 
-class HarveyConfig(BaseModel):
-    persona: PersonaConfig
-    product: ProductConfig
-    icp: ICPConfig
-    channels: ChannelsConfig = ChannelsConfig()
+class EscalationConfig(BaseModel):
+    # Named humans who get paged for adverse events / legal-regulatory
+    # mentions. Blank until WellPeps names them (docs/PLAN.md §5).
+    clinical_owner: str = ""
+    backup_owner: str = ""
+    sla_minutes: int = Field(default=15, ge=1)
+
+
+class NotifyConfig(BaseModel):
+    # Name of the env var holding the Slack webhook (never the URL itself).
+    slack_webhook_env: str = "SLACK_WEBHOOK_URL"
+
+
+class PulseConfig(BaseModel):
+    # Unknown keys fail loudly, so a leftover sales-era harvey.yaml is caught.
+    model_config = ConfigDict(extra="forbid")
+
+    organization: OrganizationConfig = OrganizationConfig()
     usage: UsageConfig = UsageConfig()
+    escalation: EscalationConfig = EscalationConfig()
+    notify: NotifyConfig = NotifyConfig()
+    retention_days: int = Field(default=180, ge=1)
+
+
+# Backward-compatible name for the config root.
+HarveyConfig = PulseConfig
 
 
 class EnvConfig(BaseModel):
-    instantly_api_key: str = ""
-    # Discovery providers
-    dataforseo_login: str = ""
-    dataforseo_password: str = ""
-    dataforseo_sandbox: str = ""   # any truthy value routes to the free sandbox
-    linkedin_email: str = ""
-    linkedin_password: str = ""
-    hunter_api_key: str = ""
-    serper_api_key: str = ""
-    reoon_api_key: str = ""
-    zerobounce_api_key: str = ""
-    # Native mail providers (channels.email.provider: gmail | smtp)
-    gmail_client_id: str = ""
-    gmail_client_secret: str = ""
-    smtp_host: str = ""
-    smtp_port: int = 587
-    smtp_username: str = ""
-    smtp_password: str = ""
-    imap_host: str = ""
-    imap_port: int = 993
-    imap_username: str = ""
-    imap_password: str = ""
+    """Optional secrets from the environment / .env. All default to blank.
+
+    Secret fields are excluded from repr so they never land in logs.
+    """
+
+    anthropic_api_key: str = Field(default="", repr=False)
+    slack_webhook_url: str = Field(default="", repr=False)
+    apify_token: str = Field(default="", repr=False)
+    meta_access_token: str = Field(default="", repr=False)
+    pulse_admin_email: str = ""
+    pulse_admin_password: str = Field(default="", repr=False)
+
+
+# EnvConfig field -> environment variable.
+_ENV_KEYS = {
+    "anthropic_api_key": "ANTHROPIC_API_KEY",
+    "slack_webhook_url": "SLACK_WEBHOOK_URL",
+    "apify_token": "APIFY_TOKEN",
+    "meta_access_token": "META_ACCESS_TOKEN",
+    "pulse_admin_email": "PULSE_ADMIN_EMAIL",
+    "pulse_admin_password": "PULSE_ADMIN_PASSWORD",
+}
 
 
 def _format_validation_error(e: ValidationError) -> str:
@@ -216,10 +158,11 @@ def _format_validation_error(e: ValidationError) -> str:
     return "\n".join(lines)
 
 
-def load_config(config_path: str | None = None) -> HarveyConfig:
-    """Load Harvey configuration from YAML file.
+def load_config(config_path: str | None = None) -> PulseConfig:
+    """Load configuration from YAML.
 
-    Raises ConfigError with a clear, actionable message on any problem.
+    Raises ConfigError with a clear message for file/YAML problems and
+    pydantic's ValidationError for schema problems.
     """
     if config_path is None:
         config_path = _find_config_file()
@@ -228,17 +171,14 @@ def load_config(config_path: str | None = None) -> HarveyConfig:
         with open(config_path, encoding="utf-8") as f:
             data = yaml.safe_load(f)
     except FileNotFoundError:
-        raise ConfigFileNotFoundError(
-            f"Config file not found: {config_path}. "
-            "Create one from harvey.yaml.example or run 'harvey setup'."
-        )
+        raise ConfigFileNotFoundError(f"Config file not found: {config_path}.")
     except yaml.YAMLError as e:
         raise ConfigError(f"Invalid YAML in {config_path}:\n  {e}")
     except OSError as e:
         raise ConfigError(f"Could not read {config_path}: {e}")
 
     if data is None:
-        raise ConfigError(f"{config_path} is empty. Run 'harvey setup' to configure Harvey.")
+        raise ConfigError(f"{config_path} is empty.")
     if not isinstance(data, dict):
         raise ConfigError(
             f"{config_path} must contain a YAML mapping (key: value pairs), "
@@ -246,58 +186,34 @@ def load_config(config_path: str | None = None) -> HarveyConfig:
         )
 
     try:
-        return HarveyConfig(**data)
+        return PulseConfig(**data)
     except ValidationError as e:
-        # Log a friendly, actionable summary, then re-raise the original
-        # ValidationError so callers (and tests) keep the pydantic type.
+        # Log a friendly summary, then re-raise the original ValidationError
+        # so callers (and tests) keep the pydantic type.
         logger.error(
-            f"Invalid configuration in {config_path}:\n{_format_validation_error(e)}\n"
-            "Fix the fields above or re-run 'harvey setup'."
+            f"Invalid configuration in {config_path}:\n{_format_validation_error(e)}"
         )
         raise
 
 
 def load_env() -> EnvConfig:
-    """Load environment variables from .env file."""
+    """Load optional secrets from the environment (and .env if present)."""
     load_dotenv()
-    env = EnvConfig(
-        instantly_api_key=os.getenv("INSTANTLY_API_KEY", "").strip(),
-        dataforseo_login=os.getenv("DATAFORSEO_LOGIN", "").strip(),
-        dataforseo_password=os.getenv("DATAFORSEO_PASSWORD", "").strip(),
-        dataforseo_sandbox=os.getenv("DATAFORSEO_SANDBOX", "").strip(),
-        linkedin_email=os.getenv("LINKEDIN_EMAIL", "").strip(),
-        linkedin_password=os.getenv("LINKEDIN_PASSWORD", "").strip(),
-        hunter_api_key=os.getenv("HUNTER_API_KEY", "").strip(),
-        serper_api_key=os.getenv("SERPER_API_KEY", "").strip(),
-        reoon_api_key=os.getenv("REOON_API_KEY", "").strip(),
-        zerobounce_api_key=os.getenv("ZEROBOUNCE_API_KEY", "").strip(),
-        gmail_client_id=os.getenv("GMAIL_CLIENT_ID", "").strip(),
-        gmail_client_secret=os.getenv("GMAIL_CLIENT_SECRET", "").strip(),
-        smtp_host=os.getenv("SMTP_HOST", "").strip(),
-        smtp_port=int(os.getenv("SMTP_PORT", "587").strip() or 587),
-        smtp_username=os.getenv("SMTP_USERNAME", "").strip(),
-        smtp_password=os.getenv("SMTP_PASSWORD", "").strip(),
-        imap_host=os.getenv("IMAP_HOST", "").strip(),
-        imap_port=int(os.getenv("IMAP_PORT", "993").strip() or 993),
-        imap_username=os.getenv("IMAP_USERNAME", "").strip(),
-        imap_password=os.getenv("IMAP_PASSWORD", "").strip(),
-    )
-    return env
+    return EnvConfig(**{
+        field: os.getenv(var, "").strip() for field, var in _ENV_KEYS.items()
+    })
 
 
 def _find_config_file() -> str:
-    """Search for Harvey's config.
+    """Search for the config.
 
-    ``harvey.local.yaml`` wins when present. It is gitignored, so a fork can
-    carry a real product configuration (trained on an actual company) while
-    the tracked ``harvey.yaml`` stays an untrained template — nobody
-    publishes their positioning, pricing, and prospect targeting by accident.
+    ``harvey.local.yaml`` wins when present. It is gitignored, so a
+    deployment can carry real owner names without committing them.
     """
     candidates = [
         Path.cwd() / "harvey.local.yaml",
         PROJECT_ROOT / "harvey.local.yaml",
         Path.cwd() / "harvey.yaml",
-        Path.cwd().parent / "harvey.yaml",
         PROJECT_ROOT / "harvey.yaml",
     ]
     for path in candidates:
@@ -305,6 +221,6 @@ def _find_config_file() -> str:
             return str(path)
     raise ConfigFileNotFoundError(
         "harvey.yaml not found in "
-        + ", ".join(str(p.parent) for p in candidates)
-        + ". Create one from harvey.yaml.example or run 'harvey setup'."
+        + ", ".join(sorted({str(p.parent) for p in candidates}))
+        + "."
     )

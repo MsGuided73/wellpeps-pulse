@@ -1,33 +1,56 @@
-"""SQLite state manager. All of Harvey's memory lives here.
+"""SQLite state manager. All of WellPeps Pulse's memory lives here.
 
 Concurrency: the DB runs in WAL mode (set persistently at init) so the
-dashboard can read while the agent writes. Every connection gets a busy
+dashboard can read while the heartbeat writes. Every connection gets a busy
 timeout so concurrent writers wait instead of raising "database is locked".
 
 Migrations: schema changes are applied via a linear, idempotent migration
-list tracked with SQLite's ``PRAGMA user_version`` so existing user DBs
-upgrade cleanly in place.
+list tracked with SQLite's ``PRAGMA user_version``. Pulse starts a fresh
+database (data/pulse.db), so the list restarts at v1.
+
+The audit_log table is append-only: SQLite triggers abort any UPDATE or
+DELETE, so the record of what was drafted, reviewed, approved and posted
+cannot be rewritten after the fact.
 """
 
 import json
 import uuid
 from contextlib import asynccontextmanager
-from datetime import datetime, date, timezone
+from datetime import date, datetime, timezone
 from pathlib import Path
 
 import aiosqlite
 
-from harvey.models.company import Company
-from harvey.models.prospect import Prospect
-from harvey.models.campaign import Campaign, EmailStep  # noqa: F401 (EmailStep re-exported)
-from harvey.models.conversation import Conversation, Message  # noqa: F401
-
-from harvey.paths import PROJECT_ROOT
-
-DB_PATH = PROJECT_ROOT / "data" / "harvey.db"
+from harvey.models import (
+    AuditEvent,
+    Draft,
+    Escalation,
+    Mention,
+    MentionStatus,
+    Triage,
+)
+from harvey.paths import DB_PATH
+from harvey.urls import normalize_url
 
 # How long (seconds) a connection waits on a locked database before failing.
 BUSY_TIMEOUT_SECONDS = 30.0
+
+# Allowed mention status transitions. Anything not listed raises ValueError.
+# Terminal states (rejected, posted, dropped) have no outgoing edges.
+ALLOWED_TRANSITIONS: dict[MentionStatus, frozenset[MentionStatus]] = {
+    MentionStatus.NEW: frozenset({
+        MentionStatus.TRIAGED, MentionStatus.DROPPED, MentionStatus.ESCALATED,
+    }),
+    MentionStatus.TRIAGED: frozenset({
+        MentionStatus.DRAFTED, MentionStatus.DROPPED, MentionStatus.ESCALATED,
+    }),
+    MentionStatus.DRAFTED: frozenset({MentionStatus.IN_REVIEW}),
+    MentionStatus.IN_REVIEW: frozenset({
+        MentionStatus.APPROVED, MentionStatus.REJECTED, MentionStatus.DRAFTED,
+    }),
+    MentionStatus.APPROVED: frozenset({MentionStatus.POSTED}),
+    MentionStatus.ESCALATED: frozenset({MentionStatus.TRIAGED, MentionStatus.DROPPED}),
+}
 
 
 def _new_id() -> str:
@@ -39,9 +62,17 @@ def _utcnow() -> datetime:
     return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
-def _norm(value: str | None) -> str:
-    """Normalize an identity key (email/domain) for dedup: strip + lowercase."""
-    return (value or "").strip().lower()
+def _ts(value: datetime | None) -> str | None:
+    return value.isoformat() if value else None
+
+
+def _loads(raw, default):
+    """Decode a *_json column, falling back to ``default`` on junk."""
+    try:
+        parsed = json.loads(raw) if raw else default
+    except (json.JSONDecodeError, TypeError):
+        return default
+    return parsed if isinstance(parsed, type(default)) else default
 
 
 # ── Schema migrations ─────────────────────────────────────────────────
@@ -50,80 +81,31 @@ def _norm(value: str | None) -> str:
 # released migrations — append new ones.
 
 MIGRATIONS: list[str] = [
-    # ── v1: base schema (idempotent, so pre-migration DBs adopt cleanly) ──
+    # ── v1: WellPeps Pulse base schema ──
     """
-    CREATE TABLE IF NOT EXISTS companies (
-        id TEXT PRIMARY KEY,
-        name TEXT DEFAULT '',
-        domain TEXT DEFAULT '',
-        website TEXT DEFAULT '',
-        description TEXT DEFAULT '',
-        industry TEXT DEFAULT '',
-        company_size TEXT DEFAULT '',
-        location TEXT DEFAULT '',
-        source TEXT DEFAULT '',
-        source_url TEXT DEFAULT '',
-        notes TEXT DEFAULT '',
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    -- ── Kept from Harvey: operational plumbing ──
+
+    -- Key/value store for operational flags (kill switch, counters).
+    CREATE TABLE IF NOT EXISTS settings (
+        key TEXT PRIMARY KEY,
+        value TEXT DEFAULT '',
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     );
 
-    CREATE TABLE IF NOT EXISTS prospects (
+    -- What ran, when, how much it produced and cost.
+    CREATE TABLE IF NOT EXISTS runs (
         id TEXT PRIMARY KEY,
-        company_id TEXT DEFAULT '' REFERENCES companies(id),
-        first_name TEXT DEFAULT '',
-        last_name TEXT DEFAULT '',
-        email TEXT DEFAULT '',
-        email_verified INTEGER DEFAULT 0,
-        phone TEXT DEFAULT '',
-        phone_verified INTEGER DEFAULT 0,
-        linkedin_url TEXT DEFAULT '',
-        title TEXT DEFAULT '',
-        seniority TEXT DEFAULT '',
-        department TEXT DEFAULT '',
-        source TEXT DEFAULT '',
-        source_url TEXT DEFAULT '',
-        status TEXT DEFAULT 'new',
-        score INTEGER DEFAULT 0,
-        personalization_notes TEXT DEFAULT '',
-        company TEXT DEFAULT '',
-        industry TEXT DEFAULT '',
-        company_size TEXT DEFAULT '',
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        stage TEXT DEFAULT '',
+        status TEXT DEFAULT 'running',
+        provider TEXT DEFAULT '',
+        records INTEGER DEFAULT 0,
+        cost_usd REAL DEFAULT 0.0,
+        params_json TEXT DEFAULT '{}',
+        error TEXT DEFAULT '',
+        started_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        ended_at TIMESTAMP
     );
-
-    CREATE TABLE IF NOT EXISTS campaigns (
-        id TEXT PRIMARY KEY,
-        name TEXT DEFAULT '',
-        channel TEXT DEFAULT 'email',
-        instantly_campaign_id TEXT DEFAULT '',
-        sequence_json TEXT DEFAULT '[]',
-        prospect_ids_json TEXT DEFAULT '[]',
-        status TEXT DEFAULT 'draft',
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-    );
-
-    CREATE TABLE IF NOT EXISTS conversations (
-        id TEXT PRIMARY KEY,
-        prospect_id TEXT REFERENCES prospects(id),
-        campaign_id TEXT DEFAULT '',
-        channel TEXT DEFAULT 'email',
-        thread_json TEXT DEFAULT '[]',
-        intent TEXT DEFAULT '',
-        stage TEXT DEFAULT 'initial_outreach',
-        status TEXT DEFAULT 'open',
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-    );
-
-    CREATE TABLE IF NOT EXISTS feedback (
-        id TEXT PRIMARY KEY,
-        entity_type TEXT DEFAULT '',
-        entity_id TEXT DEFAULT '',
-        comment TEXT DEFAULT '',
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-    );
+    CREATE INDEX IF NOT EXISTS idx_runs_stage_started ON runs(stage, started_at);
 
     CREATE TABLE IF NOT EXISTS actions (
         id TEXT PRIMARY KEY,
@@ -132,7 +114,10 @@ MIGRATIONS: list[str] = [
         details_json TEXT DEFAULT '{}',
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     );
+    CREATE INDEX IF NOT EXISTS idx_actions_created_at ON actions(created_at);
 
+    -- Daily Claude call counter: the Brain's budget fallback when the
+    -- subscription quota endpoint is unreadable.
     CREATE TABLE IF NOT EXISTS usage_log (
         id TEXT PRIMARY KEY,
         date TEXT UNIQUE,
@@ -141,56 +126,7 @@ MIGRATIONS: list[str] = [
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     );
 
-    CREATE TABLE IF NOT EXISTS processed_replies (
-        reply_id TEXT PRIMARY KEY,
-        processed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-    );
-
-    CREATE INDEX IF NOT EXISTS idx_companies_domain ON companies(domain);
-    CREATE INDEX IF NOT EXISTS idx_prospects_company_id ON prospects(company_id);
-    CREATE INDEX IF NOT EXISTS idx_prospects_status ON prospects(status);
-    CREATE INDEX IF NOT EXISTS idx_prospects_email ON prospects(email);
-    CREATE INDEX IF NOT EXISTS idx_campaigns_status ON campaigns(status);
-    CREATE INDEX IF NOT EXISTS idx_conversations_status ON conversations(status);
-    CREATE INDEX IF NOT EXISTS idx_feedback_entity ON feedback(entity_type, entity_id);
-    CREATE INDEX IF NOT EXISTS idx_usage_date ON usage_log(date);
-    """,
-    # ── v2: normalize identity keys, dedup, uniqueness, hot-path indexes ──
-    """
-    -- Normalize emails/domains so uniqueness is case-insensitive going forward.
-    UPDATE prospects SET email = LOWER(TRIM(email)) WHERE email != LOWER(TRIM(email));
-    UPDATE companies SET domain = LOWER(TRIM(domain)) WHERE domain != LOWER(TRIM(domain));
-
-    -- Dedup existing rows (keep the earliest) so unique indexes can be built.
-    DELETE FROM prospects WHERE email != '' AND rowid NOT IN (
-        SELECT MIN(rowid) FROM prospects WHERE email != '' GROUP BY email
-    );
-    DELETE FROM prospects WHERE linkedin_url != '' AND rowid NOT IN (
-        SELECT MIN(rowid) FROM prospects WHERE linkedin_url != '' GROUP BY linkedin_url
-    );
-    DELETE FROM companies WHERE domain != '' AND rowid NOT IN (
-        SELECT MIN(rowid) FROM companies WHERE domain != '' GROUP BY domain
-    );
-
-    -- Enforce uniqueness at the DB level (partial: blank values allowed).
-    CREATE UNIQUE INDEX IF NOT EXISTS uq_prospects_email
-        ON prospects(email) WHERE email != '';
-    CREATE UNIQUE INDEX IF NOT EXISTS uq_prospects_linkedin
-        ON prospects(linkedin_url) WHERE linkedin_url != '';
-    CREATE UNIQUE INDEX IF NOT EXISTS uq_companies_domain
-        ON companies(domain) WHERE domain != '';
-
-    -- Hot-path indexes: campaign stats subqueries, reply handling, dedup checks.
-    CREATE INDEX IF NOT EXISTS idx_conversations_campaign_id ON conversations(campaign_id);
-    CREATE INDEX IF NOT EXISTS idx_conversations_prospect_id ON conversations(prospect_id);
-    CREATE INDEX IF NOT EXISTS idx_conversations_intent ON conversations(intent);
-    CREATE INDEX IF NOT EXISTS idx_prospects_name_company
-        ON prospects(LOWER(first_name), LOWER(last_name), LOWER(company));
-    CREATE INDEX IF NOT EXISTS idx_prospects_status_updated ON prospects(status, updated_at);
-    CREATE INDEX IF NOT EXISTS idx_actions_created_at ON actions(created_at);
-    """,
-    # ── v3: per-call usage accounting (tokens, cost, attribution) ──
-    """
+    -- Per-call usage accounting (tokens, cost, attribution).
     CREATE TABLE IF NOT EXISTS usage_events (
         id TEXT PRIMARY KEY,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -209,182 +145,192 @@ MIGRATIONS: list[str] = [
         is_error INTEGER DEFAULT 0,
         source TEXT DEFAULT 'result_json'
     );
-
     CREATE INDEX IF NOT EXISTS idx_usage_events_created ON usage_events(created_at);
     CREATE INDEX IF NOT EXISTS idx_usage_events_agent ON usage_events(agent);
     CREATE INDEX IF NOT EXISTS idx_usage_events_session ON usage_events(session_id);
-    -- Transcript-backfilled rows carry a request_key; uniqueness makes
-    -- reconciliation idempotent (INSERT OR IGNORE).
     CREATE UNIQUE INDEX IF NOT EXISTS uq_usage_events_request
         ON usage_events(request_key) WHERE request_key != '';
-    """,
-    # ── v4: honest email statuses + per-domain pattern cache ──
-    """
-    -- verified: a provider confirmed the mailbox exists
-    -- risky:    catch-all / accept-all domain — sendable only in low volume
-    -- guess:    pattern guess, never verified — never auto-sent
-    -- invalid:  provider said undeliverable
-    ALTER TABLE prospects ADD COLUMN email_status TEXT DEFAULT '';
 
-    -- Backfill: the old email_verified flag over-reported (pattern guesses
-    -- at any MX-bearing domain were marked verified), so every existing
-    -- address is downgraded to an honest 'guess' and must re-verify.
-    UPDATE prospects SET email_status = 'guess', email_verified = 0
-        WHERE email != '';
+    -- ── Listening ──
 
-    CREATE TABLE IF NOT EXISTS email_patterns (
-        domain TEXT PRIMARY KEY,
-        pattern TEXT DEFAULT '',
-        source TEXT DEFAULT '',
-        confidence REAL DEFAULT 0.0,
-        mx_type TEXT DEFAULT '',
-        is_catch_all INTEGER DEFAULT -1,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-    );
-    """,
-    # ── v5: buying signals on companies (tech stack, hiring, etc.) ──
-    """
-    ALTER TABLE companies ADD COLUMN tech_stack_json TEXT DEFAULT '[]';
-    ALTER TABLE companies ADD COLUMN signals_json TEXT DEFAULT '[]';
-    """,
-    # ── v6: outbox (approval ladder + native sending) and settings KV ──
-    """
-    -- Every outgoing email becomes an outbox row first. Status ladder:
-    --   pending_review -> approved -> sent
-    --   (or rejected / cancelled / failed)
-    -- The unique index on (campaign_id, prospect_id, step) is the
-    -- double-send guard: retries and re-stages physically cannot
-    -- duplicate a send.
-    CREATE TABLE IF NOT EXISTS outbox (
-        id TEXT PRIMARY KEY,
-        campaign_id TEXT DEFAULT '',
-        prospect_id TEXT DEFAULT '',
-        conversation_id TEXT DEFAULT '',
-        step INTEGER DEFAULT 1,
-        kind TEXT DEFAULT 'sequence',
-        to_email TEXT DEFAULT '',
-        subject TEXT DEFAULT '',
-        body TEXT DEFAULT '',
-        status TEXT DEFAULT 'pending_review',
-        send_at TIMESTAMP,
-        sent_at TIMESTAMP,
-        provider TEXT DEFAULT '',
-        message_id TEXT DEFAULT '',
-        thread_ref TEXT DEFAULT '',
-        in_reply_to TEXT DEFAULT '',
-        error TEXT DEFAULT '',
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    -- A configured feed (subreddit search, review page, owned account...).
+    CREATE TABLE IF NOT EXISTS sources (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        collector TEXT NOT NULL,
+        name TEXT DEFAULT '',
+        config_json TEXT DEFAULT '{}',
+        enabled INTEGER DEFAULT 1,
+        owned INTEGER DEFAULT 0,
+        last_cursor TEXT DEFAULT '',
+        last_run_at TIMESTAMP,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     );
 
-    CREATE UNIQUE INDEX IF NOT EXISTS uq_outbox_campaign_step
-        ON outbox(campaign_id, prospect_id, step)
-        WHERE campaign_id != '' AND kind = 'sequence';
-    CREATE INDEX IF NOT EXISTS idx_outbox_status_send_at ON outbox(status, send_at);
-    CREATE INDEX IF NOT EXISTS idx_outbox_prospect ON outbox(prospect_id);
-
-    -- Simple key/value store for operational flags (kill switch, counters).
-    CREATE TABLE IF NOT EXISTS settings (
-        key TEXT PRIMARY KEY,
-        value TEXT DEFAULT '',
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-    );
-    """,
-    # ── v7: observation model — every fact is a row, never a column ──
-    """
-    -- The governed vocabulary. A collector may only emit a code that exists
-    -- here (enforced by the observations FK), so a typo fails loudly instead
-    -- of quietly inventing a junk signal. `status` is the user-confirmation
-    -- gate: Harvey PROPOSES signals, the user confirms which ones to
-    -- prospect against, and only confirmed signals get collected.
-    CREATE TABLE IF NOT EXISTS signal_codes (
-        code TEXT PRIMARY KEY,
-        label TEXT DEFAULT '',
-        description TEXT DEFAULT '',
-        category TEXT DEFAULT '',
-        value_type TEXT DEFAULT 'text',
-        collector TEXT DEFAULT '',
-        cost_note TEXT DEFAULT '',
-        status TEXT DEFAULT 'proposed',
-        confidence_floor REAL DEFAULT 0.0,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-    );
-
-    -- One row per fact. Confidence and provenance travel WITH the fact, and
-    -- re-observing the same signal over time is a free time series.
-    CREATE TABLE IF NOT EXISTS observations (
-        id TEXT PRIMARY KEY,
-        company_id TEXT DEFAULT '',
-        prospect_id TEXT DEFAULT '',
-        signal_code TEXT NOT NULL,
-        collector TEXT DEFAULT '',
-        value_num REAL,
-        value_text TEXT DEFAULT '',
-        confidence REAL DEFAULT 1.0,
-        evidence_url TEXT DEFAULT '',
-        observed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    -- One public post / comment / review. The permalink is mandatory.
+    CREATE TABLE IF NOT EXISTS mentions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        source_id INTEGER REFERENCES sources(id),
+        platform TEXT NOT NULL,
+        external_id TEXT DEFAULT '',
+        url TEXT NOT NULL,
+        url_norm TEXT NOT NULL,
+        author_handle TEXT DEFAULT '',
+        parent_external_id TEXT DEFAULT '',
+        text TEXT DEFAULT '',
+        title TEXT DEFAULT '',
+        lang TEXT DEFAULT '',
+        posted_at TIMESTAMP,
+        collected_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        engagement_json TEXT DEFAULT '{}',
+        owned_channel INTEGER DEFAULT 0,
+        status TEXT DEFAULT 'new',
         run_id TEXT DEFAULT ''
     );
+    CREATE UNIQUE INDEX IF NOT EXISTS uq_mentions_platform_external
+        ON mentions(platform, external_id) WHERE external_id != '';
+    CREATE UNIQUE INDEX IF NOT EXISTS uq_mentions_url_norm ON mentions(url_norm);
+    CREATE INDEX IF NOT EXISTS idx_mentions_status ON mentions(status, collected_at);
+    CREATE INDEX IF NOT EXISTS idx_mentions_collected ON mentions(collected_at);
+    CREATE INDEX IF NOT EXISTS idx_mentions_platform ON mentions(platform, collected_at);
 
-    CREATE INDEX IF NOT EXISTS idx_obs_company ON observations(company_id);
-    CREATE INDEX IF NOT EXISTS idx_obs_signal ON observations(signal_code);
-    CREATE INDEX IF NOT EXISTS idx_obs_company_signal
-        ON observations(company_id, signal_code, observed_at);
-    CREATE INDEX IF NOT EXISTS idx_obs_run ON observations(run_id);
+    CREATE TABLE IF NOT EXISTS triage (
+        mention_id INTEGER PRIMARY KEY REFERENCES mentions(id),
+        relevant INTEGER DEFAULT 1,
+        subject_type TEXT DEFAULT '',
+        subject TEXT DEFAULT '',
+        competitor TEXT DEFAULT '',
+        product TEXT DEFAULT '',
+        category TEXT DEFAULT 'other',
+        sentiment TEXT DEFAULT '',
+        urgency TEXT DEFAULT 'normal',
+        urgency_reason TEXT DEFAULT '',
+        reply_appropriate INTEGER DEFAULT 0,
+        phrases_json TEXT DEFAULT '[]',
+        model TEXT DEFAULT '',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE INDEX IF NOT EXISTS idx_triage_category ON triage(category);
+    CREATE INDEX IF NOT EXISTS idx_triage_urgency ON triage(urgency);
 
-    -- The governed-vocabulary guarantee. A trigger (not a foreign key) so it
-    -- holds regardless of the per-connection foreign_keys pragma, and applies
-    -- only here: the legacy tables default several id columns to '' and would
-    -- break under blanket FK enforcement.
-    CREATE TRIGGER IF NOT EXISTS trg_observations_signal_known
-    BEFORE INSERT ON observations
-    FOR EACH ROW
-    WHEN NEW.signal_code NOT IN (SELECT code FROM signal_codes)
-    BEGIN
-        SELECT RAISE(ABORT, 'unknown signal_code: not in signal_codes vocabulary');
-    END;
+    CREATE TABLE IF NOT EXISTS escalations (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        mention_id INTEGER NOT NULL REFERENCES mentions(id),
+        kind TEXT DEFAULT '',
+        owner TEXT DEFAULT '',
+        notified_at TIMESTAMP,
+        sla_due_at TIMESTAMP,
+        acked_at TIMESTAMP,
+        acked_by TEXT DEFAULT '',
+        breached INTEGER DEFAULT 0,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE INDEX IF NOT EXISTS idx_escalations_mention ON escalations(mention_id);
+    CREATE INDEX IF NOT EXISTS idx_escalations_open ON escalations(acked_at, sla_due_at);
 
-    -- A log of what ran, when, how much it produced and cost. Purely a
-    -- record: spend is capped inside the collector, never here.
-    CREATE TABLE IF NOT EXISTS runs (
-        id TEXT PRIMARY KEY,
-        stage TEXT DEFAULT '',
-        status TEXT DEFAULT 'running',
-        provider TEXT DEFAULT '',
-        records INTEGER DEFAULT 0,
-        cost_usd REAL DEFAULT 0.0,
-        params_json TEXT DEFAULT '{}',
-        error TEXT DEFAULT '',
-        started_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        ended_at TIMESTAMP
+    -- ── Drafting & review ──
+
+    CREATE TABLE IF NOT EXISTS drafts (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        mention_id INTEGER NOT NULL REFERENCES mentions(id),
+        version INTEGER NOT NULL,
+        text TEXT DEFAULT '',
+        claim_ids_json TEXT DEFAULT '[]',
+        model TEXT DEFAULT '',
+        filter_ok INTEGER,
+        filter_hits_json TEXT DEFAULT '[]',
+        review_verdict TEXT,
+        review_reasons_json TEXT DEFAULT '[]',
+        tier TEXT DEFAULT '',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(mention_id, version)
     );
 
-    CREATE INDEX IF NOT EXISTS idx_runs_stage_started ON runs(stage, started_at);
-    """,
-    # ── v8: discovery — entity resolution for businesses without a website ──
-    """
-    -- The best prospect for anyone selling websites is a business that has
-    -- none, so `domain` cannot be the only identity key. `external_id` holds
-    -- the provider's stable id ("dataforseo:ChIJ...", "osm:node/123") and is
-    -- what dedups a re-run for those records.
-    ALTER TABLE companies ADD COLUMN external_id TEXT DEFAULT '';
-    ALTER TABLE companies ADD COLUMN phone TEXT DEFAULT '';
+    -- Append-only record of every decision. Triggers below forbid edits.
+    CREATE TABLE IF NOT EXISTS audit_log (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        mention_id INTEGER,
+        draft_id INTEGER,
+        event TEXT NOT NULL,
+        actor TEXT NOT NULL DEFAULT '',
+        claim_ids_json TEXT DEFAULT '[]',
+        filter_result_json TEXT DEFAULT '{}',
+        verdict_json TEXT DEFAULT '{}',
+        final_text TEXT DEFAULT '',
+        permalink TEXT DEFAULT '',
+        at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE INDEX IF NOT EXISTS idx_audit_mention ON audit_log(mention_id, id);
+    CREATE INDEX IF NOT EXISTS idx_audit_at ON audit_log(at);
 
-    CREATE UNIQUE INDEX IF NOT EXISTS uq_companies_external
-        ON companies(external_id) WHERE external_id != '';
+    CREATE TRIGGER IF NOT EXISTS trg_audit_log_no_update
+    BEFORE UPDATE ON audit_log
+    BEGIN
+        SELECT RAISE(ABORT, 'audit_log is append-only: UPDATE not allowed');
+    END;
+
+    CREATE TRIGGER IF NOT EXISTS trg_audit_log_no_delete
+    BEFORE DELETE ON audit_log
+    BEGIN
+        SELECT RAISE(ABORT, 'audit_log is append-only: DELETE not allowed');
+    END;
+
+    -- ── Intelligence ──
+
+    CREATE TABLE IF NOT EXISTS briefs (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        kind TEXT DEFAULT 'daily',
+        period_start TIMESTAMP,
+        period_end TIMESTAMP,
+        body_md TEXT DEFAULT '',
+        data_json TEXT DEFAULT '{}',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE INDEX IF NOT EXISTS idx_briefs_kind_created ON briefs(kind, created_at);
+
+    CREATE TABLE IF NOT EXISTS trend_terms (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        term TEXT NOT NULL,
+        platform TEXT DEFAULT '',
+        day TEXT NOT NULL,
+        count INTEGER DEFAULT 0,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(term, platform, day)
+    );
+    CREATE INDEX IF NOT EXISTS idx_trend_terms_day ON trend_terms(day);
+
+    CREATE TABLE IF NOT EXISTS language_bank (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        phrase TEXT NOT NULL UNIQUE,
+        category TEXT DEFAULT '',
+        example_mention_id INTEGER,
+        count INTEGER DEFAULT 0,
+        first_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        last_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+
+    -- ── Access ──
+
+    CREATE TABLE IF NOT EXISTS users (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        email TEXT NOT NULL UNIQUE,
+        display_name TEXT DEFAULT '',
+        role TEXT DEFAULT 'reviewer',
+        password_hash TEXT DEFAULT '',
+        active INTEGER DEFAULT 1,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE TABLE IF NOT EXISTS sessions (
+        id TEXT PRIMARY KEY,
+        user_id INTEGER NOT NULL REFERENCES users(id),
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        expires_at TIMESTAMP NOT NULL,
+        last_seen_at TIMESTAMP
+    );
+    CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id);
+    CREATE INDEX IF NOT EXISTS idx_sessions_expires ON sessions(expires_at);
     """,
 ]
-
-# Column whitelists for dynamic UPDATEs (prevents SQL injection via kwargs).
-_CAMPAIGN_COLUMNS = frozenset({
-    "name", "channel", "instantly_campaign_id",
-    "sequence_json", "prospect_ids_json", "status",
-})
-_CONVERSATION_COLUMNS = frozenset({
-    "prospect_id", "campaign_id", "channel",
-    "thread_json", "intent", "stage", "status",
-})
 
 
 class StateManager:
@@ -397,9 +343,11 @@ class StateManager:
 
         `timeout` maps to SQLite's busy handler, so writers wait for locks
         (e.g. while the dashboard holds a read) instead of erroring.
+        Foreign keys are enforced per connection.
         """
         db = await aiosqlite.connect(self.db_path, timeout=BUSY_TIMEOUT_SECONDS)
         try:
+            await db.execute("PRAGMA foreign_keys=ON")
             yield db
         finally:
             await db.close()
@@ -409,7 +357,7 @@ class StateManager:
         Path(self.db_path).parent.mkdir(parents=True, exist_ok=True)
         async with self._connect() as db:
             # WAL is persistent in the DB file: readers (dashboard) never
-            # block the writer (agent) and vice versa.
+            # block the writer (heartbeat) and vice versa.
             await db.execute("PRAGMA journal_mode=WAL")
             await db.execute("PRAGMA synchronous=NORMAL")
 
@@ -421,772 +369,6 @@ class StateManager:
                     await db.executescript(script)
                     await db.execute(f"PRAGMA user_version = {target}")
                     await db.commit()
-
-    # ── Companies ──
-
-    @staticmethod
-    def _company_from_row(row: aiosqlite.Row) -> Company:
-        d = dict(row)
-        for json_col, field in (("tech_stack_json", "tech_stack"), ("signals_json", "signals")):
-            raw = d.pop(json_col, None)
-            try:
-                parsed = json.loads(raw) if raw else []
-            except (json.JSONDecodeError, TypeError):
-                parsed = []
-            d[field] = parsed if isinstance(parsed, list) else []
-        return Company(**d)
-
-    async def add_company(self, company: Company) -> str:
-        """Insert a company, or return the id of the one already recorded.
-
-        Identity is the normalised domain when there is one, and the
-        provider's ``external_id`` when there isn't — a business with no
-        website still has to dedup across re-runs, and for anyone selling
-        websites those are the best prospects on the list.
-        """
-        if not company.id:
-            company.id = _new_id()
-        company.domain = _norm(company.domain)
-        async with self._connect() as db:
-            cursor = await db.execute(
-                """INSERT OR IGNORE INTO companies
-                   (id, name, domain, website, description, industry,
-                    company_size, location, phone, source, source_url,
-                    external_id, notes, tech_stack_json, signals_json,
-                    created_at, updated_at)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-                (
-                    company.id, company.name, company.domain, company.website,
-                    company.description, company.industry, company.company_size,
-                    company.location, company.phone, company.source,
-                    company.source_url, company.external_id, company.notes,
-                    json.dumps(company.tech_stack), json.dumps(company.signals),
-                    company.created_at.isoformat(),
-                    company.updated_at.isoformat(),
-                ),
-            )
-            await db.commit()
-            if cursor.rowcount == 0:
-                # Uniqueness conflict: hand back the existing record's id.
-                for column, value in (("domain", company.domain),
-                                      ("external_id", company.external_id)):
-                    if not value:
-                        continue
-                    async with db.execute(
-                        f"SELECT id FROM companies WHERE {column} = ?", (value,)
-                    ) as cur:
-                        row = await cur.fetchone()
-                        if row:
-                            company.id = row[0]
-                            break
-        return company.id
-
-    async def update_company_signals(
-        self,
-        company_id: str,
-        tech_stack: list[str] | None = None,
-        new_signals: list[dict] | None = None,
-    ):
-        """Merge freshly-detected tech + signals into a company record.
-
-        Signals are appended with dedup on (type, detail) so re-scans
-        don't multiply the same finding.
-        """
-        async with self._connect() as db:
-            db.row_factory = aiosqlite.Row
-            async with db.execute(
-                "SELECT tech_stack_json, signals_json FROM companies WHERE id = ?",
-                (company_id,),
-            ) as cursor:
-                row = await cursor.fetchone()
-            if not row:
-                return
-
-            def _load(raw):
-                try:
-                    parsed = json.loads(raw) if raw else []
-                except (json.JSONDecodeError, TypeError):
-                    parsed = []
-                return parsed if isinstance(parsed, list) else []
-
-            tech = _load(row["tech_stack_json"])
-            signals = _load(row["signals_json"])
-
-            for t in tech_stack or []:
-                if t not in tech:
-                    tech.append(t)
-            seen = {(s.get("type"), s.get("detail")) for s in signals if isinstance(s, dict)}
-            for s in new_signals or []:
-                if not isinstance(s, dict):
-                    continue
-                if (s.get("type"), s.get("detail")) in seen:
-                    continue
-                signals.append(s)
-                seen.add((s.get("type"), s.get("detail")))
-
-            await db.execute(
-                "UPDATE companies SET tech_stack_json = ?, signals_json = ?, "
-                "updated_at = ? WHERE id = ?",
-                (json.dumps(tech), json.dumps(signals),
-                 _utcnow().isoformat(), company_id),
-            )
-            await db.commit()
-
-    async def get_company(self, company_id: str) -> Company | None:
-        async with self._connect() as db:
-            db.row_factory = aiosqlite.Row
-            async with db.execute(
-                "SELECT * FROM companies WHERE id = ?", (company_id,)
-            ) as cursor:
-                row = await cursor.fetchone()
-                return self._company_from_row(row) if row else None
-
-    async def get_company_by_domain(self, domain: str) -> Company | None:
-        async with self._connect() as db:
-            db.row_factory = aiosqlite.Row
-            async with db.execute(
-                "SELECT * FROM companies WHERE domain = ?", (_norm(domain),)
-            ) as cursor:
-                row = await cursor.fetchone()
-                return self._company_from_row(row) if row else None
-
-    async def get_company_by_external_id(self, external_id: str) -> Company | None:
-        """Look a company up by its provider-stable id.
-
-        The identity path for businesses with no website — which is exactly
-        the cohort worth the most to anyone selling one.
-        """
-        if not external_id:
-            return None
-        async with self._connect() as db:
-            db.row_factory = aiosqlite.Row
-            async with db.execute(
-                "SELECT * FROM companies WHERE external_id = ?", (external_id,)
-            ) as cursor:
-                row = await cursor.fetchone()
-                return self._company_from_row(row) if row else None
-
-    async def get_contacts_for_company(self, company_id: str) -> list[Prospect]:
-        async with self._connect() as db:
-            db.row_factory = aiosqlite.Row
-            async with db.execute(
-                "SELECT * FROM prospects WHERE company_id = ? ORDER BY score DESC",
-                (company_id,),
-            ) as cursor:
-                rows = await cursor.fetchall()
-                return [self._prospect_from_row(r) for r in rows]
-
-    async def company_exists(self, domain: str) -> bool:
-        async with self._connect() as db:
-            async with db.execute(
-                "SELECT 1 FROM companies WHERE domain = ?", (_norm(domain),)
-            ) as cursor:
-                return bool(await cursor.fetchone())
-
-    # ── Prospects (Contacts) ──
-
-    @staticmethod
-    def _prospect_from_row(row: aiosqlite.Row) -> Prospect:
-        d = dict(row)
-        d["email_verified"] = bool(d.get("email_verified", 0))
-        d["phone_verified"] = bool(d.get("phone_verified", 0))
-        d["email_status"] = d.get("email_status") or ""
-        return Prospect(**d)
-
-    async def add_prospect(self, prospect: Prospect) -> str:
-        """Insert a prospect. Duplicates (same email or LinkedIn URL) are not
-        re-inserted; the existing record's id is returned instead."""
-        if not prospect.id:
-            prospect.id = _new_id()
-        prospect.email = _norm(prospect.email)
-        prospect.linkedin_url = (prospect.linkedin_url or "").strip()
-        async with self._connect() as db:
-            cursor = await db.execute(
-                """INSERT OR IGNORE INTO prospects
-                   (id, company_id, first_name, last_name, email, email_verified,
-                    email_status, phone, phone_verified, linkedin_url, title,
-                    seniority, department, source, source_url, status, score,
-                    personalization_notes, company, industry, company_size,
-                    created_at, updated_at)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-                (
-                    prospect.id, prospect.company_id,
-                    prospect.first_name, prospect.last_name,
-                    prospect.email, int(prospect.email_verified),
-                    prospect.email_status,
-                    prospect.phone, int(prospect.phone_verified),
-                    prospect.linkedin_url, prospect.title,
-                    prospect.seniority, prospect.department,
-                    prospect.source, prospect.source_url,
-                    prospect.status, prospect.score,
-                    prospect.personalization_notes,
-                    prospect.company, prospect.industry, prospect.company_size,
-                    prospect.created_at.isoformat(),
-                    prospect.updated_at.isoformat(),
-                ),
-            )
-            await db.commit()
-            if cursor.rowcount == 0:
-                # Unique-constraint conflict: resolve to the existing record.
-                for column, value in (
-                    ("email", prospect.email),
-                    ("linkedin_url", prospect.linkedin_url),
-                    ("id", prospect.id),
-                ):
-                    if not value:
-                        continue
-                    async with db.execute(
-                        f"SELECT id FROM prospects WHERE {column} = ?", (value,)
-                    ) as cur:
-                        row = await cur.fetchone()
-                        if row:
-                            prospect.id = row[0]
-                            break
-        return prospect.id
-
-    async def get_prospect(self, prospect_id: str) -> Prospect | None:
-        async with self._connect() as db:
-            db.row_factory = aiosqlite.Row
-            async with db.execute(
-                "SELECT * FROM prospects WHERE id = ?", (prospect_id,)
-            ) as cursor:
-                row = await cursor.fetchone()
-                return self._prospect_from_row(row) if row else None
-
-    async def get_prospects_by_status(self, status: str) -> list[Prospect]:
-        async with self._connect() as db:
-            db.row_factory = aiosqlite.Row
-            async with db.execute(
-                "SELECT * FROM prospects WHERE status = ? ORDER BY created_at DESC",
-                (status,),
-            ) as cursor:
-                rows = await cursor.fetchall()
-                return [self._prospect_from_row(r) for r in rows]
-
-    async def update_prospect_status(self, prospect_id: str, status: str):
-        async with self._connect() as db:
-            await db.execute(
-                "UPDATE prospects SET status = ?, updated_at = ? WHERE id = ?",
-                (status, _utcnow().isoformat(), prospect_id),
-            )
-            await db.commit()
-
-    async def get_prospect_by_email(self, email: str) -> Prospect | None:
-        """Look up a prospect by email address (indexed, case-insensitive)."""
-        email = _norm(email)
-        if not email:
-            return None
-        async with self._connect() as db:
-            db.row_factory = aiosqlite.Row
-            async with db.execute(
-                "SELECT * FROM prospects WHERE email = ?", (email,)
-            ) as cursor:
-                row = await cursor.fetchone()
-                return self._prospect_from_row(row) if row else None
-
-    async def update_prospect_email(
-        self, prospect_id: str, email: str, email_status: str
-    ):
-        """Set a prospect's email + honesty status (verified/risky/guess/invalid)."""
-        async with self._connect() as db:
-            await db.execute(
-                """UPDATE prospects
-                   SET email = ?, email_status = ?, email_verified = ?, updated_at = ?
-                   WHERE id = ?""",
-                (
-                    _norm(email), email_status,
-                    1 if email_status == "verified" else 0,
-                    _utcnow().isoformat(), prospect_id,
-                ),
-            )
-            await db.commit()
-
-    # ── Email pattern cache (per-domain) ──
-
-    async def get_email_pattern(self, domain: str) -> dict | None:
-        async with self._connect() as db:
-            db.row_factory = aiosqlite.Row
-            async with db.execute(
-                "SELECT * FROM email_patterns WHERE domain = ?", (_norm(domain),)
-            ) as cursor:
-                row = await cursor.fetchone()
-                return dict(row) if row else None
-
-    async def save_email_pattern(
-        self,
-        domain: str,
-        pattern: str = "",
-        source: str = "",
-        confidence: float = 0.0,
-        mx_type: str = "",
-        is_catch_all: int | None = None,
-    ):
-        """Upsert what we've learned about a domain's email conventions.
-
-        Only overwrites the stored pattern when the new one has equal or
-        higher confidence; mx_type/is_catch_all always refresh.
-        """
-        domain = _norm(domain)
-        if not domain:
-            return
-        async with self._connect() as db:
-            await db.execute(
-                """INSERT INTO email_patterns
-                       (domain, pattern, source, confidence, mx_type, is_catch_all, updated_at)
-                   VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-                   ON CONFLICT(domain) DO UPDATE SET
-                       pattern = CASE WHEN excluded.confidence >= email_patterns.confidence
-                                       AND excluded.pattern != ''
-                                      THEN excluded.pattern ELSE email_patterns.pattern END,
-                       source = CASE WHEN excluded.confidence >= email_patterns.confidence
-                                      AND excluded.pattern != ''
-                                     THEN excluded.source ELSE email_patterns.source END,
-                       confidence = MAX(email_patterns.confidence, excluded.confidence),
-                       mx_type = CASE WHEN excluded.mx_type != ''
-                                      THEN excluded.mx_type ELSE email_patterns.mx_type END,
-                       is_catch_all = CASE WHEN excluded.is_catch_all != -1
-                                           THEN excluded.is_catch_all
-                                           ELSE email_patterns.is_catch_all END,
-                       updated_at = CURRENT_TIMESTAMP""",
-                (
-                    domain, pattern, source, float(confidence), mx_type,
-                    -1 if is_catch_all is None else int(is_catch_all),
-                ),
-            )
-            await db.commit()
-
-    # ── Outbox (approval ladder + native sending) ──
-
-    async def add_outbox_item(
-        self,
-        *,
-        prospect_id: str,
-        to_email: str,
-        subject: str,
-        body: str,
-        send_at: str,
-        status: str = "pending_review",
-        campaign_id: str = "",
-        conversation_id: str = "",
-        step: int = 1,
-        kind: str = "sequence",
-        provider: str = "",
-        thread_ref: str = "",
-        in_reply_to: str = "",
-    ) -> str | None:
-        """Queue one outgoing email. Returns its id, or None when the
-        (campaign, prospect, step) slot already exists — the double-send guard."""
-        item_id = _new_id()
-        async with self._connect() as db:
-            cursor = await db.execute(
-                """INSERT OR IGNORE INTO outbox
-                   (id, campaign_id, prospect_id, conversation_id, step, kind,
-                    to_email, subject, body, status, send_at, provider,
-                    thread_ref, in_reply_to)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-                (
-                    item_id, campaign_id, prospect_id, conversation_id,
-                    int(step), kind, _norm(to_email), subject, body,
-                    status, send_at, provider, thread_ref, in_reply_to,
-                ),
-            )
-            await db.commit()
-            return item_id if cursor.rowcount > 0 else None
-
-    async def get_outbox(
-        self,
-        status: str | None = None,
-        due_before: str | None = None,
-        limit: int = 200,
-    ) -> list[dict]:
-        where, params = [], []
-        if status:
-            where.append("status = ?")
-            params.append(status)
-        if due_before:
-            where.append("(send_at IS NULL OR send_at <= ?)")
-            params.append(due_before)
-        sql = "SELECT * FROM outbox"
-        if where:
-            sql += " WHERE " + " AND ".join(where)
-        sql += " ORDER BY send_at ASC, created_at ASC LIMIT ?"
-        params.append(int(limit))
-        async with self._connect() as db:
-            db.row_factory = aiosqlite.Row
-            async with db.execute(sql, params) as cursor:
-                return [dict(r) for r in await cursor.fetchall()]
-
-    async def get_outbox_item(self, item_id: str) -> dict | None:
-        async with self._connect() as db:
-            db.row_factory = aiosqlite.Row
-            async with db.execute(
-                "SELECT * FROM outbox WHERE id = ?", (item_id,)
-            ) as cursor:
-                row = await cursor.fetchone()
-                return dict(row) if row else None
-
-    _OUTBOX_COLUMNS = frozenset({
-        "status", "error", "message_id", "thread_ref", "sent_at",
-        "subject", "body", "send_at", "provider",
-    })
-
-    async def update_outbox_item(self, item_id: str, **kwargs):
-        fields = {k: v for k, v in kwargs.items() if k in self._OUTBOX_COLUMNS}
-        if not fields:
-            return
-        sets = ", ".join(f"{k} = ?" for k in fields)
-        async with self._connect() as db:
-            await db.execute(
-                f"UPDATE outbox SET {sets}, updated_at = ? WHERE id = ?",
-                (*fields.values(), _utcnow().isoformat(), item_id),
-            )
-            await db.commit()
-
-    async def approve_outbox(self, item_id: str | None = None) -> int:
-        """Approve one pending item, or ALL pending when item_id is None."""
-        async with self._connect() as db:
-            if item_id:
-                cursor = await db.execute(
-                    "UPDATE outbox SET status = 'approved', updated_at = ? "
-                    "WHERE id = ? AND status = 'pending_review'",
-                    (_utcnow().isoformat(), item_id),
-                )
-            else:
-                cursor = await db.execute(
-                    "UPDATE outbox SET status = 'approved', updated_at = ? "
-                    "WHERE status = 'pending_review'",
-                    (_utcnow().isoformat(),),
-                )
-            await db.commit()
-            return cursor.rowcount
-
-    async def cancel_pending_outbox_for_prospect(
-        self, prospect_id: str, reason: str = "stop_on_reply"
-    ) -> int:
-        """Stop-on-reply: cancel everything queued for a prospect who replied."""
-        async with self._connect() as db:
-            cursor = await db.execute(
-                "UPDATE outbox SET status = 'cancelled', error = ?, updated_at = ? "
-                "WHERE prospect_id = ? AND status IN ('pending_review', 'approved')",
-                (reason, _utcnow().isoformat(), prospect_id),
-            )
-            await db.commit()
-            return cursor.rowcount
-
-    async def count_outbox_sent(self) -> int:
-        async with self._connect() as db:
-            async with db.execute(
-                "SELECT COUNT(*) FROM outbox WHERE status = 'sent'"
-            ) as cursor:
-                return (await cursor.fetchone())[0]
-
-    async def count_outbox_sent_today(self) -> int:
-        async with self._connect() as db:
-            async with db.execute(
-                "SELECT COUNT(*) FROM outbox WHERE status = 'sent' "
-                "AND date(sent_at) = date('now')"
-            ) as cursor:
-                return (await cursor.fetchone())[0]
-
-    async def find_outbox_by_message_id(self, message_id: str) -> dict | None:
-        if not message_id:
-            return None
-        async with self._connect() as db:
-            db.row_factory = aiosqlite.Row
-            async with db.execute(
-                "SELECT * FROM outbox WHERE message_id = ?", (message_id,)
-            ) as cursor:
-                row = await cursor.fetchone()
-                return dict(row) if row else None
-
-    # ── Signal vocabulary (governed; user-confirmed before collection) ──
-
-    async def upsert_signal_code(
-        self,
-        code: str,
-        *,
-        label: str = "",
-        description: str = "",
-        category: str = "",
-        value_type: str = "text",
-        collector: str = "",
-        cost_note: str = "",
-        confidence_floor: float = 0.0,
-        status: str | None = None,
-    ):
-        """Register a signal in the vocabulary. Never downgrades a user's
-        decision: an existing row's ``status`` is preserved unless explicitly
-        passed, so re-seeding can't silently re-enable a rejected signal."""
-        async with self._connect() as db:
-            await db.execute(
-                """INSERT INTO signal_codes
-                       (code, label, description, category, value_type,
-                        collector, cost_note, confidence_floor, status)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, COALESCE(?, 'proposed'))
-                   ON CONFLICT(code) DO UPDATE SET
-                       label = excluded.label,
-                       description = excluded.description,
-                       category = excluded.category,
-                       value_type = excluded.value_type,
-                       collector = excluded.collector,
-                       cost_note = excluded.cost_note,
-                       confidence_floor = excluded.confidence_floor,
-                       status = COALESCE(?, signal_codes.status),
-                       updated_at = CURRENT_TIMESTAMP""",
-                (code, label, description, category, value_type, collector,
-                 cost_note, float(confidence_floor), status, status),
-            )
-            await db.commit()
-
-    async def get_signal_codes(self, status: str | None = None) -> list[dict]:
-        sql = "SELECT * FROM signal_codes"
-        params: list = []
-        if status:
-            sql += " WHERE status = ?"
-            params.append(status)
-        sql += " ORDER BY category, code"
-        async with self._connect() as db:
-            db.row_factory = aiosqlite.Row
-            async with db.execute(sql, params) as cursor:
-                return [dict(r) for r in await cursor.fetchall()]
-
-    async def set_signal_status(self, code: str, status: str) -> bool:
-        """Confirm / reject a proposed signal. Only confirmed signals are
-        collected — Harvey proposes, the user decides."""
-        if status not in ("proposed", "confirmed", "rejected"):
-            raise ValueError(f"invalid signal status: {status}")
-        async with self._connect() as db:
-            cursor = await db.execute(
-                "UPDATE signal_codes SET status = ?, updated_at = CURRENT_TIMESTAMP "
-                "WHERE code = ?",
-                (status, code),
-            )
-            await db.commit()
-            return cursor.rowcount > 0
-
-    async def confirmed_signal_codes(self) -> set[str]:
-        return {r["code"] for r in await self.get_signal_codes(status="confirmed")}
-
-    # ── Observations (every fact is a row, never a column) ──
-
-    async def add_observation(
-        self,
-        signal_code: str,
-        *,
-        company_id: str = "",
-        prospect_id: str = "",
-        collector: str = "",
-        value_num: float | None = None,
-        value_text: str = "",
-        confidence: float = 1.0,
-        evidence_url: str = "",
-        run_id: str = "",
-        observed_at: str | None = None,
-    ) -> str:
-        """Record one fact. Raises if signal_code isn't in the vocabulary —
-        a typo must fail loudly rather than create a junk signal."""
-        obs_id = _new_id()
-        async with self._connect() as db:
-            await db.execute(
-                """INSERT INTO observations
-                       (id, company_id, prospect_id, signal_code, collector,
-                        value_num, value_text, confidence, evidence_url,
-                        observed_at, run_id)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?,
-                           COALESCE(?, CURRENT_TIMESTAMP), ?)""",
-                (obs_id, company_id, prospect_id, signal_code, collector,
-                 value_num, value_text, float(confidence), evidence_url,
-                 observed_at, run_id),
-            )
-            await db.commit()
-        return obs_id
-
-    async def add_observations(self, rows: list[dict], run_id: str = "") -> int:
-        """Batch insert. Flushed per batch by callers — a long run that dies
-        must not lose everything it observed."""
-        if not rows:
-            return 0
-        payload = [
-            (
-                _new_id(), r.get("company_id", ""), r.get("prospect_id", ""),
-                r["signal_code"], r.get("collector", ""), r.get("value_num"),
-                r.get("value_text", ""), float(r.get("confidence", 1.0)),
-                r.get("evidence_url", ""), r.get("observed_at"),
-                r.get("run_id", run_id),
-            )
-            for r in rows
-        ]
-        async with self._connect() as db:
-            await db.executemany(
-                """INSERT INTO observations
-                       (id, company_id, prospect_id, signal_code, collector,
-                        value_num, value_text, confidence, evidence_url,
-                        observed_at, run_id)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?,
-                           COALESCE(?, CURRENT_TIMESTAMP), ?)""",
-                payload,
-            )
-            await db.commit()
-        return len(payload)
-
-    async def get_observations(
-        self,
-        company_id: str = "",
-        signal_code: str = "",
-        latest_only: bool = False,
-        limit: int = 500,
-    ) -> list[dict]:
-        where, params = [], []
-        if company_id:
-            where.append("company_id = ?")
-            params.append(company_id)
-        if signal_code:
-            where.append("signal_code = ?")
-            params.append(signal_code)
-        sql = "SELECT * FROM observations"
-        if where:
-            sql += " WHERE " + " AND ".join(where)
-        if latest_only:
-            # Newest observation per (company, signal) — the current view of
-            # the world, with history still on disk underneath.
-            sql = (
-                "SELECT * FROM (" + sql + " ORDER BY observed_at DESC) "
-                "GROUP BY company_id, signal_code"
-            )
-        else:
-            sql += " ORDER BY observed_at DESC"
-        sql += " LIMIT ?"
-        params.append(int(limit))
-        async with self._connect() as db:
-            db.row_factory = aiosqlite.Row
-            async with db.execute(sql, params) as cursor:
-                return [dict(r) for r in await cursor.fetchall()]
-
-    # A boolean signal is recorded either way: "checked, not running ads" is a
-    # real finding, and a later flip from 0 to 1 is a real event. But a COHORT
-    # asks who *has* the signal, so it must read the value, not merely the
-    # presence of a row. Without this, "companies running Google Ads" silently
-    # means "companies we checked for Google Ads" — which is everyone.
-    #
-    # `latest` is the current view of the world (newest observation per company
-    # and signal, with history still on disk underneath). `positive` is the
-    # subset where the finding is actually true — value_num IS NULL covers text
-    # signals like INCUMBENT_AGENCY, where the row's existence IS the finding.
-    _CURRENT_CTE = """
-    WITH latest AS (
-        SELECT o.* FROM observations o
-        JOIN (SELECT company_id, signal_code, MAX(observed_at) AS t
-              FROM observations GROUP BY company_id, signal_code) newest
-          ON newest.company_id = o.company_id
-         AND newest.signal_code = o.signal_code
-         AND newest.t = o.observed_at
-    ),
-    positive AS (
-        SELECT * FROM latest WHERE value_num IS NULL OR value_num != 0
-    )
-    """
-
-    async def signal_counts(self) -> list[dict]:
-        """How many entities actually carry each signal — the cohort sizes."""
-        async with self._connect() as db:
-            db.row_factory = aiosqlite.Row
-            async with db.execute(
-                self._CURRENT_CTE + """
-                SELECT p.signal_code,
-                       COALESCE(sc.label, p.signal_code) AS label,
-                       sc.status AS status,
-                       COUNT(DISTINCT p.company_id) AS companies,
-                       COUNT(*) AS observations
-                FROM positive p
-                LEFT JOIN signal_codes sc ON sc.code = p.signal_code
-                GROUP BY p.signal_code
-                ORDER BY companies DESC"""
-            ) as cursor:
-                return [dict(r) for r in await cursor.fetchall()]
-
-    async def cohort(
-        self,
-        require: list[str],
-        exclude: list[str] | None = None,
-        min_confidence: float = 0.0,
-        limit: int = 500,
-    ) -> list[str]:
-        """Company IDs carrying ALL required signals and none excluded.
-
-        Set intersection happens in SQL — doing it in application code over a
-        capped SELECT silently returns the wrong cohort.
-        """
-        if not require:
-            return []
-        req_ph = ",".join("?" for _ in require)
-        sql = self._CURRENT_CTE + (
-            f"SELECT company_id FROM positive "
-            f"WHERE signal_code IN ({req_ph}) AND company_id != '' "
-            "AND confidence >= ? "
-            "GROUP BY company_id HAVING COUNT(DISTINCT signal_code) = ?"
-        )
-        params: list = [*require, float(min_confidence), len(set(require))]
-        if exclude:
-            exc_ph = ",".join("?" for _ in exclude)
-            sql += (
-                " AND company_id NOT IN ("
-                f"SELECT company_id FROM positive WHERE signal_code IN ({exc_ph})"
-                ")"
-            )
-            params.extend(exclude)
-        sql += " LIMIT ?"
-        params.append(int(limit))
-        async with self._connect() as db:
-            async with db.execute(sql, params) as cursor:
-                return [row[0] for row in await cursor.fetchall()]
-
-    async def companies_needing_profile(
-        self, limit: int = 100, stale_days: int = 90
-    ) -> list[dict]:
-        """Companies a profile run should visit next.
-
-        Never profiled, or last profiled longer ago than ``stale_days``. The
-        staleness window is what makes re-observation a time series rather
-        than a duplicate: "they dropped their agency last quarter" is only
-        visible if you look again.
-
-        Businesses with no domain are excluded — there is no site to read.
-        They are not a failure, they are the NO_WEBSITE cohort.
-        """
-        async with self._connect() as db:
-            db.row_factory = aiosqlite.Row
-            async with db.execute(
-                """SELECT c.id, c.name, c.domain
-                   FROM companies c
-                   LEFT JOIN (
-                       SELECT company_id, MAX(observed_at) AS last_seen
-                       FROM observations WHERE collector = 'profile'
-                       GROUP BY company_id
-                   ) p ON p.company_id = c.id
-                   WHERE c.domain != ''
-                     AND (p.last_seen IS NULL
-                          OR p.last_seen < datetime('now', ?))
-                   ORDER BY c.created_at DESC
-                   LIMIT ?""",
-                (f"-{int(stale_days)} days", int(limit)),
-            ) as cursor:
-                return [dict(r) for r in await cursor.fetchall()]
-
-    async def count_companies_needing_profile(self, stale_days: int = 90) -> int:
-        async with self._connect() as db:
-            async with db.execute(
-                """SELECT COUNT(*) FROM companies c
-                   LEFT JOIN (
-                       SELECT company_id, MAX(observed_at) AS last_seen
-                       FROM observations WHERE collector = 'profile'
-                       GROUP BY company_id
-                   ) p ON p.company_id = c.id
-                   WHERE c.domain != ''
-                     AND (p.last_seen IS NULL OR p.last_seen < datetime('now', ?))""",
-                (f"-{int(stale_days)} days",),
-            ) as cursor:
-                row = await cursor.fetchone()
-                return row[0] if row else 0
 
     # ── Run log (what ran, when, what it produced and cost) ──
 
@@ -1269,219 +451,6 @@ class StateManager:
         await self.set_setting(key, str(value))
         return value
 
-    async def prospect_exists(
-        self, email: str = "", linkedin_url: str = "",
-        first_name: str = "", last_name: str = "", company: str = "",
-    ) -> bool:
-        async with self._connect() as db:
-            if email:
-                async with db.execute(
-                    "SELECT 1 FROM prospects WHERE email = ?", (_norm(email),)
-                ) as cursor:
-                    if await cursor.fetchone():
-                        return True
-            if linkedin_url:
-                async with db.execute(
-                    "SELECT 1 FROM prospects WHERE linkedin_url = ?",
-                    (linkedin_url.strip(),),
-                ) as cursor:
-                    if await cursor.fetchone():
-                        return True
-            # Name + company dedup (case-insensitive, expression-indexed)
-            if first_name and last_name and company:
-                async with db.execute(
-                    """SELECT 1 FROM prospects
-                       WHERE LOWER(first_name) = ? AND LOWER(last_name) = ?
-                         AND LOWER(company) = ?""",
-                    (first_name.lower(), last_name.lower(), company.lower()),
-                ) as cursor:
-                    if await cursor.fetchone():
-                        return True
-        return False
-
-    async def count_prospects_by_status(self) -> dict[str, int]:
-        async with self._connect() as db:
-            async with db.execute(
-                "SELECT status, COUNT(*) FROM prospects GROUP BY status"
-            ) as cursor:
-                rows = await cursor.fetchall()
-                return {row[0]: row[1] for row in rows}
-
-    # ── Feedback ──
-
-    async def add_feedback(
-        self, entity_type: str, entity_id: str, comment: str
-    ) -> str:
-        feedback_id = _new_id()
-        async with self._connect() as db:
-            await db.execute(
-                """INSERT INTO feedback (id, entity_type, entity_id, comment)
-                   VALUES (?, ?, ?, ?)""",
-                (feedback_id, entity_type, entity_id, comment),
-            )
-            await db.commit()
-        return feedback_id
-
-    async def get_feedback(
-        self, entity_type: str, entity_id: str
-    ) -> list[dict]:
-        async with self._connect() as db:
-            db.row_factory = aiosqlite.Row
-            async with db.execute(
-                """SELECT * FROM feedback
-                   WHERE entity_type = ? AND entity_id = ?
-                   ORDER BY created_at DESC""",
-                (entity_type, entity_id),
-            ) as cursor:
-                rows = await cursor.fetchall()
-                return [dict(r) for r in rows]
-
-    async def get_all_feedback(self) -> list[dict]:
-        async with self._connect() as db:
-            db.row_factory = aiosqlite.Row
-            async with db.execute(
-                "SELECT * FROM feedback ORDER BY created_at DESC LIMIT 100"
-            ) as cursor:
-                rows = await cursor.fetchall()
-                return [dict(r) for r in rows]
-
-    # ── Reply Deduplication ──
-
-    async def is_reply_processed(self, reply_id: str) -> bool:
-        """Check if a reply has already been processed."""
-        if not reply_id:
-            return False
-        async with self._connect() as db:
-            async with db.execute(
-                "SELECT 1 FROM processed_replies WHERE reply_id = ?", (reply_id,)
-            ) as cursor:
-                return bool(await cursor.fetchone())
-
-    async def mark_reply_processed(self, reply_id: str):
-        """Mark a reply as processed to avoid double-handling."""
-        if not reply_id:
-            return
-        async with self._connect() as db:
-            await db.execute(
-                "INSERT OR IGNORE INTO processed_replies (reply_id) VALUES (?)",
-                (reply_id,),
-            )
-            await db.commit()
-
-    # ── Campaigns ──
-
-    async def add_campaign(self, campaign: Campaign) -> str:
-        if not campaign.id:
-            campaign.id = _new_id()
-        async with self._connect() as db:
-            await db.execute(
-                """INSERT INTO campaigns
-                   (id, name, channel, instantly_campaign_id, sequence_json,
-                    prospect_ids_json, status, created_at)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
-                (
-                    campaign.id, campaign.name, campaign.channel,
-                    campaign.instantly_campaign_id, campaign.sequence_json(),
-                    json.dumps(campaign.prospect_ids), campaign.status,
-                    campaign.created_at.isoformat(),
-                ),
-            )
-            await db.commit()
-        return campaign.id
-
-    async def get_campaigns_by_status(self, status: str) -> list[Campaign]:
-        async with self._connect() as db:
-            db.row_factory = aiosqlite.Row
-            async with db.execute(
-                "SELECT * FROM campaigns WHERE status = ?", (status,)
-            ) as cursor:
-                rows = await cursor.fetchall()
-                campaigns = []
-                for r in rows:
-                    d = dict(r)
-                    d["sequence"] = Campaign.sequence_from_json(d.pop("sequence_json"))
-                    d["prospect_ids"] = json.loads(d.pop("prospect_ids_json") or "[]")
-                    campaigns.append(Campaign(**d))
-                return campaigns
-
-    async def update_campaign(self, campaign_id: str, **kwargs):
-        """Update whitelisted campaign columns in a single atomic statement."""
-        if not kwargs:
-            return
-        invalid = set(kwargs) - _CAMPAIGN_COLUMNS
-        if invalid:
-            raise ValueError(f"Invalid campaign column(s): {sorted(invalid)}")
-        set_clause = ", ".join(f"{key} = ?" for key in kwargs)
-        async with self._connect() as db:
-            await db.execute(
-                f"UPDATE campaigns SET {set_clause} WHERE id = ?",
-                (*kwargs.values(), campaign_id),
-            )
-            await db.commit()
-
-    # ── Conversations ──
-
-    async def add_conversation(self, convo: Conversation) -> str:
-        if not convo.id:
-            convo.id = _new_id()
-        async with self._connect() as db:
-            await db.execute(
-                """INSERT INTO conversations
-                   (id, prospect_id, campaign_id, channel, thread_json,
-                    intent, stage, status, created_at, updated_at)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-                (
-                    convo.id, convo.prospect_id, convo.campaign_id,
-                    convo.channel, convo.thread_json(), convo.intent,
-                    convo.stage, convo.status, convo.created_at.isoformat(),
-                    convo.updated_at.isoformat(),
-                ),
-            )
-            await db.commit()
-        return convo.id
-
-    async def get_conversation(self, convo_id: str) -> Conversation | None:
-        async with self._connect() as db:
-            db.row_factory = aiosqlite.Row
-            async with db.execute(
-                "SELECT * FROM conversations WHERE id = ?", (convo_id,)
-            ) as cursor:
-                row = await cursor.fetchone()
-                if not row:
-                    return None
-                d = dict(row)
-                d["thread"] = Conversation.thread_from_json(d.pop("thread_json"))
-                return Conversation(**d)
-
-    async def get_conversations_by_status(self, status: str) -> list[Conversation]:
-        async with self._connect() as db:
-            db.row_factory = aiosqlite.Row
-            async with db.execute(
-                "SELECT * FROM conversations WHERE status = ?", (status,)
-            ) as cursor:
-                rows = await cursor.fetchall()
-                convos = []
-                for r in rows:
-                    d = dict(r)
-                    d["thread"] = Conversation.thread_from_json(d.pop("thread_json"))
-                    convos.append(Conversation(**d))
-                return convos
-
-    async def update_conversation(self, convo_id: str, **kwargs):
-        """Update whitelisted conversation columns atomically (bumps updated_at)."""
-        if not kwargs:
-            return
-        invalid = set(kwargs) - _CONVERSATION_COLUMNS
-        if invalid:
-            raise ValueError(f"Invalid conversation column(s): {sorted(invalid)}")
-        set_clause = ", ".join(f"{key} = ?" for key in kwargs)
-        async with self._connect() as db:
-            await db.execute(
-                f"UPDATE conversations SET {set_clause}, updated_at = ? WHERE id = ?",
-                (*kwargs.values(), _utcnow().isoformat(), convo_id),
-            )
-            await db.commit()
-
     # ── Actions Log ──
 
     async def log_action(self, action_type: str, agent: str, details: dict | None = None):
@@ -1492,56 +461,287 @@ class StateManager:
             )
             await db.commit()
 
-    # ── Analytics ──
+    # ── Mentions ──
 
-    async def get_campaign_stats(self) -> list[dict]:
-        """Get performance stats for each campaign (one indexed pass over conversations)."""
+    @staticmethod
+    def _mention_from_row(row: aiosqlite.Row) -> Mention:
+        d = dict(row)
+        d["engagement"] = _loads(d.pop("engagement_json", None), {})
+        d["owned_channel"] = bool(d.get("owned_channel"))
+        return Mention(**d)
+
+    async def upsert_mention(self, mention: Mention) -> tuple[int, bool]:
+        """Insert a mention unless it is already known.
+
+        Dedupes on (platform, external_id) when external_id is set, and on
+        the normalized permalink always. Returns (id, created); on a
+        duplicate, id is the existing row's and nothing is changed.
+        """
+        url_norm = normalize_url(mention.url)
+        platform = mention.platform.value
+        async with self._connect() as db:
+            cursor = await db.execute(
+                """INSERT OR IGNORE INTO mentions
+                   (source_id, platform, external_id, url, url_norm,
+                    author_handle, parent_external_id, text, title, lang,
+                    posted_at, collected_at, engagement_json, owned_channel,
+                    status, run_id)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (
+                    mention.source_id, platform, mention.external_id,
+                    mention.url, url_norm, mention.author_handle,
+                    mention.parent_external_id, mention.text, mention.title,
+                    mention.lang, _ts(mention.posted_at),
+                    _ts(mention.collected_at), json.dumps(mention.engagement),
+                    1 if mention.owned_channel else 0, mention.status.value,
+                    mention.run_id,
+                ),
+            )
+            await db.commit()
+            if cursor.rowcount:
+                return cursor.lastrowid, True
+
+            async with db.execute(
+                """SELECT id FROM mentions
+                   WHERE (platform = ? AND external_id = ? AND external_id != '')
+                      OR url_norm = ?
+                   ORDER BY id LIMIT 1""",
+                (platform, mention.external_id, url_norm),
+            ) as cur:
+                row = await cur.fetchone()
+        if row is None:  # pragma: no cover - IGNORE implies a conflicting row
+            raise RuntimeError("mention insert ignored but no conflicting row found")
+        return row[0], False
+
+    async def get_mention(self, mention_id: int) -> Mention | None:
         async with self._connect() as db:
             db.row_factory = aiosqlite.Row
             async with db.execute(
-                """SELECT c.id, c.name, c.status, c.prospect_ids_json,
-                          COUNT(v.id) as reply_count,
-                          SUM(CASE WHEN v.intent = 'interested' THEN 1 ELSE 0 END) as interested_count,
-                          SUM(CASE WHEN v.intent = 'objection' THEN 1 ELSE 0 END) as objection_count,
-                          SUM(CASE WHEN v.intent = 'not_interested' THEN 1 ELSE 0 END) as not_interested_count
-                   FROM campaigns c
-                   LEFT JOIN conversations v ON v.campaign_id = c.id
-                   WHERE c.status IN ('active', 'completed')
-                   GROUP BY c.id
-                   ORDER BY c.created_at DESC"""
+                "SELECT * FROM mentions WHERE id = ?", (int(mention_id),)
             ) as cursor:
-                rows = await cursor.fetchall()
-                stats = []
-                for r in rows:
-                    d = dict(r)
-                    for key in ("interested_count", "objection_count", "not_interested_count"):
-                        d[key] = d[key] or 0
-                    prospect_ids = json.loads(d.get("prospect_ids_json") or "[]")
-                    d["leads_count"] = len(prospect_ids)
-                    d["reply_rate"] = (
-                        round(d["reply_count"] / len(prospect_ids) * 100, 1)
-                        if prospect_ids else 0
-                    )
-                    stats.append(d)
-                return stats
+                row = await cursor.fetchone()
+        return self._mention_from_row(row) if row else None
 
-    async def get_intent_distribution(self) -> dict[str, int]:
-        """Count conversations by intent."""
+    async def list_mentions(
+        self,
+        status: MentionStatus | str | None = None,
+        limit: int = 100,
+        platform: str | None = None,
+    ) -> list[Mention]:
+        """Mentions newest first, optionally filtered by status/platform."""
+        where, params = [], []
+        if status:
+            where.append("status = ?")
+            params.append(MentionStatus(status).value)
+        if platform:
+            where.append("platform = ?")
+            params.append(str(getattr(platform, "value", platform)))
+        sql = "SELECT * FROM mentions"
+        if where:
+            sql += " WHERE " + " AND ".join(where)
+        sql += " ORDER BY collected_at DESC, id DESC LIMIT ?"
+        params.append(max(int(limit), 0))
+        async with self._connect() as db:
+            db.row_factory = aiosqlite.Row
+            async with db.execute(sql, tuple(params)) as cursor:
+                rows = await cursor.fetchall()
+        return [self._mention_from_row(r) for r in rows]
+
+    async def set_mention_status(self, mention_id: int, status: MentionStatus | str):
+        """Move a mention along its lifecycle.
+
+        Raises ValueError on an unknown status, a missing mention, or a
+        transition not in ALLOWED_TRANSITIONS.
+        """
+        target = MentionStatus(status)  # ValueError on unknown status
         async with self._connect() as db:
             async with db.execute(
-                "SELECT intent, COUNT(*) FROM conversations WHERE intent != '' GROUP BY intent"
+                "SELECT status FROM mentions WHERE id = ?", (int(mention_id),)
             ) as cursor:
-                rows = await cursor.fetchall()
-                return {row[0]: row[1] for row in rows}
+                row = await cursor.fetchone()
+            if row is None:
+                raise ValueError(f"mention {mention_id} not found")
+            current = MentionStatus(row[0])
+            if target not in ALLOWED_TRANSITIONS.get(current, frozenset()):
+                raise ValueError(
+                    f"mention {mention_id}: {current.value} -> {target.value} not allowed"
+                )
+            # Compare-and-set so a concurrent writer can't slip past the check.
+            cursor = await db.execute(
+                "UPDATE mentions SET status = ? WHERE id = ? AND status = ?",
+                (target.value, int(mention_id), current.value),
+            )
+            await db.commit()
+            if cursor.rowcount == 0:
+                raise ValueError(f"mention {mention_id} changed status concurrently")
 
-    async def get_stage_distribution(self) -> dict[str, int]:
-        """Count conversations by sales stage."""
+    # ── Triage ──
+
+    async def save_triage(self, triage: Triage):
+        """Store (or replace) the triage result for a mention."""
         async with self._connect() as db:
+            await db.execute(
+                """INSERT OR REPLACE INTO triage
+                   (mention_id, relevant, subject_type, subject, competitor,
+                    product, category, sentiment, urgency, urgency_reason,
+                    reply_appropriate, phrases_json, model, created_at)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (
+                    triage.mention_id, 1 if triage.relevant else 0,
+                    triage.subject_type, triage.subject, triage.competitor,
+                    triage.product, triage.category.value, triage.sentiment,
+                    triage.urgency.value, triage.urgency_reason,
+                    1 if triage.reply_appropriate else 0,
+                    json.dumps(triage.phrases), triage.model,
+                    _ts(triage.created_at),
+                ),
+            )
+            await db.commit()
+
+    async def get_triage(self, mention_id: int) -> Triage | None:
+        async with self._connect() as db:
+            db.row_factory = aiosqlite.Row
             async with db.execute(
-                "SELECT stage, COUNT(*) FROM conversations WHERE stage != '' GROUP BY stage"
+                "SELECT * FROM triage WHERE mention_id = ?", (int(mention_id),)
+            ) as cursor:
+                row = await cursor.fetchone()
+        if row is None:
+            return None
+        d = dict(row)
+        d["phrases"] = _loads(d.pop("phrases_json", None), [])
+        d["relevant"] = bool(d["relevant"])
+        d["reply_appropriate"] = bool(d["reply_appropriate"])
+        return Triage(**d)
+
+    # ── Drafts ──
+
+    async def add_draft(self, draft: Draft) -> int:
+        """Insert a draft as the next version for its mention; returns its id."""
+        async with self._connect() as db:
+            # One statement: the version is computed and inserted atomically;
+            # UNIQUE(mention_id, version) backstops any race.
+            cursor = await db.execute(
+                """INSERT INTO drafts
+                   (mention_id, version, text, claim_ids_json, model,
+                    filter_ok, filter_hits_json, review_verdict,
+                    review_reasons_json, tier, created_at)
+                   VALUES (?, (SELECT COALESCE(MAX(version), 0) + 1
+                               FROM drafts WHERE mention_id = ?),
+                           ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (
+                    draft.mention_id, draft.mention_id, draft.text,
+                    json.dumps(draft.claim_ids), draft.model,
+                    None if draft.filter_ok is None else int(draft.filter_ok),
+                    json.dumps(draft.filter_hits),
+                    draft.review_verdict.value if draft.review_verdict else None,
+                    json.dumps(draft.review_reasons), draft.tier,
+                    _ts(draft.created_at),
+                ),
+            )
+            await db.commit()
+            return cursor.lastrowid
+
+    async def get_latest_draft(self, mention_id: int) -> Draft | None:
+        async with self._connect() as db:
+            db.row_factory = aiosqlite.Row
+            async with db.execute(
+                "SELECT * FROM drafts WHERE mention_id = ? ORDER BY version DESC LIMIT 1",
+                (int(mention_id),),
+            ) as cursor:
+                row = await cursor.fetchone()
+        if row is None:
+            return None
+        d = dict(row)
+        d["claim_ids"] = _loads(d.pop("claim_ids_json", None), [])
+        d["filter_hits"] = _loads(d.pop("filter_hits_json", None), [])
+        d["review_reasons"] = _loads(d.pop("review_reasons_json", None), [])
+        if d["filter_ok"] is not None:
+            d["filter_ok"] = bool(d["filter_ok"])
+        return Draft(**d)
+
+    # ── Audit log (append-only) ──
+
+    async def append_audit(self, event: AuditEvent) -> int:
+        async with self._connect() as db:
+            cursor = await db.execute(
+                """INSERT INTO audit_log
+                   (mention_id, draft_id, event, actor, claim_ids_json,
+                    filter_result_json, verdict_json, final_text, permalink, at)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (
+                    event.mention_id, event.draft_id, event.event.value,
+                    event.actor, json.dumps(event.claim_ids),
+                    json.dumps(event.filter_result), json.dumps(event.verdict),
+                    event.final_text, event.permalink, _ts(event.at),
+                ),
+            )
+            await db.commit()
+            return cursor.lastrowid
+
+    async def list_audit(self, mention_id: int) -> list[AuditEvent]:
+        """Audit events for a mention, oldest first."""
+        async with self._connect() as db:
+            db.row_factory = aiosqlite.Row
+            async with db.execute(
+                "SELECT * FROM audit_log WHERE mention_id = ? ORDER BY id ASC",
+                (int(mention_id),),
             ) as cursor:
                 rows = await cursor.fetchall()
-                return {row[0]: row[1] for row in rows}
+        events = []
+        for row in rows:
+            d = dict(row)
+            d["claim_ids"] = _loads(d.pop("claim_ids_json", None), [])
+            d["filter_result"] = _loads(d.pop("filter_result_json", None), {})
+            d["verdict"] = _loads(d.pop("verdict_json", None), {})
+            events.append(AuditEvent(**d))
+        return events
+
+    # ── Escalations ──
+
+    async def create_escalation(self, escalation: Escalation) -> int:
+        async with self._connect() as db:
+            cursor = await db.execute(
+                """INSERT INTO escalations
+                   (mention_id, kind, owner, notified_at, sla_due_at,
+                    acked_at, acked_by, breached, created_at)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (
+                    escalation.mention_id, escalation.kind, escalation.owner,
+                    _ts(escalation.notified_at), _ts(escalation.sla_due_at),
+                    _ts(escalation.acked_at), escalation.acked_by,
+                    1 if escalation.breached else 0, _ts(escalation.created_at),
+                ),
+            )
+            await db.commit()
+            return cursor.lastrowid
+
+    async def ack_escalation(self, escalation_id: int, acked_by: str) -> bool:
+        """Acknowledge an open escalation. False if missing or already acked."""
+        async with self._connect() as db:
+            cursor = await db.execute(
+                "UPDATE escalations SET acked_at = ?, acked_by = ? "
+                "WHERE id = ? AND acked_at IS NULL",
+                (_ts(_utcnow()), acked_by, int(escalation_id)),
+            )
+            await db.commit()
+            return cursor.rowcount > 0
+
+    async def list_open_escalations(self) -> list[Escalation]:
+        """Unacknowledged escalations, most pressing SLA first."""
+        async with self._connect() as db:
+            db.row_factory = aiosqlite.Row
+            async with db.execute(
+                "SELECT * FROM escalations WHERE acked_at IS NULL "
+                "ORDER BY sla_due_at IS NULL, sla_due_at ASC, id ASC"
+            ) as cursor:
+                rows = await cursor.fetchall()
+        result = []
+        for row in rows:
+            d = dict(row)
+            d["breached"] = bool(d["breached"])
+            d["acked_by"] = d["acked_by"] or ""
+            result.append(Escalation(**d))
+        return result
 
     # ── Usage Tracking ──
 
@@ -1589,7 +789,7 @@ class StateManager:
         """Insert one usage row (one model within one Claude call).
 
         Returns False when the row was skipped as a duplicate (request_key
-        uniqueness makes transcript reconciliation idempotent).
+        uniqueness makes reconciliation idempotent).
         """
         async with self._connect() as db:
             cursor = await db.execute(
@@ -1686,39 +886,25 @@ class StateManager:
                     totals[label] = self._usage_row_to_dict(row) if row else {}
         return totals
 
-    # ── Summary for Decision Making ──
+    # ── Summary for the heartbeat, CLI, and dashboard ──
 
     async def get_state_summary(self) -> dict:
-        prospect_counts = await self.count_prospects_by_status()
-        today = date.today().isoformat()
+        """Mention counts per status (every status present, zero-filled),
+        open escalations, and today's Claude call count."""
+        counts = {s.value: 0 for s in MentionStatus}
         async with self._connect() as db:
             async with db.execute(
-                """SELECT
-                     SUM(CASE WHEN status = 'draft' THEN 1 ELSE 0 END),
-                     SUM(CASE WHEN status = 'active' THEN 1 ELSE 0 END)
-                   FROM campaigns"""
+                "SELECT status, COUNT(*) FROM mentions GROUP BY status"
             ) as cursor:
-                row = await cursor.fetchone()
-                draft_campaigns = row[0] or 0
-                active_campaigns = row[1] or 0
+                for status, n in await cursor.fetchall():
+                    counts[status] = n
             async with db.execute(
-                "SELECT COUNT(*) FROM conversations WHERE status = 'open'"
+                "SELECT COUNT(*) FROM escalations WHERE acked_at IS NULL"
             ) as cursor:
-                open_conversations = (await cursor.fetchone())[0]
-            async with db.execute(
-                "SELECT claude_calls FROM usage_log WHERE date = ?", (today,)
-            ) as cursor:
-                usage_row = await cursor.fetchone()
-                usage_today = usage_row[0] if usage_row else 0
-
+                (open_escalations,) = await cursor.fetchone()
         return {
-            "prospects": prospect_counts,
-            "draft_campaigns": draft_campaigns,
-            "active_campaigns": active_campaigns,
-            "open_conversations": open_conversations,
-            "usage_today": usage_today,
-            # Companies discovered but not yet read. The heartbeat profiles
-            # these every cycle — it is free, so it never competes with the
-            # Claude budget the rest of the loop is rationing.
-            "unprofiled": await self.count_companies_needing_profile(),
+            "mentions": counts,
+            "total": sum(counts.values()),
+            "open_escalations": open_escalations,
+            "usage_today": await self.get_usage_today(),
         }

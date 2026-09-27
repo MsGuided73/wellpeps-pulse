@@ -1,8 +1,7 @@
-"""External integrations: Instantly, LinkedIn, email discovery, calendar.
+"""External integrations.
 
-Submodules are intentionally NOT imported here so that optional heavy
-dependencies (playwright, dnspython, aiosmtplib) are only loaded by the
-agents that actually use them.
+Currently only ``quota`` (Claude subscription utilization). Submodules are
+not imported here so optional dependencies load only where used.
 """
 
-__all__ = ["instantly", "linkedin", "email_finder", "calendar"]
+__all__ = ["quota"]

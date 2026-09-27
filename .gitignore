@@ -16,8 +16,6 @@ build/
 .venv/
 venv/
 
-# LinkedIn cookies
-linkedin_cookies.json
 
 # Generated during setup/training — contains your product details
 skills/product_knowledge.md

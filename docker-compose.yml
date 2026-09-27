@@ -1,15 +1,15 @@
 services:
-  harvey:
+  pulse:
     build: .
     env_file: .env
     volumes:
-      # Persist database across restarts
+      # Persist the database (data/pulse.db) across restarts
       - ./data:/app/data
       # Mount config for easy editing without rebuild
       - ./harvey.yaml:/app/harvey.yaml:ro
       - ./prompts:/app/prompts:ro
-      - ./skills:/app/skills
-      # Mount Claude auth (required for Max plan usage).
+      - ./skills:/app/skills:ro
+      # Mount Claude auth (required for subscription usage).
       # Not read-only: the CLI refreshes OAuth tokens in place.
       # The container runs as non-root user "harvey" (uid 1000).
       - ~/.claude:/home/harvey/.claude

@@ -1,4 +1,9 @@
-"""Harvey's main heartbeat loop. Always Be Closing."""
+"""WellPeps Pulse heartbeat loop.
+
+Phase 1 skeleton: the loop wakes, checks quiet hours and the Claude budget,
+reads the state summary, decides (always "idle" for now), logs, and sleeps.
+The real step order lives in docs/PLAN.md §3.
+"""
 
 import asyncio
 import logging
@@ -9,8 +14,7 @@ from datetime import datetime, time, timedelta
 import pytz
 
 from harvey.brain import Brain
-from harvey.config import ConfigError, load_config, load_env, HarveyConfig
-from harvey.pipeline import run_profile_stage
+from harvey.config import ConfigError, PulseConfig, load_config
 from harvey.state import StateManager
 
 logging.basicConfig(
@@ -23,9 +27,11 @@ logger = logging.getLogger("harvey")
 # Backoff for consecutive failed cycles: 60s, 120s, 240s, ... capped at 15 min
 ERROR_BACKOFF_BASE = 60
 ERROR_BACKOFF_CAP = 900
+# How long to wait before re-checking once the Claude budget is spent.
+BUDGET_RECHECK_SECONDS = 3600
 
 
-def in_quiet_hours(config: HarveyConfig) -> bool:
+def in_quiet_hours(config: PulseConfig) -> bool:
     """Check if we're currently in quiet hours."""
     qh = config.usage.quiet_hours
     tz = pytz.timezone(qh.timezone)
@@ -35,12 +41,11 @@ def in_quiet_hours(config: HarveyConfig) -> bool:
 
     if start <= end:
         return start <= now <= end
-    else:
-        # Quiet hours cross midnight (e.g., 22:00 - 07:00)
-        return now >= start or now <= end
+    # Quiet hours cross midnight (e.g., 22:00 - 07:00)
+    return now >= start or now <= end
 
 
-def seconds_until_quiet_hours_end(config: HarveyConfig) -> int:
+def seconds_until_quiet_hours_end(config: PulseConfig) -> int:
     """Calculate seconds until quiet hours end."""
     qh = config.usage.quiet_hours
     tz = pytz.timezone(qh.timezone)
@@ -57,37 +62,18 @@ def seconds_until_quiet_hours_end(config: HarveyConfig) -> int:
 
 
 async def decide_next_action(
-    brain: Brain,
-    state: StateManager,
-    config: HarveyConfig,
+    brain: Brain | None,
+    state: StateManager | None,
+    config: PulseConfig,
     summary: dict | None = None,
 ) -> str:
-    """Decide what Harvey should do next based on current state.
+    """Decide what the heartbeat should do next.
 
-    Uses deterministic priority rules (handle_replies > send_campaign >
-    write_campaign > prospect > idle) instead of burning a Claude call on a
-    decision that is fully derivable from pipeline counts. This saves budget
-    every cycle and removes a fragile LLM string-parsing step.
+    TODO(PLAN.md §3): escalation sweep -> due collectors -> triage batch ->
+    draft/filter/review -> briefs -> idle. Steps 1-3 ignore quiet hours and
+    budget; 4-6 respect both. Until those phases land, always idle.
     """
-    if summary is None:
-        summary = await state.get_state_summary()
-
-    prospects = summary.get("prospects") or {}
-    new_prospects = prospects.get("new", 0) if isinstance(prospects, dict) else 0
-    draft_campaigns = summary.get("draft_campaigns", 0) or 0
-    open_conversations = summary.get("open_conversations", 0) or 0
-
-    if open_conversations > 0:
-        action, reason = "handle_replies", f"{open_conversations} open conversation(s) waiting"
-    elif draft_campaigns > 0:
-        action, reason = "send_campaign", f"{draft_campaigns} draft campaign(s) ready to deploy"
-    elif new_prospects > 0:
-        action, reason = "write_campaign", f"{new_prospects} new prospect(s) with no drafts ready"
-    elif new_prospects < 20:
-        action, reason = "prospect", f"only {new_prospects} new prospect(s); pipeline needs leads"
-    else:
-        action, reason = "idle", "pipeline is healthy; running analysis"
-
+    action, reason = "idle", "Phase 1 skeleton: no agents wired yet"
     logger.info(f"Decision: {action} ({reason})")
     return action
 
@@ -104,13 +90,18 @@ async def _interruptible_sleep(seconds: float, stop_event: asyncio.Event) -> boo
         return False
 
 
+def _tasks_for(action: str) -> list[tuple[str, object]]:
+    """Coroutines to run for an action. Empty until agents exist."""
+    return []
+
+
 async def heartbeat(stop_event: asyncio.Event | None = None):
-    """Harvey's main loop. Wakes up, decides, acts, sleeps. Repeat."""
+    """Main loop. Wakes up, decides, acts, sleeps. Repeat."""
     if stop_event is None:
         stop_event = asyncio.Event()
 
     logger.info("=" * 60)
-    logger.info("Harvey is online. Always Be Closing.")
+    logger.info("WellPeps Pulse is online.")
     logger.info("=" * 60)
 
     try:
@@ -120,25 +111,11 @@ async def heartbeat(stop_event: asyncio.Event | None = None):
             raise
         logger.error(f"Cannot start — configuration error:\n{e}")
         return
-    env = load_env()
     state = StateManager()
     brain = Brain(state, models=config.usage.models)
 
     await state.init_db()
-    logger.info("Database initialized.")
-
-    # Import agents here to avoid circular imports
-    from harvey.agents.scout import Scout
-    from harvey.agents.writer import Writer
-    from harvey.agents.sender import Sender
-    from harvey.agents.handler import Handler
-    from harvey.agents.analyst import Analyst
-
-    scout = Scout(brain, state, config, env)
-    writer = Writer(brain, state, config, env)
-    sender = Sender(brain, state, config, env)
-    handler = Handler(brain, state, config, env)
-    analyst = Analyst(state)
+    logger.info(f"Database initialized at {state.db_path}.")
 
     interval = config.usage.heartbeat_interval_minutes * 60
     max_calls = max(int(200 * (config.usage.max_daily_claude_percent / 100)), 1)
@@ -146,7 +123,7 @@ async def heartbeat(stop_event: asyncio.Event | None = None):
 
     while not stop_event.is_set():
         try:
-            # 1. Check quiet hours
+            # 1. Quiet hours (escalations will bypass this in a later phase)
             if in_quiet_hours(config):
                 sleep_for = seconds_until_quiet_hours_end(config)
                 logger.info(f"Quiet hours. Sleeping for {sleep_for // 60} minutes.")
@@ -154,8 +131,8 @@ async def heartbeat(stop_event: asyncio.Event | None = None):
                     break
                 continue
 
-            # 2. Check usage budget (real subscription quota when readable,
-            # else Harvey's own call counter)
+            # 2. Claude budget (real subscription quota when readable,
+            # else our own call counter)
             if not await brain.is_within_budget(
                 max_calls, max_percent=config.usage.max_daily_claude_percent
             ):
@@ -164,56 +141,21 @@ async def heartbeat(stop_event: asyncio.Event | None = None):
                     f"({config.usage.max_daily_claude_percent}% of quota or "
                     f"{max_calls} calls). Sleeping 1h, then re-checking."
                 )
-                if await _interruptible_sleep(3600, stop_event):
+                if await _interruptible_sleep(BUDGET_RECHECK_SECONDS, stop_event):
                     break
                 continue
 
-            # 3. Decide what to do
-            logger.info("Checking pipeline state...")
+            # 3. Decide
             summary = await state.get_state_summary()
+            logger.info(
+                f"State: {summary['total']} mention(s), "
+                f"{summary['open_escalations']} open escalation(s)."
+            )
             action = await decide_next_action(brain, state, config, summary=summary)
 
-            # 4. Execute — run independent agents in parallel where possible
-            # Handler is always safe to run alongside other agents
-            tasks = []
-            has_open_convos = summary.get("open_conversations", 0) > 0
-
-            if action == "handle_replies":
-                tasks.append(("handle_replies", handler.run()))
-            elif action == "prospect":
-                tasks.append(("prospect", scout.run()))
-                # Also handle replies in parallel if needed
-                if has_open_convos:
-                    tasks.append(("handle_replies", handler.run()))
-                # Analyst is cheap (no Claude calls) — keep analytics fresh
-                tasks.append(("analyze", analyst.run()))
-            elif action == "write_campaign":
-                tasks.append(("write_campaign", writer.run()))
-                if has_open_convos:
-                    tasks.append(("handle_replies", handler.run()))
-            elif action == "send_campaign":
-                tasks.append(("send_campaign", sender.run()))
-            elif action == "idle":
-                tasks.append(("analyze", analyst.run()))
-
-            # Native mail providers drain the outbox every cycle — due sends
-            # and approved replies must go out on schedule regardless of the
-            # cycle's primary action.
-            if sender.is_native and not any(n == "send_campaign" for n, _ in tasks):
-                tasks.append(("send_outbox", sender.run()))
-
-            # Profiling rides along every cycle. It is three HTTP requests per
-            # business with no model call, so it costs nothing against the
-            # Claude budget the rest of this loop is rationing — and it is what
-            # turns a name and a domain into something worth writing about.
-            if summary.get("unprofiled", 0):
-                tasks.append(("profile", run_profile_stage(state, limit=25)))
-
-            if len(tasks) > 1:
-                logger.info(f"Running {len(tasks)} agents in parallel: {[t[0] for t in tasks]}")
-
-            # Run all tasks, catch errors per-task so one bad agent
-            # never takes down the cycle
+            # 4. Execute — independent tasks in parallel, errors isolated
+            # per task so one failure never takes down the cycle.
+            tasks = _tasks_for(action)
             results = await asyncio.gather(
                 *[t[1] for t in tasks], return_exceptions=True
             )
@@ -221,7 +163,7 @@ async def heartbeat(stop_event: asyncio.Event | None = None):
                 if isinstance(result, asyncio.CancelledError):
                     raise result
                 if isinstance(result, Exception):
-                    logger.error(f"Agent {name} failed: {result}", exc_info=result)
+                    logger.error(f"Task {name} failed: {result}", exc_info=result)
 
             # 5. Log the action (best-effort; never kills the loop)
             try:
@@ -254,38 +196,7 @@ async def heartbeat(stop_event: asyncio.Event | None = None):
             if await _interruptible_sleep(backoff, stop_event):
                 break
 
-    logger.info("Harvey shutting down. Deals don't close themselves, but I need a break.")
-
-
-def _needs_setup() -> bool:
-    """Check if Harvey needs first-time setup."""
-    from pathlib import Path
-    from harvey.paths import PROJECT_ROOT
-    project_root = PROJECT_ROOT
-    env_file = project_root / ".env"
-    config_file = project_root / "harvey.yaml"
-
-    # If .env doesn't exist, definitely needs setup
-    if not env_file.exists():
-        return True
-
-    # If config still has placeholder values, needs setup
-    if config_file.exists():
-        try:
-            with open(config_file, encoding="utf-8") as f:
-                import yaml
-                config = yaml.safe_load(f)
-            if not isinstance(config, dict):
-                return True
-            company = (config.get("persona") or {}).get("company", "")
-            if company in ("Your Company", ""):
-                return True
-        except Exception:
-            return True
-    else:
-        return True
-
-    return False
+    logger.info("WellPeps Pulse shutting down.")
 
 
 async def _run_with_signals():
@@ -312,13 +223,6 @@ async def _run_with_signals():
 
 def main():
     """Entry point."""
-    # Check for first-time setup
-    if _needs_setup():
-        print("\n  First time running Harvey? Let's get you set up.\n")
-        from harvey.setup import run_setup
-        asyncio.run(run_setup())
-        return
-
     try:
         asyncio.run(_run_with_signals())
     except KeyboardInterrupt:
