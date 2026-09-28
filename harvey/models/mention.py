@@ -186,11 +186,20 @@ class AuditEvent(BaseModel):
 
 
 class Brief(BaseModel):
+    """A daily/weekly Pulse brief (harvey/briefs.py); one per (period, window_start)."""
+
     id: int | None = None
-    kind: str = "daily"      # daily | weekly
-    period_start: datetime | None = None
-    period_end: datetime | None = None
-    body_md: str = ""
+    period: str = "daily"    # daily | weekly
+    window_start: datetime | None = None
+    window_end: datetime | None = None
+    status: str = "ok"       # ok | fallback (tables only)
+    headline: str = ""
+    summary_md: str = ""
+    action_cards: list[dict] = Field(default_factory=list)
+    watchlist: list[str] = Field(default_factory=list)
+    data: dict = Field(default_factory=dict)
+    model: str = ""
+    slack_sent_at: datetime | None = None
     created_at: datetime = Field(default_factory=_utcnow)
 
 

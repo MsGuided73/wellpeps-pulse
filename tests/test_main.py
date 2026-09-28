@@ -155,3 +155,131 @@ def test_decide_next_action_takes_no_brain():
     import inspect
 
     assert "brain" not in inspect.signature(decide_next_action).parameters
+
+
+# --- Phase 8: Pulse briefs in the heartbeat -------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_priority_is_triage_then_draft_then_brief_then_idle():
+    cfg = PulseConfig()
+    base = {"mentions": {"new": 0}, "draftable": 0, "briefs_due": []}
+
+    assert await decide_next_action(None, cfg, summary={
+        **base, "mentions": {"new": 1}, "draftable": 2, "briefs_due": ["daily"]}) == "triage"
+    assert await decide_next_action(None, cfg, summary={
+        **base, "draftable": 2, "briefs_due": ["daily"]}) == "draft"
+    assert await decide_next_action(None, cfg, summary={**base, "briefs_due": ["daily"]}) == "brief"
+    assert await decide_next_action(None, cfg, summary=base) == "idle"
+
+
+def test_brief_waits_out_quiet_hours():
+    assert "brief" not in QUIET_HOURS_EXEMPT
+    assert apply_quiet_hours("brief", quiet=True) == "idle"
+    assert apply_quiet_hours("brief", quiet=False) == "brief"
+
+
+def test_brief_action_runs_the_brief_task():
+    from harvey.main import _tasks_for
+
+    async def runner():
+        return []
+
+    tasks = _tasks_for("brief", brief_runner=runner)
+
+    assert [name for name, _ in tasks] == ["brief"]
+    tasks[0][1].close()
+
+
+def _pulse_config() -> PulseConfig:
+    return PulseConfig(usage={"quiet_hours": {"start": "22:00", "end": "07:00",
+                                              "timezone": "America/New_York"}},
+                       pulse={"daily_brief_hour": 7, "weekly_day": "monday"})
+
+
+async def _state_with_sunday_mention(tmp_path):
+    from harvey.models import MentionStatus
+    from tests.pulse_helpers import add_triaged
+
+    state = StateManager(str(tmp_path / "pulse.db"))
+    await state.init_db()
+    await add_triaged(state, "sun", text="shipping delay again", posted_at=datetime(2026, 9, 27, 12, 0),
+                      status=MentionStatus.TRIAGED)
+    return state
+
+
+@pytest.mark.asyncio
+async def test_daily_brief_is_due_only_after_the_configured_hour(tmp_path):
+    from harvey.briefs import due_periods
+
+    state = await _state_with_sunday_mention(tmp_path)
+    monday_0630_local = datetime(2026, 9, 28, 10, 30)
+    monday_0800_local = datetime(2026, 9, 28, 12, 0)
+
+    assert await due_periods(state, _pulse_config(), now=monday_0630_local) == []
+    assert await due_periods(state, _pulse_config(), now=monday_0800_local) == ["daily"]
+
+
+@pytest.mark.asyncio
+async def test_weekly_brief_follows_the_daily_on_the_weekly_day(tmp_path):
+    from harvey.briefs import build_brief, due_periods
+    from tests.pulse_helpers import FakeBrain, good_answer
+
+    state = await _state_with_sunday_mention(tmp_path)
+    now = datetime(2026, 9, 28, 12, 0)
+    config = _pulse_config()
+
+    await build_brief(state, FakeBrain([good_answer()]), "daily", config=config, now=now)
+    assert await due_periods(state, config, now=now) == ["weekly"]
+
+    await build_brief(state, FakeBrain([good_answer()]), "weekly", config=config, now=now)
+    assert await due_periods(state, config, now=now) == []
+
+
+@pytest.mark.asyncio
+async def test_no_brief_is_due_for_an_empty_window(tmp_path):
+    from harvey.briefs import due_periods
+
+    state = StateManager(str(tmp_path / "pulse.db"))
+    await state.init_db()
+
+    assert await due_periods(state, _pulse_config(), now=datetime(2026, 9, 28, 12, 0)) == []
+
+
+@pytest.mark.asyncio
+async def test_due_briefs_skip_when_over_budget(tmp_path):
+    from harvey.briefs import run_due_briefs
+    from tests.pulse_helpers import FakeBrain, good_answer
+
+    state = await _state_with_sunday_mention(tmp_path)
+    brain = FakeBrain([good_answer()])
+
+    built = await run_due_briefs(state, brain, _pulse_config(), budget_ok=lambda: False,
+                                 now=datetime(2026, 9, 28, 12, 0))
+
+    assert built == [] and brain.calls == []
+
+    built = await run_due_briefs(state, brain, _pulse_config(), budget_ok=lambda: True,
+                                 now=datetime(2026, 9, 28, 12, 0))
+
+    assert [b["period"] for b in built] == ["daily"] and len(brain.calls) == 1
+
+
+def test_pulse_config_defaults():
+    pulse = PulseConfig().pulse
+    assert (pulse.daily_brief_hour, pulse.weekly_day, pulse.top_terms, pulse.baseline_days,
+            pulse.min_count) == (7, "monday", 25, 28, 3)
+
+
+def test_pulse_config_rejects_bad_weekday():
+    from pydantic import ValidationError
+
+    with pytest.raises(ValidationError):
+        PulseConfig(pulse={"weekly_day": "funday"})
+
+
+def test_pulse_min_count_never_allows_single_post_terms():
+    from pydantic import ValidationError
+
+    with pytest.raises(ValidationError):
+        PulseConfig(pulse={"min_count": 1})

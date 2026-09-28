@@ -7,7 +7,7 @@ and drafts replies that humans review. It is **not** a sales or outreach
 tool.
 
 The roadmap and data model are in `docs/PLAN.md`. Read it before changing
-behavior. Current status: **Phase 7 complete**. The data layer, config, idle
+behavior. Current status: **Phase 8 complete**. The data layer, config, idle
 heartbeat, minimal dashboard, knowledge files (`config/*.yaml`) and the
 deterministic compliance filter (`harvey/compliance.py`) exist.
 - Phase 3: collector registry + JSONL fixture collector (`harvey/collectors/`)
@@ -47,6 +47,20 @@ deterministic compliance filter (`harvey/compliance.py`) exist.
   runs under a strict CSP: no inline script/style, no `on*=` handlers;
   render server data only through `escHtml`/`safeHref`.
 
+- Phase 8: `harvey/trends.py` (deterministic: tokenizer, term velocity,
+  share of voice, sentiment shift, mixes, complaint themes, language bank
+  upsert), `harvey/pulse_store.py` (its SQL), `harvey/briefs.py` (windows
+  local to `usage.quiet_hours.timezone`, the `pulse` agent call, pydantic
+  validation + one retry + "tables only" fallback, numeric verification of
+  action cards, idempotent per (period, window_start), Slack message built
+  only by `build_brief_message`), `prompts/brief.md`, config `pulse:`,
+  migration v5 (briefs / trend_terms / language_bank rebuilt,
+  language_bank_mentions), `pulse brief` / `pulse trends`, the dashboard
+  Pulse tab (`harvey/web/pulse.js`) and its API. The brief prompt carries
+  aggregates only: never mention text, handles, URLs or mention ids, and
+  nothing seen in fewer than 2 mentions. Heartbeat priority: triage > draft >
+  brief > idle; briefs respect quiet hours and the budget.
+
 Later phases add everything else. Don't build ahead of the phase you've
 been asked to do.
 
@@ -79,7 +93,8 @@ Also:
 - Tests: `.venv/Scripts/python -m pytest -q`. Work test-first.
 - Imports smoke check: `.venv/Scripts/python -c "import harvey.main, harvey.dashboard, harvey.cli, harvey.state"`
 - CLI: `pulse run | dashboard [--host H] | status | ingest | usage |
-  escalations | ack | user add|list|disable` (`harvey` is an alias).
+  escalations | ack | user add|list|disable | brief | trends` (`harvey` is
+  an alias).
 - The dashboard binds to 127.0.0.1 by default; `--host` anything else is
   refused until an active admin exists. Every /api route except /api/login
   needs a session; every POST needs X-CSRF-Token. Approval needs a non-red

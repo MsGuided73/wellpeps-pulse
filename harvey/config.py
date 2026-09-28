@@ -65,6 +65,7 @@ DEFAULT_MODELS = {
     "safety": "haiku",
     "drafter": "sonnet",
     "reviewer": "sonnet",
+    "pulse": "sonnet",   # daily/weekly market brief from aggregates
 }
 
 
@@ -180,6 +181,30 @@ class ReviewConfig(BaseModel):
     require_publishable_claims: bool = True
 
 
+WEEKDAYS = ("monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday")
+
+
+class PulseBriefConfig(BaseModel):
+    """Pulse trends and briefs (Phase 8). Times are in the quiet-hours timezone."""
+
+    # The daily brief (previous local day) runs once, after this local hour.
+    daily_brief_hour: int = Field(default=7, ge=0, le=23)
+    # The weekly brief (previous Mon-Sun) runs from this day on, after the daily.
+    weekly_day: str = "monday"
+    top_terms: int = Field(default=25, ge=1, le=100)
+    baseline_days: int = Field(default=28, ge=1, le=365)
+    # >= 2: a term from a single post is an anecdote and could point at its author.
+    min_count: int = Field(default=3, ge=2)
+
+    @field_validator("weekly_day")
+    @classmethod
+    def _valid_weekday(cls, v: str) -> str:
+        day = (v or "").strip().lower()
+        if day not in WEEKDAYS:
+            raise ValueError(f"weekly_day must be one of {', '.join(WEEKDAYS)}")
+        return day
+
+
 class PulseConfig(BaseModel):
     # Unknown keys fail loudly, so a leftover sales-era harvey.yaml is caught.
     model_config = ConfigDict(extra="forbid")
@@ -191,6 +216,7 @@ class PulseConfig(BaseModel):
     notify: NotifyConfig = Field(default_factory=NotifyConfig)
     dashboard: DashboardConfig = Field(default_factory=DashboardConfig)
     review: ReviewConfig = Field(default_factory=ReviewConfig)
+    pulse: PulseBriefConfig = Field(default_factory=PulseBriefConfig)
     retention_days: int = Field(default=180, ge=1)
 
 

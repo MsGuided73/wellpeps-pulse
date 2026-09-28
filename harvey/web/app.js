@@ -208,6 +208,7 @@ function loadCurrentTab() {
   switch (currentTab) {
     case 'urgent': loadUrgent(); break;
     case 'review': loadReview(); break;
+    case 'pulse': loadPulse(); break;
     case 'feed': loadFeed(); break;
     case 'usage': loadUsage(); break;
     case 'users': loadUsers(); break;
@@ -798,7 +799,8 @@ async function init() {
   document.getElementById('user-chip').innerHTML = '<span>' + escHtml(ME.name || ME.email) + '</span>' +
     '<span class="role">' + escHtml(ME.role) + '</span>';
   document.getElementById('nav-users').classList.toggle('hidden', !can('admin'));
-  showTab('urgent');  // Slack pages link to /#escalation-<id>: the Urgent tab
+  // Slack pages link to /#escalation-<id> (Urgent) or /#pulse-brief-<id> (Pulse).
+  showTab(/^#pulse-brief-\d+$/.test(window.location.hash) ? 'pulse' : 'urgent');
   loadHarveyStatus();
   loadReviewCount();
   setInterval(pollUrgent, 30000);

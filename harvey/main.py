@@ -7,8 +7,11 @@ is open the sleep is capped at ``usage.urgent_tick_minutes`` so SLA breaches
 are re-paged promptly. Triage checks the Claude budget before every mention.
 Drafting (draft -> compliance filter -> adversarial review -> in_review)
 runs when nothing is waiting for triage, respecting quiet hours and the
-budget. The full step order lives in docs/PLAN.md §3; later phases add
-collectors and briefs.
+budget. When neither has work, a due Pulse brief (daily after
+``pulse.daily_brief_hour`` local, weekly from ``pulse.weekly_day``) is built,
+also respecting quiet hours and the budget. New triage phrases are banked
+into the language bank every cycle (no Claude call). The full step order
+lives in docs/PLAN.md §3; a later phase adds real collectors.
 """
 
 import asyncio
@@ -24,11 +27,13 @@ from harvey.agents.reviewer import Reviewer
 from harvey.agents.safety_screen import SafetyScreen
 from harvey.agents.triager import Triager, triage_batch
 from harvey.brain import Brain
+from harvey.briefs import due_periods, run_due_briefs
 from harvey.config import ConfigError, PulseConfig, load_config
 from harvey.drafting import draft_batch
 from harvey.escalation import SweepReport, escalate, sweep
 from harvey.notify import SlackNotifier
 from harvey.state import StateManager
+from harvey.trends import bank_language
 
 logging.basicConfig(
     level=logging.INFO,
@@ -87,12 +92,14 @@ async def decide_next_action(
 
     PLAN.md §3 order: escalation sweep (every cycle, outside this
     decision) -> due collectors -> triage batch -> draft/filter/review ->
-    briefs -> idle. Implemented so far: triage when any mention is still
-    ``new``, else draft when triaged mentions await a reply, else idle.
+    briefs -> idle. Priority: triage when any mention is still ``new``, else
+    draft when triaged mentions await a reply, else brief when a Pulse brief
+    is due (``summary["briefs_due"]``, computed from state when absent),
+    else idle.
     """
     if summary is None and state is not None:
         summary = await state.get_state_summary()
-    summary = summary or {}
+    summary = dict(summary or {})
     new_count = int((summary.get("mentions") or {}).get("new", 0) or 0)
     draftable = int(summary.get("draftable", 0) or 0)
     if new_count > 0:
@@ -100,7 +107,13 @@ async def decide_next_action(
     elif draftable > 0:
         action, reason = "draft", f"{draftable} mention(s) awaiting a draft"
     else:
-        action, reason = "idle", "nothing to do"
+        due = summary.get("briefs_due")
+        if due is None and state is not None:
+            due = await due_periods(state, config)
+        if due:
+            action, reason = "brief", f"{', '.join(due)} brief due"
+        else:
+            action, reason = "idle", "nothing to do"
     logger.info(f"Decision: {action} ({reason})")
     return action
 
@@ -151,9 +164,10 @@ async def _interruptible_sleep(seconds: float, stop_event: asyncio.Event) -> boo
 
 def _tasks_for(
     action: str, state=None, triager=None, budget_ok=None, escalate_hook=None,
-    drafter=None, reviewer=None, screen=None,
+    drafter=None, reviewer=None, screen=None, brief_runner=None,
 ) -> list[tuple[str, object]]:
-    """Coroutines to run for an action."""
+    """Coroutines to run for an action. ``brief_runner`` is a zero-argument
+    callable returning the brief coroutine."""
     if action == "triage" and state is not None and triager is not None:
         return [("triage", triage_batch(
             state, triager, limit=TRIAGE_BATCH_LIMIT, budget_ok=budget_ok,
@@ -163,7 +177,18 @@ def _tasks_for(
         return [("draft", draft_batch(
             state, drafter, reviewer, limit=DRAFT_BATCH_LIMIT, budget_ok=budget_ok,
         ))]
+    if action == "brief" and brief_runner is not None:
+        return [("brief", brief_runner())]
     return []
+
+
+async def run_language_bank(state) -> int:
+    """Bank new triage phrases (deterministic, no Claude). Logs and swallows errors."""
+    try:
+        return await bank_language(state)
+    except Exception as e:
+        logger.warning(f"Language bank update failed: {e}")
+        return 0
 
 
 async def heartbeat(stop_event: asyncio.Event | None = None):
@@ -205,6 +230,11 @@ async def heartbeat(stop_event: asyncio.Event | None = None):
             max_calls, max_percent=config.usage.max_daily_claude_percent
         )
 
+    async def brief_runner():
+        built = await run_due_briefs(state, brain, config, notifier=notifier, budget_ok=budget_ok)
+        # Log ids and status only; the brief itself lives in the DB.
+        return [f"{b['period']} brief #{b['id']} ({b['status']})" for b in built]
+
     while not stop_event.is_set():
         try:
             # 0. Escalation sweep: every cycle, regardless of quiet hours,
@@ -230,7 +260,7 @@ async def heartbeat(stop_event: asyncio.Event | None = None):
             tasks = _tasks_for(
                 action, state=state, triager=triager, budget_ok=budget_ok,
                 escalate_hook=escalate_hook, drafter=drafter, reviewer=reviewer,
-                screen=screen,
+                screen=screen, brief_runner=brief_runner,
             )
             results = await asyncio.gather(
                 *[t[1] for t in tasks], return_exceptions=True
@@ -242,6 +272,9 @@ async def heartbeat(stop_event: asyncio.Event | None = None):
                     logger.error(f"Task {name} failed: {result}", exc_info=result)
                 elif result is not None:
                     logger.info(f"Task {name}: {result}")
+
+            # 3b. Language bank: new triage phrases (no Claude call).
+            await run_language_bank(state)
 
             # 4. Log the action (best-effort; never kills the loop)
             try:

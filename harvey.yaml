@@ -22,6 +22,7 @@ usage:
     safety: haiku         # independent safety screen: one narrow yes/no question
     drafter: sonnet       # reply drafting from approved claims
     reviewer: sonnet      # adversarial compliance review; never haiku (config rejects it)
+    pulse: sonnet         # daily/weekly market brief (aggregates only, never post text)
   # Drafting and briefs pause in quiet hours. Escalations never do.
   quiet_hours:
     start: "22:00"
@@ -68,6 +69,15 @@ review:
   # Approval requires every cited claim to be signed off in
   # config/claims.yaml ("no claim ID, no publish"). Keep true.
   require_publishable_claims: true
+
+pulse:
+  # Market briefs from triaged mentions (aggregates only). Times are local to
+  # usage.quiet_hours.timezone; briefs never run in quiet hours or over budget.
+  daily_brief_hour: 7     # daily brief (previous local day) after this hour
+  weekly_day: monday      # weekly brief (previous Mon-Sun) from this day, after the daily
+  top_terms: 25           # emerging terms per brief
+  baseline_days: 28       # term velocity is measured against this many prior days
+  min_count: 3            # a term needs this many mentions in the window
 
 # Days to keep mention text before purging (pending legal sign-off).
 retention_days: 180

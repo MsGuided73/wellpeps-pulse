@@ -20,15 +20,16 @@ import os
 import signal
 import subprocess
 import sys
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from typing import Literal
 
 import aiosqlite
-from fastapi import Depends, FastAPI, HTTPException, Request
+from fastapi import Depends, FastAPI, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse, RedirectResponse, Response
 from pydantic import BaseModel, Field
 
-from harvey import auth, review
+from harvey import auth, briefs, pulse_store, review, trends
 from harvey.config import ConfigFileNotFoundError, PulseConfig, load_config, load_env
 from harvey.escalation import ack as ack_escalation
 from harvey.models import MentionStatus
@@ -108,6 +109,13 @@ def get_reviewer(config: PulseConfig = Depends(get_config), state: StateManager 
     from harvey.brain import Brain
 
     return Reviewer(Brain(state, models=config.usage.models))
+
+
+def get_brief_brain(config: PulseConfig = Depends(get_config), state: StateManager = Depends(get_state)):
+    """The brain the Pulse brief is written with (overridden in tests)."""
+    from harvey.brain import Brain
+
+    return Brain(state, models=config.usage.models)
 
 
 def require(permission: str):
@@ -363,6 +371,68 @@ async def ack(escalation_id: int, user: dict = VIEW):
     if not await ack_escalation(state, escalation_id, user["email"]):
         raise HTTPException(status_code=409, detail="already acknowledged")
     return {"success": True}
+
+
+# ── Pulse: briefs, live trends, language bank ──
+
+Period = Literal["daily", "weekly"]
+
+
+class GenerateBriefBody(BaseModel):
+    period: Period
+    force: bool = False
+
+
+@app.get("/api/briefs")
+async def get_briefs(period: Period | None = None, limit: int = Query(30, ge=1, le=200),
+                     user: dict = VIEW):
+    """Brief history, newest window first (headline and status only)."""
+    return {"items": await pulse_store.list_briefs(await get_state(), period=period, limit=limit)}
+
+
+@app.get("/api/briefs/{brief_id}")
+async def get_brief_detail(brief_id: int, user: dict = VIEW):
+    state = await get_state()
+    brief = await pulse_store.get_brief(state, brief_id)
+    if brief is None:
+        raise HTTPException(status_code=404, detail="brief not found")
+    return {**brief, "trend_terms": await pulse_store.list_trend_terms(state, brief_id)}
+
+
+@app.get("/api/trends")
+async def get_trends(days: int = Query(7, ge=1, le=90), user: dict = VIEW,
+                     config: PulseConfig = Depends(get_config)):
+    """Live trends for the last ``days`` days: deterministic, no Claude call."""
+    end = datetime.now(timezone.utc).replace(tzinfo=None)
+    report = await trends.compute_trends(
+        await get_state(), end - timedelta(days=days), end, baseline_days=config.pulse.baseline_days,
+        min_count=config.pulse.min_count, top_n=config.pulse.top_terms,
+    )
+    return report.to_dict()
+
+
+@app.get("/api/language-bank")
+async def get_language_bank(q: str | None = Query(None, max_length=200),
+                            category: str | None = Query(None, max_length=40),
+                            drug: str | None = Query(None, max_length=120),
+                            sort: Literal["count", "recent"] = "count",
+                            limit: int = Query(100, ge=1, le=pulse_store.MAX_PAGE),
+                            offset: int = Query(0, ge=0), user: dict = VIEW):
+    """Verbatim consumer phrases with counts (for copywriters)."""
+    return await pulse_store.search_language_bank(await get_state(), q=q, category=category, drug=drug,
+                                                  sort=sort, limit=limit, offset=offset)
+
+
+@app.post("/api/briefs/generate")
+async def generate_brief(body: GenerateBriefBody, user: dict = ADMIN,
+                         config: PulseConfig = Depends(get_config),
+                         brain=Depends(get_brief_brain), notifier=Depends(get_notifier)):
+    """Build the brief for the latest window now (one Claude call unless it exists)."""
+    brief = await briefs.build_brief(await get_state(), brain, body.period, config=config,
+                                     force=body.force, notifier=notifier)
+    logger.info("%s brief #%s requested by %s (created=%s)", body.period, brief["id"],
+                user["email"], brief["created"])
+    return brief
 
 
 # ── Helpers ──

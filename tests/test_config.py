@@ -29,6 +29,7 @@ def test_defaults():
     assert config.usage.heartbeat_interval_minutes == 15
     assert config.usage.models == DEFAULT_MODELS == {
         "triager": "haiku", "safety": "haiku", "drafter": "sonnet", "reviewer": "sonnet",
+        "pulse": "sonnet",
     }
     assert config.escalation.sla_minutes == 15
     assert config.escalation.clinical_owner == ""

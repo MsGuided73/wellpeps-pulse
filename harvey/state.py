@@ -366,6 +366,70 @@ MIGRATIONS: list[str] = [
     ALTER TABLE sessions ADD COLUMN csrf_token TEXT DEFAULT '';
     ALTER TABLE users ADD COLUMN last_login_at TIMESTAMP;
     """,
+    # ── v5: Pulse trends, briefs and language bank (Phase 8) ──
+    # The v1 briefs / trend_terms / language_bank placeholders were never
+    # written by any code path, so they are empty everywhere: rebuild them in
+    # the shape Phase 8 needs. language_bank_mentions records which mentions
+    # were banked, so banking is idempotent per mention.
+    """
+    DROP TABLE IF EXISTS trend_terms;
+    DROP TABLE IF EXISTS briefs;
+    DROP TABLE IF EXISTS language_bank;
+
+    CREATE TABLE briefs (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        period TEXT NOT NULL,                 -- daily | weekly
+        window_start TIMESTAMP NOT NULL,      -- naive UTC
+        window_end TIMESTAMP NOT NULL,
+        status TEXT DEFAULT 'ok',             -- ok | fallback
+        headline TEXT DEFAULT '',
+        summary_md TEXT DEFAULT '',
+        action_cards_json TEXT DEFAULT '[]',
+        watchlist_json TEXT DEFAULT '[]',
+        data_json TEXT DEFAULT '{}',          -- the aggregates the brief was built from
+        model TEXT DEFAULT '',
+        slack_sent_at TIMESTAMP,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(period, window_start)
+    );
+
+    CREATE TABLE trend_terms (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        brief_id INTEGER NOT NULL REFERENCES briefs(id),
+        rank INTEGER NOT NULL,
+        term TEXT NOT NULL,
+        count INTEGER DEFAULT 0,
+        baseline_count INTEGER DEFAULT 0,
+        velocity REAL DEFAULT 0.0,
+        score REAL DEFAULT 0.0,
+        is_new INTEGER DEFAULT 0,
+        example_ids_json TEXT DEFAULT '[]',
+        UNIQUE(brief_id, term)
+    );
+
+    CREATE TABLE language_bank (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        phrase TEXT NOT NULL,                 -- first verbatim form seen
+        phrase_norm TEXT NOT NULL,            -- lowercased, whitespace collapsed
+        scope TEXT NOT NULL DEFAULT '',       -- WellPeps product, else drug, else ''
+        product TEXT DEFAULT '',
+        drug TEXT DEFAULT '',
+        category TEXT DEFAULT '',
+        sentiment TEXT DEFAULT '',
+        example_mention_id INTEGER,
+        count INTEGER DEFAULT 0,
+        first_seen TIMESTAMP,
+        last_seen TIMESTAMP,
+        UNIQUE(phrase_norm, scope)
+    );
+    CREATE INDEX idx_language_bank_count ON language_bank(count);
+    CREATE INDEX idx_language_bank_last_seen ON language_bank(last_seen);
+
+    CREATE TABLE language_bank_mentions (
+        mention_id INTEGER PRIMARY KEY REFERENCES mentions(id),
+        banked_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+    """,
 ]
 
 

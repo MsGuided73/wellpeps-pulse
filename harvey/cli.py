@@ -1,5 +1,5 @@
 """WellPeps Pulse CLI: run, dashboard, status, ingest, usage, escalations, ack,
-user.
+user, brief, trends.
 
 Installed as both `pulse` and `harvey` (same entry point).
 """
@@ -254,6 +254,92 @@ def cmd_ack(args):
     asyncio.run(_ack())
 
 
+def trend_lines(report) -> list[str]:
+    """Plain-text trend tables (aggregates only)."""
+    lines = [f"{report.mentions} triaged mention(s) from {report.window_start:%Y-%m-%d %H:%M} to "
+             f"{report.window_end:%Y-%m-%d %H:%M} UTC ({report.previous_mentions} in the window before)", ""]
+    if report.terms:
+        lines.append(f"{'Term':<34} {'Count':>6} {'Base':>6} {'Velocity':>9}")
+        for t in report.terms:
+            lines.append(f"{t.term[:34]:<34} {t.count:>6} {t.baseline_count:>6} {t.velocity:>8.1f}x"
+                         f"{'  NEW' if t.is_new else ''}")
+    else:
+        lines.append("No term reached the minimum count in this window.")
+    if report.share_of_voice:
+        lines += ["", f"{'Share of voice':<34} {'Count':>6} {'Share':>7} {'Change':>8}"]
+        for r in report.share_of_voice:
+            lines.append(f"{r['subject'][:34]:<34} {r['count']:>6} {r['share'] * 100:>6.1f}% "
+                         f"{r['delta'] * 100:>+7.1f}pp")
+    return lines
+
+
+def brief_lines(brief: dict) -> list[str]:
+    """The brief's headline and action cards (no summary tables)."""
+    state = "new" if brief.get("created") else "existing"
+    lines = [f"{brief['period']} brief #{brief['id']} ({state}, {brief['status']}) for the window from "
+             f"{str(brief['window_start'])[:16]} UTC", "", brief["headline"], ""]
+    for i, card in enumerate(brief.get("action_cards", []), start=1):
+        lines.append(f"{i}. {card['title']}  [{card.get('owner_hint', '')}, {card.get('urgency', '')}]")
+    if not brief.get("action_cards"):
+        lines.append("No action cards.")
+    return lines
+
+
+def cmd_brief(args):
+    """Build the daily/weekly Pulse brief now (one Claude call unless it exists)."""
+    from harvey.brain import Brain
+    from harvey.briefs import build_brief
+    from harvey.config import load_config
+    from harvey.notify import SlackNotifier
+    from harvey.state import StateManager
+
+    async def _brief():
+        config = load_config()
+        state = StateManager()
+        await state.init_db()
+        brief = await build_brief(state, Brain(state, models=config.usage.models), args.period,
+                                  config=config, force=args.force,
+                                  notifier=SlackNotifier.from_config(config))
+        print()
+        for line in brief_lines(brief):
+            print(f"  {line}")
+        print()
+
+    asyncio.run(_brief())
+
+
+def cmd_trends(args):
+    """Print live trends for the last N days (deterministic, no Claude)."""
+    from datetime import datetime, timedelta, timezone
+
+    from harvey.config import ConfigFileNotFoundError, PulseConfig, load_config
+    from harvey.state import StateManager
+    from harvey.trends import bank_language, compute_trends
+
+    if not 1 <= args.days <= 365:
+        print("  --days must be between 1 and 365.")
+        sys.exit(2)
+
+    async def _trends():
+        try:
+            config = load_config()
+        except ConfigFileNotFoundError:
+            config = PulseConfig()
+        state = StateManager()
+        await state.init_db()
+        await bank_language(state)
+        end = datetime.now(timezone.utc).replace(tzinfo=None)
+        report = await compute_trends(state, end - timedelta(days=args.days), end,
+                                      baseline_days=config.pulse.baseline_days,
+                                      min_count=config.pulse.min_count, top_n=config.pulse.top_terms)
+        print()
+        for line in trend_lines(report):
+            print(f"  {line}")
+        print()
+
+    asyncio.run(_trends())
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="WellPeps Pulse: social listening with human-reviewed replies.",
@@ -303,6 +389,16 @@ def build_parser() -> argparse.ArgumentParser:
     sub.add_argument("id", type=int, help="Escalation id (see `pulse escalations`)")
     sub.add_argument("--by", required=True, help="Who is taking it")
     sub.set_defaults(func=cmd_ack)
+
+    sub = subparsers.add_parser("brief", help="Build the Pulse brief now (one Claude call)")
+    sub.add_argument("--period", choices=("daily", "weekly"), default="daily",
+                     help="daily = previous local day, weekly = previous Mon-Sun (default daily)")
+    sub.add_argument("--force", action="store_true", help="Rebuild even if this window has a brief")
+    sub.set_defaults(func=cmd_brief)
+
+    sub = subparsers.add_parser("trends", help="Print live Pulse trends (no Claude call)")
+    sub.add_argument("--days", type=int, default=7, help="Window length in days (default: 7)")
+    sub.set_defaults(func=cmd_trends)
 
     sub = subparsers.add_parser("usage", help="Show Claude usage and quota")
     sub.add_argument("--days", type=int, default=30, help="Breakdown window (default: 30)")

@@ -93,9 +93,34 @@ Steps 4–6 respect quiet hours and budget; 1–3 do not (triage has budget prio
 - **P5** Escalation + Slack notifier (no-op without webhook).
 - **P6** Drafter + adversarial reviewer; end-to-end fixture test.  *(Blocked for real use on a compliance-signed claims.yaml.)*
 - **P7** Auth + dashboard (Urgent, Feed, Review desk, Pulse, Usage, Settings).
-- **P8** Pulse trends, briefs, language bank.
+- **P8** Pulse trends, briefs, language bank. *(done)*
 - **P9** Real collectors: F5Bot/Syften, Apify, Meta Graph read.
 - **P10** Meta publish behind flag (off) + "Copy reply & open post".
+
+## Phase 8 decisions (2026-09-27)
+- Trends are deterministic (no Claude): terms counted once per mention;
+  unigrams to trigrams within a clause, never across a stopword or dropped
+  token; velocity = (window/day + 0.5) / (baseline/day + 0.5) over a 28-day
+  baseline; score = velocity × log(1 + count); a sub-term that only appears
+  inside a ranked longer term is dropped. Only triaged, relevant, not-dropped
+  mentions count; a mention's time is `posted_at`, else `collected_at`.
+- Briefs: daily = previous local day, weekly = previous Mon–Sun, local to
+  `usage.quiet_hours.timezone` (no separate Pulse timezone). One brief per
+  (period, window_start); the heartbeat builds the daily after
+  `pulse.daily_brief_hour`, the weekly from `pulse.weekly_day` on (catch-up
+  through Sunday) once the daily is done, and never for an empty window.
+- The brief prompt carries aggregates only, and nothing seen in fewer than 2
+  mentions (terms, complaint themes, language-bank phrases): a one-post
+  anecdote could point at its author. Phrases with a link, handle or e-mail
+  never enter the prompt.
+- 1–7 action cards are accepted (the prompt asks for 3–7) so a thin week
+  doesn't force the fallback; extra cards are cut at 7. Cards citing numbers
+  absent from the payload are stripped and logged.
+- Slack gets the headline + top 3 card titles + dashboard link, with URLs,
+  handles, e-mails and any banked phrase scrubbed out.
+- Migration v5 rebuilds the unused v1 `briefs`, `trend_terms`,
+  `language_bank` tables (never written before Phase 8) and adds
+  `language_bank_mentions` so banking is idempotent per mention.
 
 ## 5. Open questions
 - Approved claims library content + physician/compliance sign-off.

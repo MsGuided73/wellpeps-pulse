@@ -37,3 +37,30 @@ def test_seed_refuses_without_a_throwaway_db(monkeypatch):
     monkeypatch.delenv("PULSE_DB_PATH", raising=False)
     with pytest.raises(SystemExit):
         seed_demo._check_target()
+
+
+def test_seed_builds_trend_history_briefs_and_language_bank(tmp_path):
+    from harvey import pulse_store
+
+    seed_demo = _load()
+    db = str(tmp_path / "demo.db")
+
+    asyncio.run(seed_demo.seed(db))
+
+    state = StateManager(db)
+    daily = asyncio.run(pulse_store.list_briefs(state, period="daily"))
+    weekly = asyncio.run(pulse_store.list_briefs(state, period="weekly"))
+    assert len(daily) == 1 and len(weekly) == 1
+    brief = asyncio.run(pulse_store.get_brief(state, weekly[0]["id"]))
+    assert brief["headline"].startswith("DEMO")
+    assert brief["status"] == "ok" and len(brief["action_cards"]) >= 3
+    terms = [t["term"] for t in asyncio.run(pulse_store.list_trend_terms(state, brief["id"]))]
+    spikes = {"shipping delay", "price hike", "compounded tirz shortage", "oral wegovy"}
+    assert spikes & set(terms)
+    bank = asyncio.run(pulse_store.search_language_bank(state))
+    assert bank["total"] >= 5
+    rows = asyncio.run(pulse_store.fetch_rows(state, brief["window_start"], brief["window_end"]))
+    assert rows, "the weekly window has DEMO mentions"
+    for row in asyncio.run(pulse_store.list_briefs(state)):
+        stored = asyncio.run(pulse_store.get_brief(state, row["id"]))
+        assert stored["data"]["verification"]["stripped"] == []  # the demo writer cites real numbers

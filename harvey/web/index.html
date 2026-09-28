@@ -32,6 +32,7 @@
 <nav>
   <button class="active" data-tab="urgent">Urgent<span class="nav-count" id="nav-urgent"></span></button>
   <button data-tab="review">Review desk<span class="nav-count" id="nav-review"></span></button>
+  <button data-tab="pulse">Pulse</button>
   <button data-tab="feed">Feed</button>
   <button data-tab="usage">Usage</button>
   <button data-tab="users" class="hidden" id="nav-users">Users</button>
@@ -60,6 +61,56 @@
     <div class="desk-pane" id="review-pane"></div>
   </div>
   <p class="kbd-hint"><kbd>j</kbd>/<kbd>k</kbd> next/previous &middot; <kbd>e</kbd> edit &middot; <kbd>a</kbd> approve</p>
+</div>
+
+<!-- Pulse: market trends, briefs, language bank (aggregates only) -->
+<div id="pulse" class="section">
+  <div class="section-head">
+    <h2>Pulse</h2>
+    <p>What the market is saying, from triaged mentions only: aggregates, never individuals. Briefs are written from these tables, and every number an action card cites is checked against them.</p>
+  </div>
+  <div class="pulse-bar">
+    <div class="seg" role="tablist">
+      <button class="active" data-action="pulse-view" data-view="brief">Brief</button>
+      <button data-action="pulse-view" data-view="live">Live trends</button>
+      <button data-action="pulse-view" data-view="bank">Language bank</button>
+    </div>
+    <div class="pulse-tools" id="pulse-brief-tools">
+      <label class="form-label" for="pulse-history">History</label>
+      <select class="form-input" id="pulse-history"></select>
+      <span class="admin-only hidden" id="pulse-generate-tools">
+        <select class="form-input" id="pulse-period" aria-label="Brief period">
+          <option value="daily">daily</option><option value="weekly">weekly</option>
+        </select>
+        <button class="btn btn-secondary btn-sm" data-action="pulse-generate">Generate brief</button>
+      </span>
+    </div>
+    <div class="pulse-tools hidden" id="pulse-live-tools">
+      <label class="form-label" for="pulse-days">Window</label>
+      <select class="form-input" id="pulse-days">
+        <option value="1">last 24 hours</option><option value="7" selected>last 7 days</option>
+        <option value="30">last 30 days</option>
+      </select>
+    </div>
+  </div>
+  <div class="pulse-view" id="pulse-brief"></div>
+  <div class="pulse-view hidden" id="pulse-live"></div>
+  <div class="pulse-view hidden" id="pulse-bank">
+    <form class="form-row" id="bank-filters">
+      <div class="form-group"><label class="form-label" for="b-q">Search phrases</label>
+        <input class="form-input" id="b-q" name="q" type="search" placeholder="food noise…"></div>
+      <div class="form-group"><label class="form-label" for="b-category">Category</label>
+        <select class="form-input" id="b-category" name="category"><option value="">All</option></select></div>
+      <div class="form-group"><label class="form-label" for="b-drug">Drug</label>
+        <input class="form-input" id="b-drug" name="drug" placeholder="semaglutide"></div>
+      <div class="form-group"><label class="form-label" for="b-sort">Sort</label>
+        <select class="form-input" id="b-sort" name="sort"><option value="count">Most used</option><option value="recent">Most recent</option></select></div>
+      <div class="form-group"><button class="btn btn-secondary" type="submit">Apply</button></div>
+    </form>
+    <p class="muted bank-note">Verbatim consumer phrases (copied exactly from public posts by triage), counted once per mention. Useful for ad and FAQ wording; never quote a phrase in a way that points at its author.</p>
+    <div id="bank-list"></div>
+    <div class="pager" id="bank-pager"></div>
+  </div>
 </div>
 
 <!-- Feed: every collected mention -->
@@ -152,5 +203,6 @@
 <aside class="drawer hidden" id="drawer" aria-label="Mention detail"></aside>
 
 <script src="/static/app.js"></script>
+<script src="/static/pulse.js"></script>
 </body>
 </html>

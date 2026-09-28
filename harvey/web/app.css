@@ -624,3 +624,44 @@ tbody tr.clickable { cursor: pointer; }
 .login-card .btn { width: 100%; margin-top: 6px; }
 .login-note { font-size: 11.5px; color: var(--text-3); margin-top: 14px; line-height: 1.6; }
 .desk-actions select.form-input { width: auto; max-width: 200px; }
+
+/* ── Pulse tab (Phase 8) ── */
+.pulse-bar { display: flex; align-items: center; justify-content: space-between; gap: 14px; flex-wrap: wrap; margin-bottom: 22px; }
+.pulse-tools { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.pulse-tools .form-label { margin: 0; }
+.pulse-tools .form-input { width: auto; min-width: 150px; }
+.admin-only { display: inline-flex; gap: 8px; align-items: center; }
+.seg { display: inline-flex; border: 1px solid var(--border-strong); border-radius: 99px; padding: 2px; }
+.seg button { background: none; border: none; color: var(--text-2); font: inherit; font-size: 12.5px; padding: 5px 13px; border-radius: 99px; cursor: pointer; }
+.seg button:hover { color: var(--text); }
+.seg button.active { background: var(--ink); color: var(--ink-contrast); }
+.brief-head { margin-bottom: 22px; max-width: 78ch; }
+.brief-headline { font-family: var(--serif); font-size: 24px; font-weight: 400; letter-spacing: -0.015em; line-height: 1.25; margin: 10px 0 12px; text-wrap: balance; }
+.md p { font-size: 14px; color: var(--text-2); line-height: 1.65; margin-bottom: 10px; }
+.md ul { margin: 0 0 10px 20px; font-size: 14px; color: var(--text-2); line-height: 1.6; }
+.md b { color: var(--text); font-weight: 600; }
+.cards-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; margin-bottom: 24px; }
+.action-card { border: 1px solid var(--border); border-radius: var(--r-md); padding: 14px 16px; background: var(--panel); }
+.ac-title { font-size: 14.5px; font-weight: 500; letter-spacing: -0.006em; }
+.ac-chips { margin: 8px 0; display: flex; gap: 5px; flex-wrap: wrap; }
+.ac-why { font-size: 13px; color: var(--text-2); line-height: 1.55; margin-bottom: 6px; }
+.ac-action { font-size: 13px; line-height: 1.55; }
+.pulse-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 460px), 1fr)); gap: 14px; }
+.pulse-card { margin-bottom: 0; }
+.bar-label { width: 130px; flex-shrink: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.delta { font-family: var(--mono); font-size: 11px; }
+.delta.up { color: var(--s-good); }
+.delta.down { color: var(--s-bad); }
+.delta.flat { color: var(--text-3); }
+.mix-row { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid var(--border); font-size: 13px; }
+.mix-row:last-child { border-bottom: none; }
+.theme { margin-bottom: 12px; }
+.theme-head { font-size: 13px; font-weight: 500; }
+.term-link { background: none; border: none; padding: 0; font: inherit; text-align: left; color: var(--text); text-decoration: underline; text-decoration-color: var(--border-strong); text-underline-offset: 2px; cursor: pointer; }
+.term-link:hover { text-decoration-color: var(--text); }
+td.phrase { font-family: var(--serif); font-size: 14px; }
+.bank-note { font-size: 12.5px; margin: 0 0 12px; max-width: 80ch; }
+@media (max-width: 720px) {
+  .pulse-grid { grid-template-columns: 1fr; }
+  .bar-label { width: 90px; }
+}

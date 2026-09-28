@@ -14,7 +14,7 @@ Pulse never posts on its own, and nothing clinical is ever auto-published.
 
 ## Status
 
-**Phase 7 complete.** Harvey's sales functionality is gone. What's here:
+**Phase 8 complete.** Harvey's sales functionality is gone. What's here:
 
 - a data layer with mentions, triage, drafts, escalations, and an append-only audit log
 - config, plus WellPeps knowledge in `config/*.yaml` (competitors, products, keywords, compliance rules, a seed claims library pending sign-off)
@@ -28,7 +28,9 @@ Pulse never posts on its own, and nothing clinical is ever auto-published.
 - a signed-in review dashboard (`harvey/dashboard.py`, `harvey/review.py`, `harvey/auth.py`): **Urgent** (open escalations with SLA countdowns, breached first, ack by role), **Review desk** (original post + permalink, triage tags, draft editor, claim chips, compliance tier and reviewer verdict, save/approve/reject, copy-and-open, mark posted, manual escalation; `j`/`k`/`e`/`a` keys), **Feed** (filters, search, detail drawer with the audit trail), **Usage**, **Users** (admin). Approval is refused while the filter is red, the draft cites no claim, or any cited claim is still PENDING sign-off. Pulse still posts nothing: a human copies the approved reply, posts it, and marks it posted
 - auth: argon2id passwords, HttpOnly SameSite=Strict session cookies (only a hash of the token is stored, 12 h sliding expiry), a CSRF header on every change, login throttling (5 failures / 15 min per email and per IP), roles viewer / reviewer / clinical / admin, a strict Content-Security-Policy, and a refusal to bind beyond 127.0.0.1 until an admin exists
 
-Real collectors and briefs arrive in later phases. The full roadmap is in [docs/PLAN.md](docs/PLAN.md).
+- **Pulse** market intelligence (`harvey/trends.py`, `harvey/briefs.py`, `harvey/pulse_store.py`), from triaged relevant mentions only and as aggregates only: emerging terms (unigrams to trigrams, velocity against a 28-day baseline, NEW flags), share of voice for WellPeps and competitors, sentiment shift per brand and drug, category and drug mix, complaint themes per competitor, and a **language bank** of verbatim consumer phrases with counts. A daily brief (previous local day, after 07:00) and a weekly brief (previous Mon–Sun, from Monday) are written by the `pulse` agent (sonnet) from the tables alone: never post text, handles or links. Action cards that cite a number not in the tables are stripped; a bad answer gets one retry, then a "tables only" fallback. Slack gets the headline, the top three card titles and a dashboard link. The dashboard's **Pulse** tab shows the brief, its action cards and tables, live trends, and the searchable language bank with Copy buttons. `pulse brief --period daily|weekly [--force]`, `pulse trends --days 7`
+
+Real collectors arrive in a later phase. The full roadmap is in [docs/PLAN.md](docs/PLAN.md).
 
 ## Quick start
 
@@ -47,14 +49,18 @@ pulse dashboard                             # http://127.0.0.1:5555, sign in
 pulse user list                             # users and roles; `pulse user disable EMAIL`
 pulse escalations                           # open escalations and SLA status
 pulse ack 3 --by "Nurse Jo"                 # acknowledge escalation #3
-pulse run                                   # heartbeat loop (triages new mentions)
+pulse trends --days 7                       # emerging terms and share of voice (no Claude call)
+pulse brief --period daily                  # write the Pulse brief now (one Claude call)
+pulse run                                   # heartbeat loop (triage, drafts, briefs)
 ```
 
 ### Demo data
 
 `scripts/seed_demo.py` fills a throwaway database with **DEMO DATA** (the
-fixture posts run through the real pipeline with a deterministic fake
-brain; no Claude calls, no Slack):
+fixture posts plus ~35 days of synthetic posts with a few spiking terms, run
+through the real pipeline with a deterministic fake brain, then one daily and
+one weekly Pulse brief from a deterministic brief writer; no Claude calls, no
+Slack):
 
 ```bash
 export PULSE_DB_PATH=data/demo.db                 # PowerShell: $env:PULSE_DB_PATH="data/demo.db"
