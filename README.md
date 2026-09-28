@@ -79,6 +79,30 @@ and HTTPS in front, with `dashboard.secure_cookies: true` in harvey.yaml.
 `harvey.yaml`, and `harvey.local.yaml` (gitignored) overrides it. State is
 stored in `data/pulse.db`, or wherever `PULSE_DB_PATH` points. Set `PULSE_DATABASE_URL` to use Postgres instead: the `pulse` schema in the Supabase project `wellpeps-pulse` (see [db/postgres/README.md](db/postgres/README.md)).
 
+## Deploy (Coolify)
+
+Pulse deploys on Coolify with the **Docker Compose** build pack.
+`docker-compose.yml` builds one image and runs two services: `worker`
+(`pulse run`, the heartbeat) and `dashboard` (port 5555, exposed to
+Coolify's Traefik proxy, which terminates HTTPS). Everything is configured
+through environment variables; data lives in Supabase (`PULSE_DATABASE_URL`),
+and `PULSE_REQUIRE_POSTGRES=true` makes every command refuse to fall back to
+SQLite inside a container. The Claude CLI in the image uses
+`ANTHROPIC_API_KEY`.
+
+- Health: the dashboard serves `GET /healthz` (public, `{"ok": true}` or 503);
+  the worker's check is `pulse health --worker` (database reachable and a
+  heartbeat within 2 x max(heartbeat, urgent tick) + 10 minutes).
+- Behind the proxy the login throttle uses the real client IP from
+  `X-Forwarded-For`, believed only from `PULSE_TRUSTED_PROXIES`.
+- `PULSE_SECURE_COOKIES`, `PULSE_DASHBOARD_URL` and `PULSE_TRUSTED_PROXIES`
+  override `harvey.yaml` (see `.env.example`).
+
+Step-by-step: [docs/DEPLOY-SUPABASE-COOLIFY.md](docs/DEPLOY-SUPABASE-COOLIFY.md).
+On a laptop, `docker compose -f docker-compose.yml -f docker-compose.local.yml up`
+adds `./data` (SQLite allowed), your `~/.claude` login, and publishes
+`127.0.0.1:5555`.
+
 ## Ground rules
 
 - Collectors read public data only, keep only minimal author info, and store a permalink for every mention.

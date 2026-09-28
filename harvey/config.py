@@ -1,12 +1,15 @@
 """Configuration loader for WellPeps Pulse. Reads harvey.yaml + .env."""
 
+import ipaddress
 import logging
 import os
 from datetime import time as _time
 from pathlib import Path
 
+from urllib.parse import urlsplit
+
 import yaml
-from dotenv import load_dotenv
+from dotenv import dotenv_values, load_dotenv
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 
 from harvey.paths import PROJECT_ROOT
@@ -157,19 +160,73 @@ class TriageConfig(BaseModel):
     safety_screen: bool = True
 
 
+def _is_loopback_host(host: str) -> bool:
+    if host == "localhost":
+        return True
+    try:
+        return ipaddress.ip_address(host).is_loopback
+    except ValueError:
+        return False
+
+
+def check_dashboard_url(url: str) -> str:
+    """"" or an https:// URL, or http:// on a loopback host. Raises ValueError."""
+    url = (url or "").strip()
+    if not url:
+        return ""
+    if any(c.isspace() for c in url):
+        raise ValueError("dashboard_url must not contain spaces")
+    try:
+        parts = urlsplit(url)
+        host = parts.hostname or ""
+        parts.port  # noqa: B018 - raises ValueError on a bad port
+    except ValueError as exc:
+        raise ValueError(f"dashboard_url '{url}' is not a valid URL") from exc
+    if not host:
+        raise ValueError(f"dashboard_url '{url}' has no host")
+    if parts.scheme == "https":
+        return url
+    if parts.scheme == "http" and _is_loopback_host(host):
+        return url
+    raise ValueError(
+        f"dashboard_url '{url}' must start with https:// (http:// is only allowed for localhost)"
+    )
+
+
 class NotifyConfig(BaseModel):
     # Name of the env var holding the Slack webhook (never the URL itself).
     slack_webhook_env: str = "SLACK_WEBHOOK_URL"
     # Optional base URL of the dashboard, linked from Slack pages.
+    # Env PULSE_DASHBOARD_URL overrides it.
     dashboard_url: str = ""
+
+    @field_validator("dashboard_url")
+    @classmethod
+    def _valid_dashboard_url(cls, v: str) -> str:
+        return check_dashboard_url(v)
 
 
 class DashboardConfig(BaseModel):
     # Set true whenever the dashboard is served over HTTPS (any non-loopback
     # deployment): the session cookie then carries the Secure flag.
+    # Env PULSE_SECURE_COOKIES overrides it.
     secure_cookies: bool = False
     # Idle session lifetime; every authenticated request slides it forward.
     session_hours: int = Field(default=12, ge=1, le=24 * 30)
+    # Reverse proxies (IPs/CIDRs) whose X-Forwarded-For is believed when
+    # finding the client IP for the login throttle (harvey/netutil.py).
+    # Empty = never read X-Forwarded-For. Env PULSE_TRUSTED_PROXIES
+    # (comma-separated) overrides it.
+    trusted_proxies: list[str] = Field(default_factory=list)
+
+    @field_validator("trusted_proxies")
+    @classmethod
+    def _valid_proxies(cls, v: list[str]) -> list[str]:
+        from harvey.netutil import parse_networks
+
+        cleaned = [str(item).strip() for item in v]
+        parse_networks(cleaned)  # raises ValueError on garbage
+        return cleaned
 
 
 class ReviewConfig(BaseModel):
@@ -258,11 +315,77 @@ def _format_validation_error(e: ValidationError) -> str:
     return "\n".join(lines)
 
 
-def load_config(config_path: str | None = None) -> PulseConfig:
-    """Load configuration from YAML.
+_TRUE = frozenset({"true", "1", "yes"})
+_FALSE = frozenset({"false", "0", "no"})
 
-    Raises ConfigError with a clear message for file/YAML problems and
-    pydantic's ValidationError for schema problems.
+# Deployment overrides (env wins over harvey.yaml). Blank means "not set".
+SECURE_COOKIES_ENV = "PULSE_SECURE_COOKIES"
+DASHBOARD_URL_ENV = "PULSE_DASHBOARD_URL"
+TRUSTED_PROXIES_ENV = "PULSE_TRUSTED_PROXIES"
+
+
+def parse_bool(raw: str, name: str) -> bool:
+    """true/false/1/0/yes/no, any case. Anything else is a ConfigError naming ``name``."""
+    value = (raw or "").strip().lower()
+    if value in _TRUE:
+        return True
+    if value in _FALSE:
+        return False
+    raise ConfigError(f"{name} must be true/false (or 1/0, yes/no), got '{raw.strip()}'.")
+
+
+def env_setting(name: str) -> str:
+    """An env var, stripped. The environment wins, even when set to "" (tests
+    pin blanks that way); otherwise the repo's .env is read without touching
+    os.environ."""
+    if name in os.environ:
+        return os.environ[name].strip()
+    env_file = PROJECT_ROOT / ".env"
+    if not env_file.is_file():
+        return ""
+    return (dotenv_values(env_file).get(name) or "").strip()
+
+
+def _env_overrides(data: dict) -> dict:
+    """A copy of the YAML mapping with the deployment env overrides applied."""
+    from harvey.netutil import parse_networks
+
+    notify = dict(data.get("notify") or {})
+    dashboard = dict(data.get("dashboard") or {})
+
+    raw = env_setting(SECURE_COOKIES_ENV)
+    if raw:
+        dashboard["secure_cookies"] = parse_bool(raw, SECURE_COOKIES_ENV)
+
+    raw = env_setting(DASHBOARD_URL_ENV)
+    if raw:
+        try:
+            notify["dashboard_url"] = check_dashboard_url(raw)
+        except ValueError as exc:
+            raise ConfigError(f"{DASHBOARD_URL_ENV}: {exc}")
+
+    raw = env_setting(TRUSTED_PROXIES_ENV)
+    if raw:
+        try:
+            parse_networks(raw)
+        except ValueError as exc:
+            raise ConfigError(f"{TRUSTED_PROXIES_ENV}: {exc}")
+        dashboard["trusted_proxies"] = [item.strip() for item in raw.split(",")]
+
+    merged = dict(data)
+    if notify or "notify" in data:
+        merged["notify"] = notify
+    if dashboard or "dashboard" in data:
+        merged["dashboard"] = dashboard
+    return merged
+
+
+def load_config(config_path: str | None = None) -> PulseConfig:
+    """Load configuration from YAML, then apply the deployment env overrides
+    (PULSE_SECURE_COOKIES, PULSE_DASHBOARD_URL, PULSE_TRUSTED_PROXIES).
+
+    Raises ConfigError with a clear message for file/YAML problems and bad
+    env overrides, and pydantic's ValidationError for schema problems.
     """
     if config_path is None:
         config_path = _find_config_file()
@@ -285,6 +408,7 @@ def load_config(config_path: str | None = None) -> PulseConfig:
             f"got {type(data).__name__}."
         )
 
+    data = _env_overrides(data)
     try:
         return PulseConfig(**data)
     except ValidationError as e:

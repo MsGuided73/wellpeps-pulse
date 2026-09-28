@@ -12,9 +12,11 @@ from urllib.parse import urlsplit, urlunsplit
 
 from dotenv import dotenv_values
 
+from harvey.config import ConfigError, env_setting, parse_bool
 from harvey.paths import PROJECT_ROOT
 
 DATABASE_URL_ENV = "PULSE_DATABASE_URL"
+REQUIRE_POSTGRES_ENV = "PULSE_REQUIRE_POSTGRES"
 ENV_FILE = PROJECT_ROOT / ".env"
 _SCHEMES = ("postgres://", "postgresql://")
 
@@ -60,6 +62,31 @@ def env_database_url() -> str:
             f"'{url.split(':', 1)[0]}'); leave it blank to use SQLite."
         )
     return url
+
+
+class PostgresRequiredError(ConfigError):
+    """PULSE_REQUIRE_POSTGRES is on but no PULSE_DATABASE_URL is set."""
+
+
+def require_postgres() -> bool:
+    """True when PULSE_REQUIRE_POSTGRES (env or .env) says SQLite is not allowed."""
+    raw = env_setting(REQUIRE_POSTGRES_ENV)
+    return parse_bool(raw, REQUIRE_POSTGRES_ENV) if raw else False
+
+
+def check_sqlite_allowed() -> None:
+    """Refuse the env-selected SQLite fallback when Postgres is required.
+
+    In a container the SQLite file would live in a throwaway layer and vanish
+    on the next deploy, so fail loudly instead.
+    """
+    if require_postgres():
+        raise PostgresRequiredError(
+            f"{REQUIRE_POSTGRES_ENV} is on but {DATABASE_URL_ENV} is not set: refusing to "
+            "write SQLite inside the container, where it would be lost on redeploy. Set "
+            f"{DATABASE_URL_ENV} to the Supabase session-pooler URL (or set "
+            f"{REQUIRE_POSTGRES_ENV}=false for local use)."
+        )
 
 
 def integrity_errors() -> tuple[type[BaseException], ...]:

@@ -1,5 +1,5 @@
-"""WellPeps Pulse CLI: run, dashboard, status, ingest, usage, escalations, ack,
-user, brief, trends.
+"""WellPeps Pulse CLI: run, dashboard, status, health, ingest, usage, escalations,
+ack, user, brief, trends.
 
 Installed as both `pulse` and `harvey` (same entry point).
 """
@@ -255,6 +255,52 @@ def cmd_ack(args):
     run_async(_ack())
 
 
+def _health_config():
+    from harvey.config import ConfigFileNotFoundError, PulseConfig, load_config
+
+    try:
+        return load_config()
+    except ConfigFileNotFoundError:
+        return PulseConfig()
+
+
+def _one_line(exc: BaseException) -> str:
+    text = " ".join(str(exc).split()) or type(exc).__name__
+    return text[:300]
+
+
+def cmd_health(args):
+    """Container healthcheck: DB reachable (and, with --worker, a fresh heartbeat).
+
+    Prints one line and exits 0 (healthy) or 1 (unhealthy).
+    """
+    from harvey import health
+    from harvey.state import StateManager
+
+    if args.max_age_minutes is not None and args.max_age_minutes < 1:
+        print("unhealthy: --max-age-minutes must be at least 1")
+        sys.exit(2)
+
+    async def _check() -> tuple[bool, str]:
+        config = _health_config()
+        state = StateManager()
+        try:
+            await state.init_db()
+            await health.check_database(state)
+            if not args.worker:
+                return True, f"database reachable ({state.backend})"
+            return await health.worker_health(state, config, args.max_age_minutes)
+        finally:
+            await state.close()
+
+    try:
+        ok, reason = run_async(_check())
+    except Exception as exc:
+        ok, reason = False, f"database check failed: {_one_line(exc)}"
+    print(f"{'ok' if ok else 'unhealthy'}: {reason}")
+    sys.exit(0 if ok else 1)
+
+
 def trend_lines(report) -> list[str]:
     """Plain-text trend tables (aggregates only)."""
     lines = [f"{report.mentions} triaged mention(s) from {report.window_start:%Y-%m-%d %H:%M} to "
@@ -372,6 +418,13 @@ def build_parser() -> argparse.ArgumentParser:
     sub = user_sub.add_parser("disable", help="Disable a user and end their sessions")
     sub.add_argument("email")
     sub.set_defaults(func=cmd_user_disable)
+
+    sub = subparsers.add_parser("health", help="Healthcheck: database (and worker heartbeat)")
+    sub.add_argument("--worker", action="store_true",
+                     help="Also require a recent heartbeat from `pulse run`")
+    sub.add_argument("--max-age-minutes", type=int, default=None, metavar="N",
+                     help="Heartbeat age limit (default: 2 x max(heartbeat, urgent tick) + 10)")
+    sub.set_defaults(func=cmd_health)
 
     sub = subparsers.add_parser("status", help="Show mention counts by status")
     sub.set_defaults(func=cmd_status)

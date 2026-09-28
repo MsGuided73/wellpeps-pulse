@@ -34,6 +34,7 @@ running it locally against that database, and deploying it on Coolify.
 - [x] Row-level security on for all 18 tables; the `anon` role has no access.
 - [x] Supabase security advisor: **0 warnings**.
 - [x] App code can run on Postgres (`PULSE_DATABASE_URL`) or SQLite (default).
+- [x] Docker/Coolify setup: worker + dashboard services, health checks, proxy-aware login throttle (step 6).
 
 ---
 
@@ -134,32 +135,44 @@ After that:
 
 ---
 
-## 6. Code changes needed before the first Coolify deploy
+## 6. Code changes for Coolify (done)
 
-The Docker files came from Harvey and assume a laptop. Claude will make these
-changes (tested and committed) before you deploy:
+The Docker files came from Harvey and assumed a laptop. These changes are
+made, tested and committed:
 
 | Change | Why |
 |---|---|
-| Add a **dashboard** service to `docker-compose.yml` (listening on `0.0.0.0:5555`), next to the heartbeat worker | Today the container only runs the background worker, so there's no web UI |
-| Replace the health check | It checks the SQLite file's age, which is wrong when data lives in Supabase |
-| Remove the `~/.claude` volume and use `ANTHROPIC_API_KEY` | A server has no Claude login. It needs WellPeps' API key. |
-| Read the real visitor IP from Coolify's proxy for the login throttle | Otherwise everyone appears to come from the proxy, and 5 bad logins would lock out the whole team |
-| Allow `PULSE_SECURE_COOKIES=true` as an environment variable | The dashboard refuses to open to the network without HTTPS-only cookies |
+| `docker-compose.yml` now has two services from one image: **worker** (`python -m harvey run`) and **dashboard** (`python -m harvey dashboard --host 0.0.0.0 --port 5555`, `expose: 5555`, no published ports) | The web UI runs next to the heartbeat; Coolify's proxy routes the domain to port 5555 |
+| All settings come from `environment:` entries (`${VAR}` / `${VAR:-default}`) that Coolify fills from its UI. No `env_file`, no bind mounts of `~/.claude`, `harvey.yaml`, prompts, skills or data | The image carries code, config, prompts and skills; data lives in Supabase |
+| New health checks per service: the dashboard answers `GET /healthz` (public, only `{"ok": true}` or 503 `{"ok": false}`); the worker runs `python -m harvey health --worker` | The old check looked at the SQLite file's age, which is meaningless with Supabase |
+| The heartbeat writes a liveness timestamp (`heartbeat_at`) every cycle, idle and quiet hours included. `pulse health --worker` fails if it's older than 40 minutes (2 x the 15-minute heartbeat + 10) | Coolify can see a stuck or crashed worker |
+| The Claude CLI in the image uses `ANTHROPIC_API_KEY`; a failed CLI install now fails the build | A server has no Claude login to mount |
+| The login throttle reads the real visitor IP from `X-Forwarded-For`, but only when the request comes from a trusted proxy (`PULSE_TRUSTED_PROXIES`, preset to the private Docker networks) | Otherwise everyone appears to come from the proxy, and 5 bad logins would lock out the whole team. Visitors can't fake the header to dodge the limit |
+| `PULSE_SECURE_COOKIES`, `PULSE_DASHBOARD_URL` and `PULSE_TRUSTED_PROXIES` override `harvey.yaml` | No need to edit files on the server |
+| `PULSE_REQUIRE_POSTGRES=true` (preset in the compose file) makes every command stop with a clear error when `PULSE_DATABASE_URL` is missing | Instead of silently writing SQLite inside a container, where it vanishes on the next deploy |
+| `.dockerignore` keeps `.env`, `data/`, `.venv`, `.git` and caches out of the image | No secrets or local data in the build |
+
+For a laptop, `docker-compose.local.yml` adds `./data` (SQLite allowed), your
+`~/.claude` login, and publishes `127.0.0.1:5555`:
+`docker compose -f docker-compose.yml -f docker-compose.local.yml up`, then
+open http://localhost:5555.
 
 ---
 
-## 7. Coolify setup (after step 6)
+## 7. Coolify setup
 
 ### 7a. Create the resource
 1. Coolify: **Projects**, then **+ Add**, name it `WellPeps`.
 2. Inside it: **+ New Resource**, then **Private Repository (with GitHub App)**,
    then pick `wellpeps-pulse`, branch `main`.
 3. Build pack: **Docker Compose** (it reads `docker-compose.yml`).
-4. On the **dashboard** service, set **Domains** to e.g.
+4. Coolify lists the two services. On the **dashboard** service, set
+   **Domains** to your domain **with the container port appended**, e.g.
+   `https://pulse.wellpeps.com:5555`. The `:5555` tells Traefik which
+   container port to route to; visitors still use plain
    `https://pulse.wellpeps.com`. Coolify issues the HTTPS certificate
    automatically. Point that DNS record at your Coolify server first.
-   The worker service gets **no** domain.
+5. The **worker** service gets **no** domain.
 
 ### 7b. Environment variables
 Open the resource, then the **Environment Variables** tab. Add these as
@@ -170,12 +183,17 @@ as locked/secret:
 |---|---|---|
 | `PULSE_DATABASE_URL` | Your Session pooler string from step 2 or 3, ending `?sslmode=require` | **Required.** Secret. |
 | `ANTHROPIC_API_KEY` | WellPeps' Anthropic API key (console.anthropic.com, WellPeps organization) | **Required.** Secret. |
-| `PULSE_SECURE_COOKIES` | `true` | **Required** (once step 6 lands) |
+| `PULSE_DASHBOARD_URL` | Your dashboard's https address, e.g. `https://pulse.wellpeps.com` (no `:5555`) | **Recommended.** Used for the links in Slack pages and briefs. Must start with `https://`. |
 | `PULSE_ADMIN_EMAIL` | Your email | **First deploy only**, then delete |
 | `PULSE_ADMIN_PASSWORD` | A 12+ character password | **First deploy only**, then delete. Secret. |
 | `SLACK_WEBHOOK_URL` | PepRite Slack incoming-webhook URL | When Slack is ready. Secret. |
 | `APIFY_TOKEN` | Apify API token | Phase 9, after legal sign-off. Secret. |
 | `META_ACCESS_TOKEN` | Meta Graph token for WellPeps' own IG/FB | Phase 9. Secret. |
+| `PULSE_SECURE_COOKIES` | Leave unset (the compose file defaults it to `true`) | No. Never set it to `false` on the server. |
+| `PULSE_TRUSTED_PROXIES` | Leave unset (defaults to the private Docker networks `10.0.0.0/8,172.16.0.0/12,192.168.0.0/16,127.0.0.1/32`, where Coolify's proxy lives) | No. |
+
+`PULSE_REQUIRE_POSTGRES=true` is already set inside `docker-compose.yml`;
+you don't add it.
 
 Do **not** add `PULSE_DB_PATH` or any Supabase anon/service keys. Pulse
 doesn't use them.
@@ -213,6 +231,12 @@ doesn't use them.
 | `password authentication failed` | Wrong password, or it has symbols. Reset it to letters and numbers only (step 2). |
 | Connection times out | You used "Direct connection". Use the **Session pooler** string (IPv4). |
 | `schema version ... expected 5` | The schema isn't applied to the database you're pointing at. Check the project ref in the URL: `sgzundcnvsmvqdwshcxp`. |
-| `Refusing to bind ... secure_cookies` | Set `PULSE_SECURE_COOKIES=true` and serve over HTTPS (Coolify domain). |
-| Login says "too many attempts" (429) | Wait 15 minutes. If the whole team is locked out, the proxy-IP change in step 6 isn't deployed. |
+| `Refusing to bind ... secure_cookies` | `PULSE_SECURE_COOKIES` was set to `false` in Coolify. Delete it (the default is `true`) and serve over HTTPS (Coolify domain). |
+| `Refusing to bind ...: no active admin user exists` | Set `PULSE_ADMIN_EMAIL` and `PULSE_ADMIN_PASSWORD` for the first deploy (7b), or run `pulse user add` against the database from your computer (step 4). |
+| Login says "too many attempts" (429) | Wait 15 minutes. If the whole team is locked out, check that `PULSE_TRUSTED_PROXIES` is unset or still includes the network Coolify's proxy uses (the dashboard logs show nothing about it; the default covers all private Docker ranges). |
+| `PULSE_REQUIRE_POSTGRES is on but PULSE_DATABASE_URL is not set` | Add `PULSE_DATABASE_URL` in Coolify (7b), as a **runtime** variable, and redeploy. Both services need it. |
+| Dashboard unhealthy / `https://.../healthz` returns 503 `{"ok": false}` | The dashboard can't reach the database or the schema is too old. Its logs say `healthz: database check failed (...)`. Check `PULSE_DATABASE_URL` (Session pooler, `?sslmode=require`, password) and the schema version (row above). Coolify's proxy stops routing to an unhealthy container, so the site shows "no available server". |
+| Worker unhealthy | Open a terminal on the worker in Coolify and run `python -m harvey health --worker`. `no heartbeat recorded yet` or `heartbeat is stale` means `pulse run` is stuck or crashing: read the worker logs. A database error means the same fixes as the row above. |
+| `PULSE_DASHBOARD_URL: ... must start with https://` | Use the full `https://` address of the dashboard, without `:5555`. |
+| `PULSE_SECURE_COOKIES must be true/false` or `PULSE_TRUSTED_PROXIES: ... is not an IP address` | Fix or delete the variable in Coolify. |
 | `PULSE_DATABASE_URL must be a postgres URL` | The value must start with `postgresql://` or `postgres://`. |

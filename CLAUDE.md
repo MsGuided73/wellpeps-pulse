@@ -98,9 +98,17 @@ Also:
 
 - Tests: `.venv/Scripts/python -m pytest -q`. Work test-first.
 - Imports smoke check: `.venv/Scripts/python -c "import harvey.main, harvey.dashboard, harvey.cli, harvey.state"`
-- CLI: `pulse run | dashboard [--host H] | status | ingest | usage |
-  escalations | ack | user add|list|disable | brief | trends` (`harvey` is
-  an alias).
+- CLI: `pulse run | dashboard [--host H] | status | health [--worker] |
+  ingest | usage | escalations | ack | user add|list|disable | brief |
+  trends` (`harvey` is an alias).
+- Deploy: `docker-compose.yml` (Coolify: `worker` + `dashboard`, env only,
+  no bind mounts; `docker-compose.local.yml` is the laptop override). Env
+  `PULSE_SECURE_COOKIES` / `PULSE_DASHBOARD_URL` / `PULSE_TRUSTED_PROXIES`
+  override harvey.yaml in `load_config`; `PULSE_REQUIRE_POSTGRES=true` makes
+  `StateManager()`/`from_env` refuse SQLite. `GET /healthz` is public and
+  returns only `{"ok": ...}`. Use `dashboard.request_ip()` (harvey/netutil.py),
+  never `request.client.host`, for anything security-related. The heartbeat
+  stamps `settings.heartbeat_at` every cycle (`pulse health --worker`).
 - The dashboard binds to 127.0.0.1 by default; `--host` anything else is
   refused until an active admin exists. Every /api route except /api/login
   needs a session; every POST needs X-CSRF-Token. Approval needs a non-red

@@ -1,0 +1,39 @@
+# Laptop override for docker-compose.yml (never used by Coolify):
+#   docker compose -f docker-compose.yml -f docker-compose.local.yml up
+#
+# - SQLite in ./data is allowed (PULSE_REQUIRE_POSTGRES=false); set
+#   PULSE_DATABASE_URL in .env to use Supabase instead.
+# - ~/.claude is mounted so `claude -p` runs on your subscription login
+#   (not read-only: the CLI refreshes OAuth tokens in place; the container
+#   user is uid 1000).
+# - The dashboard is published on 127.0.0.1:5555 only. It binds 0.0.0.0
+#   inside the container, so it still needs an admin (PULSE_ADMIN_EMAIL /
+#   PULSE_ADMIN_PASSWORD in .env) and keeps Secure cookies on: open it at
+#   http://localhost:5555 (browsers accept Secure cookies on localhost).
+#
+# Compose reads .env for the variable references below; env_file also passes the
+# rest of .env into the containers.
+
+services:
+  worker:
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      - PULSE_REQUIRE_POSTGRES=false
+    volumes:
+      - ./data:/app/data
+      - ~/.claude:/home/harvey/.claude
+
+  dashboard:
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      - PULSE_REQUIRE_POSTGRES=false
+      - PULSE_DASHBOARD_URL=${PULSE_DASHBOARD_URL:-http://localhost:5555}
+    ports:
+      - "127.0.0.1:5555:5555"
+    volumes:
+      - ./data:/app/data
+      - ~/.claude:/home/harvey/.claude

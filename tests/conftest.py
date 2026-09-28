@@ -16,6 +16,17 @@ def pytest_configure(config):
     )
 
 
+# Deployment overrides a developer's .env (or shell) might carry; "" = unset.
+_PINNED_BLANK = (
+    "PULSE_DATABASE_URL",
+    "PULSE_REQUIRE_POSTGRES",
+    "PULSE_SECURE_COOKIES",
+    "PULSE_DASHBOARD_URL",
+    "PULSE_TRUSTED_PROXIES",
+)
+
+
 @pytest.fixture(autouse=True)
 def _sqlite_by_default(monkeypatch):
-    monkeypatch.setenv("PULSE_DATABASE_URL", "")
+    for name in _PINNED_BLANK:
+        monkeypatch.setenv(name, "")

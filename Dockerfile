@@ -21,23 +21,27 @@ RUN useradd --create-home --uid 1000 harvey \
     && mkdir -p /app/data \
     && chown -R harvey:harvey /app
 
-# Copy project (config/prompts are typically bind-mounted over these at runtime)
+# The image carries code, config, prompts and skills; nothing is bind-mounted
+# in production (data lives in Supabase via PULSE_DATABASE_URL).
 COPY --chown=harvey:harvey harvey/ harvey/
 COPY --chown=harvey:harvey prompts/ prompts/
 COPY --chown=harvey:harvey skills/ skills/
 COPY --chown=harvey:harvey config/ config/
+COPY --chown=harvey:harvey db/ db/
 COPY --chown=harvey:harvey harvey.yaml .
 
 USER harvey
-ENV PATH="/home/harvey/.local/bin:${PATH}"
+ENV PATH="/home/harvey/.local/bin:${PATH}" \
+    DISABLE_AUTOUPDATER=1
 
 # Claude Code CLI, installed as the runtime user so ~/.local/bin is correct.
-# `|| true` keeps the build working offline; the CLI is required at runtime.
-RUN curl -fsSL https://claude.ai/install.sh | sh || true
+# Every Claude call shells out to it, so a failed install fails the build
+# (pipefail catches a failed download too). In the container it
+# authenticates with ANTHROPIC_API_KEY; there is no OAuth login to mount.
+SHELL ["/bin/bash", "-o", "pipefail", "-c"]
+RUN curl -fsSL https://claude.ai/install.sh | bash \
+    && claude --version
 
-# Healthy = the heartbeat loop has touched the database recently
-# (2h window tolerates long heartbeat intervals and quiet-hour idling).
-HEALTHCHECK --interval=5m --timeout=10s --start-period=3m --retries=3 \
-    CMD python -c "import os,sys,time; p='/app/data/pulse.db'; sys.exit(0 if os.path.exists(p) and time.time()-os.path.getmtime(p) < 7200 else 1)"
-
+# Healthchecks are per service in docker-compose.yml (dashboard: GET /healthz,
+# worker: `python -m harvey health --worker`).
 CMD ["python", "-m", "harvey", "run"]

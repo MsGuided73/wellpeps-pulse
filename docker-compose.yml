@@ -1,18 +1,74 @@
+# WellPeps Pulse on Coolify (Docker Compose build pack, Traefik + HTTPS).
+#
+# Two services from one image:
+#   worker     the heartbeat loop (`pulse run`); no domain.
+#   dashboard  the web UI on container port 5555; in Coolify give it the
+#              domain as https://pulse.example.com:5555 (Traefik routes to it).
+#
+# Configuration comes only from environment variables (Coolify injects the
+# ones set in its UI); see .env.example and docs/DEPLOY-SUPABASE-COOLIFY.md.
+# Data lives in Supabase (PULSE_DATABASE_URL); nothing is bind-mounted here.
+# On a laptop, add the local override:
+#   docker compose -f docker-compose.yml -f docker-compose.local.yml up
+
 services:
-  pulse:
+  worker:
     build: .
-    env_file: .env
-    volumes:
-      # Persist the database (data/pulse.db) across restarts
-      - ./data:/app/data
-      # Mount config for easy editing without rebuild
-      - ./harvey.yaml:/app/harvey.yaml:ro
-      - ./prompts:/app/prompts:ro
-      - ./skills:/app/skills:ro
-      # Mount Claude auth (required for subscription usage).
-      # Not read-only: the CLI refreshes OAuth tokens in place.
-      # The container runs as non-root user "harvey" (uid 1000).
-      - ~/.claude:/home/harvey/.claude
+    command: ["python", "-m", "harvey", "run"]
+    environment:
+      - PULSE_DATABASE_URL=${PULSE_DATABASE_URL}
+      - PULSE_REQUIRE_POSTGRES=true
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - SLACK_WEBHOOK_URL=${SLACK_WEBHOOK_URL:-}
+      - APIFY_TOKEN=${APIFY_TOKEN:-}
+      - META_ACCESS_TOKEN=${META_ACCESS_TOKEN:-}
+      - PULSE_DASHBOARD_URL=${PULSE_DASHBOARD_URL:-}
+    healthcheck:
+      # Unhealthy when the database is unreachable or the heartbeat stamp is
+      # older than 2 x max(heartbeat, urgent tick) + 10 min (40 min by default).
+      # The stamp is written at the start of every cycle, so a fresh start
+      # turns healthy within seconds.
+      test: ["CMD", "python", "-m", "harvey", "health", "--worker"]
+      interval: 5m
+      timeout: 30s
+      retries: 3
+      start_period: 5m
+    restart: unless-stopped
+    init: true
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  dashboard:
+    build: .
+    command: ["python", "-m", "harvey", "dashboard", "--host", "0.0.0.0", "--port", "5555"]
+    expose:
+      - "5555"
+    environment:
+      - PULSE_DATABASE_URL=${PULSE_DATABASE_URL}
+      - PULSE_REQUIRE_POSTGRES=true
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - SLACK_WEBHOOK_URL=${SLACK_WEBHOOK_URL:-}
+      - APIFY_TOKEN=${APIFY_TOKEN:-}
+      - META_ACCESS_TOKEN=${META_ACCESS_TOKEN:-}
+      - PULSE_DASHBOARD_URL=${PULSE_DASHBOARD_URL:-}
+      # First admin, created only while the users table is empty. Delete both
+      # from Coolify after the first sign-in.
+      - PULSE_ADMIN_EMAIL=${PULSE_ADMIN_EMAIL:-}
+      - PULSE_ADMIN_PASSWORD=${PULSE_ADMIN_PASSWORD:-}
+      # Coolify serves the domain over HTTPS, so the session cookie is Secure.
+      - PULSE_SECURE_COOKIES=${PULSE_SECURE_COOKIES:-true}
+      # Traefik reaches the container over a private Docker network; only those
+      # peers may set X-Forwarded-For (the login throttle's client IP).
+      - PULSE_TRUSTED_PROXIES=${PULSE_TRUSTED_PROXIES:-10.0.0.0/8,172.16.0.0/12,192.168.0.0/16,127.0.0.1/32}
+    healthcheck:
+      test: ["CMD", "python", "-c", "import sys, urllib.request; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:5555/healthz', timeout=5).status == 200 else 1)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
     restart: unless-stopped
     init: true
     logging:

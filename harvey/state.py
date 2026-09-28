@@ -471,11 +471,14 @@ class StateManager:
     - ``StateManager(database_url=url)``: Postgres.
     - ``StateManager()``: Postgres if PULSE_DATABASE_URL is set, else SQLite
       at DB_PATH. ``from_env(path)`` is the same with a SQLite path override.
+      Both refuse the SQLite fallback when PULSE_REQUIRE_POSTGRES is on.
     """
 
     def __init__(self, db_path: str | None = None, database_url: str | None = None):
         if database_url is None and db_path is None:
             database_url = dbmod.env_database_url() or None
+            if database_url is None:
+                dbmod.check_sqlite_allowed()
         if database_url is not None and not dbmod.is_postgres_url(database_url):
             raise ValueError("database_url must be a postgres:// or postgresql:// URL")
         self.database_url = database_url.strip() if database_url else None
@@ -488,6 +491,7 @@ class StateManager:
         url = dbmod.env_database_url()
         if url:
             return cls(database_url=url)
+        dbmod.check_sqlite_allowed()
         return cls(str(db_path) if db_path else None)
 
     @property

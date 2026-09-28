@@ -9,7 +9,8 @@
 - CSRF: double-submit. ``/api/me`` hands the session's CSRF token to the
   page; every state-changing request must echo it in ``X-CSRF-Token``.
 - Login throttling: in-memory, per email and per client IP, 5 failures in
-  15 minutes -> 429. Process-local by design (one dashboard process).
+  15 minutes -> 429. Process-local by design (one dashboard process). Behind
+  a proxy the client IP comes from harvey/netutil.py (trusted proxies only).
 - Roles: viewer < reviewer; clinical and admin see ``PERMISSIONS``.
 """
 
@@ -338,7 +339,8 @@ def bind_error(host: str, active_admins: int, secure_cookies: bool = False) -> s
         return (
             f"Refusing to bind to {host} without dashboard.secure_cookies: true: the "
             "session cookie would travel without TLS. Put the dashboard behind HTTPS "
-            "and set dashboard.secure_cookies: true in harvey.yaml."
+            "and set dashboard.secure_cookies: true in harvey.yaml (or env "
+            "PULSE_SECURE_COOKIES=true)."
         )
     if active_admins > 0:
         return None

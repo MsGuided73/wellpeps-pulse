@@ -32,6 +32,7 @@ from harvey.config import ConfigError, PulseConfig, load_config
 from harvey.db.postgres import run as run_async
 from harvey.drafting import draft_batch
 from harvey.escalation import SweepReport, escalate, sweep
+from harvey.health import record_heartbeat
 from harvey.notify import SlackNotifier
 from harvey.state import StateManager
 from harvey.trends import bank_language
@@ -183,6 +184,14 @@ def _tasks_for(
     return []
 
 
+async def stamp_liveness(state) -> None:
+    """Record ``settings.heartbeat_at`` for `pulse health --worker`. Never raises."""
+    try:
+        await record_heartbeat(state)
+    except Exception as e:
+        logger.warning(f"Failed to record heartbeat timestamp: {e}")
+
+
 async def run_language_bank(state) -> int:
     """Bank new triage phrases (deterministic, no Claude). Logs and swallows errors."""
     try:
@@ -238,6 +247,10 @@ async def heartbeat(stop_event: asyncio.Event | None = None):
 
     while not stop_event.is_set():
         try:
+            # Liveness stamp for the container healthcheck: every cycle,
+            # idle and quiet-hour cycles included.
+            await stamp_liveness(state)
+
             # 0. Escalation sweep: every cycle, regardless of quiet hours,
             # budget, or what gets decided below.
             await run_sweep(state, notifier, config)
@@ -288,6 +301,7 @@ async def heartbeat(stop_event: asyncio.Event | None = None):
             # 5. Sleep until next heartbeat (shorter while escalations are open)
             open_now = (await state.get_state_summary())["open_escalations"]
             pause = sleep_seconds(config, open_now)
+            await stamp_liveness(state)  # again, so a long cycle doesn't look dead
             logger.info(f"Cycle complete. Sleeping for {pause // 60} minute(s).")
             if await _interruptible_sleep(pause, stop_event):
                 break

@@ -9,6 +9,9 @@ Security (Phase 7, see harvey/auth.py):
   admin exists; serve it over HTTPS with ``dashboard.secure_cookies: true``.
 - Security headers on every response: a strict CSP (no inline script or
   style), nosniff, DENY framing, no referrer.
+- ``GET /healthz`` is public and says only {"ok": true|false} (200/503).
+- The login throttle keys on the real client IP: X-Forwarded-For is
+  believed only from ``dashboard.trusted_proxies`` (harvey/netutil.py).
 
 Nothing here posts to any platform. "Copied" and "mark posted" only record
 what a human did by hand.
@@ -28,10 +31,11 @@ from fastapi import Depends, FastAPI, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse, RedirectResponse, Response
 from pydantic import BaseModel, Field
 
-from harvey import auth, briefs, pulse_store, review, trends
+from harvey import auth, briefs, health, pulse_store, review, trends
 from harvey.config import ConfigFileNotFoundError, PulseConfig, load_config, load_env
 from harvey.escalation import ack as ack_escalation
 from harvey.models import MentionStatus
+from harvey.netutil import client_ip, networks_from_config
 from harvey.paths import DB_PATH, PROJECT_ROOT
 from harvey.state import StateManager, usage_windows
 
@@ -46,6 +50,7 @@ MENTION_PREVIEW_CHARS = review.PREVIEW_CHARS
 SESSION_COOKIE = "pulse_session"
 CSRF_HEADER = "X-CSRF-Token"
 PUBLIC_API = frozenset({"/api/login"})
+HEALTH_TIMEOUT_SECONDS = 5.0
 SAFE_METHODS = frozenset({"GET", "HEAD", "OPTIONS"})
 SECURITY_HEADERS = {
     "Content-Security-Policy": (
@@ -175,6 +180,39 @@ async def security_middleware(request: Request, call_next):
     return response
 
 
+def request_ip(request: Request) -> str:
+    """The client's IP for security decisions (login throttle).
+
+    X-Forwarded-For is believed only from ``dashboard.trusted_proxies``
+    (harvey/netutil.py); uvicorn's own proxy-header rewriting is off.
+    """
+    peer = request.client.host if request.client else ""
+    xff = ",".join(request.headers.getlist("x-forwarded-for"))
+    return client_ip(peer, xff, networks_from_config(_config().dashboard.trusted_proxies))
+
+
+# ── Health (public, for the container healthcheck) ──
+
+
+@app.get("/healthz")
+async def healthz():
+    """{"ok": true} when the database answers; 503 {"ok": false} otherwise.
+
+    Unauthenticated, so it says nothing else: no error text, no counts.
+    """
+    async def _probe():
+        await health.check_database(await get_state())
+
+    try:
+        await asyncio.wait_for(_probe(), timeout=HEALTH_TIMEOUT_SECONDS)
+        ok = True
+    except Exception as exc:
+        logger.warning("healthz: database check failed (%s)", type(exc).__name__)
+        ok = False
+    return JSONResponse({"ok": ok}, status_code=200 if ok else 503,
+                        headers={"Cache-Control": "no-store"})
+
+
 # ── Auth routes ──
 
 
@@ -185,7 +223,7 @@ class LoginBody(BaseModel):
 
 @app.post("/api/login")
 async def login(body: LoginBody, request: Request):
-    ip = request.client.host if request.client else "unknown"
+    ip = request_ip(request)
     keys = (f"email:{body.email.strip().lower()}", f"ip:{ip}")
     if any(LOGIN_LIMITER.is_blocked(k) for k in keys):
         return _deny(429, "too many failed sign-in attempts; try again in 15 minutes")
@@ -711,7 +749,9 @@ async def _prepare(state: StateManager) -> tuple[int, str]:
 def _serve(host: str, port: int) -> None:
     import uvicorn
 
-    uvicorn.run(app, host=host, port=port, log_level="warning")
+    # proxy_headers off: request.client stays the direct peer, and request_ip()
+    # alone decides whether X-Forwarded-For is believed.
+    uvicorn.run(app, host=host, port=port, log_level="warning", proxy_headers=False)
 
 
 def start_dashboard(port: int = 5555, host: str = LOOPBACK_HOST):
