@@ -17,7 +17,7 @@ running it locally against that database, and deploying it on Coolify.
 | **Project** | One hosted Postgres database plus Supabase's extras. Pulse's project is **`wellpeps-pulse`** (ref `sgzundcnvsmvqdwshcxp`, region us-east-1). |
 | **Postgres** | The database engine. Pulse uses SQLite on your laptop for tests and Postgres on Supabase for real use. |
 | **Schema** | A folder of tables inside the database. Pulse's tables live in the **`pulse`** schema, not the default `public` one. |
-| **Migration** | A SQL file that creates or changes tables. Pulse's are the numbered files in `db/postgres/`: `0001_pulse_schema.sql` is **already applied** (see step 1); apply newer ones (e.g. `0002_password_management.sql`) the same way, in order. |
+| **Migration** | A SQL file that creates or changes tables. Pulse's are the numbered files in `db/postgres/`: `0001_pulse_schema.sql` and `0002_password_management.sql` are **already applied** (see step 1); apply any newer ones the same way, in order. |
 | **Row-Level Security (RLS)** | Per-row access rules. On for every Pulse table, with no access for the public API roles. |
 | **anon / publishable key** | A browser-safe key for Supabase's public data API. **Pulse doesn't use it.** The `pulse` schema isn't exposed to that API. |
 | **service_role / secret key** | A key that bypasses security on the data API. **Pulse doesn't use it either. Don't put it anywhere.** |
@@ -30,7 +30,7 @@ running it locally against that database, and deploying it on Coolify.
 ## 1. Already done for you
 
 - [x] Created the Supabase project `wellpeps-pulse` (us-east-1, $10/month).
-- [x] Applied the schema: 18 tables in `pulse`, schema version 5.
+- [x] Applied the schema (`0001` + `0002`): 18 tables in `pulse`, schema version 6.
 - [x] Row-level security on for all 18 tables; the `anon` role has no access.
 - [x] Supabase security advisor: **0 warnings**.
 - [x] App code can run on Postgres (`PULSE_DATABASE_URL`) or SQLite (default).
@@ -230,7 +230,7 @@ doesn't use them.
 |---|---|
 | `password authentication failed` | Wrong password, or it has symbols. Reset it to letters and numbers only (step 2). |
 | Connection times out | You used "Direct connection". Use the **Session pooler** string (IPv4). |
-| `schema version ... expected 5` | The schema isn't applied to the database you're pointing at. Check the project ref in the URL: `sgzundcnvsmvqdwshcxp`. |
+| `schema version ... expected 6` | The schema isn't applied to the database you're pointing at. Check the project ref in the URL: `sgzundcnvsmvqdwshcxp`. |
 | `Refusing to bind ... secure_cookies` | `PULSE_SECURE_COOKIES` was set to `false` in Coolify. Delete it (the default is `true`) and serve over HTTPS (Coolify domain). |
 | `Refusing to bind ...: no active admin user exists` | Set `PULSE_ADMIN_EMAIL` and `PULSE_ADMIN_PASSWORD` for the first deploy (7b), or run `pulse user add` against the database from your computer (step 4). |
 | Login says "too many attempts" (429) | Wait 15 minutes. If the whole team is locked out, check that `PULSE_TRUSTED_PROXIES` is unset or still includes the network Coolify's proxy uses (the dashboard logs show nothing about it; the default covers all private Docker ranges). |
