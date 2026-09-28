@@ -79,7 +79,13 @@ been asked to do.
    topics are never auto-published under any flag.
 4. **The audit log is append-only.** Don't add code paths that UPDATE or
    DELETE `audit_log` rows, and don't weaken or drop the triggers that
-   block it. Corrections go in as new events.
+   block it (SQLite and Postgres). Corrections go in as new events.
+5. **Schema changes go in both backends.** Append the SQLite migration to
+   `MIGRATIONS` in `harvey/state.py` *and* add a new numbered file in
+   `db/postgres/` (`0002_...sql`, idempotent, RLS on, bumps
+   `pulse.schema_version` to `len(MIGRATIONS)`). Never edit a released file
+   on either side. `tests/test_postgres_schema.py` enforces table, column and
+   index parity.
 
 Also:
 
@@ -101,8 +107,15 @@ Also:
   filter result and publishable claims (`review.require_publishable_claims`).
   Nothing posts automatically: "copied" / "mark posted" only record what a
   human did by hand.
-- The DB is `data/pulse.db`, and `PULSE_DB_PATH` overrides it. Schema
-  changes are appended to `MIGRATIONS` in `harvey/state.py`. Never edit a
-  released migration.
+- The DB is `data/pulse.db`, and `PULSE_DB_PATH` overrides it. Setting
+  `PULSE_DATABASE_URL` (env or `.env`) switches to Postgres, the Supabase
+  `pulse` schema. See `db/postgres/README.md`. Tests always run on SQLite
+  (`tests/conftest.py` blanks the URL). Postgres tests are
+  `-m postgres` with a disposable `PULSE_TEST_DATABASE_URL`.
+- SQL is written once in portable SQLite form: `?` params, `RETURNING id`
+  (no `lastrowid`), `TRUE`/`FALSE` and Python bools for flags,
+  `ON CONFLICT ... DO UPDATE` with table-qualified columns, and time cutoffs
+  from `harvey.db.dialect.sql_utc` (no `datetime('now')`). `harvey/db/dialect.py`
+  translates it for Postgres and rejects SQLite-only SQL on both backends.
 - Mention status changes go through `StateManager.set_mention_status`, which
   enforces the allowed transitions.

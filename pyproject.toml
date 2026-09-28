@@ -30,6 +30,8 @@ dependencies = [
     "uvicorn>=0.34,<1",
     # Dashboard password hashing (argon2id), Phase 7.
     "argon2-cffi>=23.1,<26",
+    # Postgres (Supabase) backend when PULSE_DATABASE_URL is set.
+    "asyncpg>=0.29,<1",
 ]
 
 [project.optional-dependencies]

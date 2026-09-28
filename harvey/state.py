@@ -1,6 +1,13 @@
-"""SQLite state manager. All of WellPeps Pulse's memory lives here.
+"""State manager. All of WellPeps Pulse's memory lives here.
 
-Concurrency: the DB runs in WAL mode (set persistently at init) so the
+Backends: SQLite by default (``data/pulse.db`` / ``PULSE_DB_PATH``; the test
+suite), or Postgres (the Supabase ``pulse`` schema) when ``PULSE_DATABASE_URL``
+is set and no explicit path is given. SQL is written once in portable,
+SQLite-flavoured form and translated by ``harvey.db.dialect``; see
+db/postgres/README.md. On Postgres the schema comes from db/postgres/*.sql,
+not from MIGRATIONS, and init_db only verifies ``pulse.schema_version``.
+
+Concurrency (SQLite): the DB runs in WAL mode (set persistently at init) so the
 dashboard can read while the heartbeat writes. Every connection gets a busy
 timeout so concurrent writers wait instead of raising "database is locked".
 
@@ -9,18 +16,22 @@ list tracked with SQLite's ``PRAGMA user_version``. Pulse starts a fresh
 database (data/pulse.db), so the list restarts at v1.
 
 The audit_log table is append-only: SQLite triggers abort any UPDATE or
-DELETE, so the record of what was drafted, reviewed, approved and posted
+DELETE (Postgres triggers also block TRUNCATE), so the record of what was drafted, reviewed, approved and posted
 cannot be rewritten after the fact.
 """
 
 import json
 import uuid
 from contextlib import asynccontextmanager
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
 import aiosqlite
 
+from harvey import db as dbmod
+from harvey.db import postgres
+from harvey.db.connection import SqliteConnection
+from harvey.db.dialect import sql_utc
 from harvey.models import (
     AuditEvent,
     Draft,
@@ -39,7 +50,7 @@ BUSY_TIMEOUT_SECONDS = 30.0
 # (mirrors harvey.agents.triager.SEVERE_CATEGORIES; tested).
 NO_DRAFT_CATEGORIES = ("adverse_event", "legal_regulatory", "privacy", "billing_fraud")
 _DRAFTABLE_WHERE = (
-    "m.status = 'triaged' AND t.relevant = 1 AND t.reply_appropriate = 1 "
+    "m.status = 'triaged' AND t.relevant = TRUE AND t.reply_appropriate = TRUE "
     f"AND t.category NOT IN ({', '.join(repr(c) for c in NO_DRAFT_CATEGORIES)})"
 )
 
@@ -83,6 +94,26 @@ def _utcnow() -> datetime:
 
 def _ts(value: datetime | None) -> str | None:
     return value.isoformat() if value else None
+
+
+def _ago(**delta) -> str:
+    """A naive-UTC cutoff, formatted like SQLite's datetime('now', '-N unit')."""
+    return sql_utc(_utcnow() - timedelta(**delta))
+
+
+def _today_bounds() -> tuple[str, str]:
+    """[start, end) of the current UTC day (what date('now') used to mean)."""
+    start = _utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+    return sql_utc(start), sql_utc(start + timedelta(days=1))
+
+
+def usage_windows() -> list[tuple[str, str, tuple]]:
+    """(label, WHERE clause, params) for the today / 7-day / 30-day usage rollups (UTC)."""
+    return [
+        ("today", "created_at >= ? AND created_at < ?", _today_bounds()),
+        ("week", "created_at >= ?", (_ago(days=7),)),
+        ("month", "created_at >= ?", (_ago(days=30),)),
+    ]
 
 
 def _loads(raw, default):
@@ -434,12 +465,39 @@ MIGRATIONS: list[str] = [
 
 
 class StateManager:
-    def __init__(self, db_path: str | None = None):
-        self.db_path = db_path or str(DB_PATH)
+    """Pulse's state on SQLite (default) or Postgres.
+
+    - ``StateManager(path)``: SQLite at ``path``, always (tests rely on this).
+    - ``StateManager(database_url=url)``: Postgres.
+    - ``StateManager()``: Postgres if PULSE_DATABASE_URL is set, else SQLite
+      at DB_PATH. ``from_env(path)`` is the same with a SQLite path override.
+    """
+
+    def __init__(self, db_path: str | None = None, database_url: str | None = None):
+        if database_url is None and db_path is None:
+            database_url = dbmod.env_database_url() or None
+        if database_url is not None and not dbmod.is_postgres_url(database_url):
+            raise ValueError("database_url must be a postgres:// or postgresql:// URL")
+        self.database_url = database_url.strip() if database_url else None
+        self.backend = "postgres" if self.database_url else "sqlite"
+        self.db_path = None if self.database_url else (db_path or str(DB_PATH))
+
+    @classmethod
+    def from_env(cls, db_path=None) -> "StateManager":
+        """Postgres when PULSE_DATABASE_URL is set, else SQLite at ``db_path``."""
+        url = dbmod.env_database_url()
+        if url:
+            return cls(database_url=url)
+        return cls(str(db_path) if db_path else None)
+
+    @property
+    def location(self) -> str:
+        """Where the data lives, safe to log (no password)."""
+        return dbmod.redact_url(self.database_url) if self.database_url else str(self.db_path)
 
     @asynccontextmanager
-    async def _connect(self):
-        """Open a connection with sane concurrency settings.
+    async def _sqlite_raw(self):
+        """A raw aiosqlite connection with sane concurrency settings.
 
         `timeout` maps to SQLite's busy handler, so writers wait for locks
         (e.g. while the dashboard holds a read) instead of erroring.
@@ -448,18 +506,41 @@ class StateManager:
         db = await aiosqlite.connect(self.db_path, timeout=BUSY_TIMEOUT_SECONDS)
         try:
             await db.execute("PRAGMA foreign_keys=ON")
+            db.row_factory = aiosqlite.Row
             yield db
         finally:
             await db.close()
+
+    @asynccontextmanager
+    async def _connect(self):
+        """A backend-neutral connection (see harvey.db.connection)."""
+        if self.database_url:
+            async with postgres.connect(self.database_url) as db:
+                yield db
+        else:
+            async with self._sqlite_raw() as raw:
+                yield SqliteConnection(raw)
 
     def connect(self):
         """Public connection context for sibling modules (auth, review)."""
         return self._connect()
 
+    async def close(self) -> None:
+        """Release pooled Postgres connections (no-op on SQLite)."""
+        if self.database_url:
+            await postgres.close_pool(self.database_url)
+
     async def init_db(self):
-        """Create/upgrade the schema. Safe to call on every startup."""
+        """Create/upgrade the schema. Safe to call on every startup.
+
+        Postgres: never migrates; fails with a pointer to db/postgres/README.md
+        unless pulse.schema_version >= len(MIGRATIONS).
+        """
+        if self.database_url:
+            await postgres.verify_schema(self.database_url, len(MIGRATIONS), self.location)
+            return
         Path(self.db_path).parent.mkdir(parents=True, exist_ok=True)
-        async with self._connect() as db:
+        async with self._sqlite_raw() as db:
             # WAL is persistent in the DB file: readers (dashboard) never
             # block the writer (heartbeat) and vice versa.
             await db.execute("PRAGMA journal_mode=WAL")
@@ -510,16 +591,14 @@ class StateManager:
         async with self._connect() as db:
             cursor = await db.execute(
                 "UPDATE runs SET status = 'stale', ended_at = CURRENT_TIMESTAMP "
-                "WHERE status = 'running' "
-                "AND started_at < datetime('now', ?)",
-                (f"-{int(older_than_hours)} hours",),
+                "WHERE status = 'running' AND started_at < ?",
+                (_ago(hours=int(older_than_hours)),),
             )
             await db.commit()
             return cursor.rowcount
 
     async def get_runs(self, limit: int = 25) -> list[dict]:
         async with self._connect() as db:
-            db.row_factory = aiosqlite.Row
             async with db.execute(
                 "SELECT * FROM runs ORDER BY started_at DESC LIMIT ?", (int(limit),)
             ) as cursor:
@@ -578,16 +657,15 @@ class StateManager:
         async with self._connect() as db:
             cursor = await db.execute(
                 "INSERT INTO sources (collector, name, config_json, owned) "
-                "VALUES (?, ?, ?, ?)",
-                (collector, name or collector, json.dumps(config or {}),
-                 1 if owned else 0),
+                "VALUES (?, ?, ?, ?) RETURNING id",
+                (collector, name or collector, json.dumps(config or {}), bool(owned)),
             )
+            (source_id,) = await cursor.fetchone()
             await db.commit()
-            return cursor.lastrowid
+            return source_id
 
     async def get_source_by_collector(self, collector: str) -> dict | None:
         async with self._connect() as db:
-            db.row_factory = aiosqlite.Row
             async with db.execute(
                 "SELECT * FROM sources WHERE collector = ? ORDER BY id LIMIT 1",
                 (collector,),
@@ -597,7 +675,6 @@ class StateManager:
 
     async def list_sources(self) -> list[dict]:
         async with self._connect() as db:
-            db.row_factory = aiosqlite.Row
             async with db.execute("SELECT * FROM sources ORDER BY id") as cursor:
                 return [dict(r) for r in await cursor.fetchall()]
 
@@ -619,7 +696,7 @@ class StateManager:
     # ── Mentions ──
 
     @staticmethod
-    def _mention_from_row(row: aiosqlite.Row) -> Mention:
+    def _mention_from_row(row) -> Mention:
         d = dict(row)
         d["engagement"] = _loads(d.pop("engagement_json", None), {})
         d["owned_channel"] = bool(d.get("owned_channel"))
@@ -641,20 +718,22 @@ class StateManager:
                     author_handle, parent_external_id, text, title, lang,
                     posted_at, collected_at, engagement_json, owned_channel,
                     status, run_id)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                   RETURNING id""",
                 (
                     mention.source_id, platform, mention.external_id,
                     mention.url, url_norm, mention.author_handle,
                     mention.parent_external_id, mention.text, mention.title,
                     mention.lang, _ts(mention.posted_at),
                     _ts(mention.collected_at), json.dumps(mention.engagement),
-                    1 if mention.owned_channel else 0, mention.status.value,
+                    bool(mention.owned_channel), mention.status.value,
                     mention.run_id,
                 ),
             )
+            inserted = await cursor.fetchone()
             await db.commit()
-            if cursor.rowcount:
-                return cursor.lastrowid, True
+            if inserted is not None:
+                return inserted[0], True
 
             async with db.execute(
                 """SELECT id FROM mentions
@@ -670,7 +749,6 @@ class StateManager:
 
     async def get_mention(self, mention_id: int) -> Mention | None:
         async with self._connect() as db:
-            db.row_factory = aiosqlite.Row
             async with db.execute(
                 "SELECT * FROM mentions WHERE id = ?", (int(mention_id),)
             ) as cursor:
@@ -700,7 +778,6 @@ class StateManager:
         sql += f" ORDER BY collected_at {order}, id {order} LIMIT ?"
         params.append(max(int(limit), 0))
         async with self._connect() as db:
-            db.row_factory = aiosqlite.Row
             async with db.execute(sql, tuple(params)) as cursor:
                 rows = await cursor.fetchall()
         return [self._mention_from_row(r) for r in rows]
@@ -708,7 +785,6 @@ class StateManager:
     async def list_draftable_mentions(self, limit: int = 10) -> list[Mention]:
         """Triaged, reply-appropriate, non-severe mentions, oldest first."""
         async with self._connect() as db:
-            db.row_factory = aiosqlite.Row
             async with db.execute(
                 f"SELECT m.* FROM mentions m JOIN triage t ON t.mention_id = m.id "
                 f"WHERE {_DRAFTABLE_WHERE} "
@@ -757,22 +833,31 @@ class StateManager:
 
     # ── Triage ──
 
+    _TRIAGE_COLUMNS = (
+        "relevant", "subject_type", "subject", "competitor", "product", "drug",
+        "category", "sentiment", "sentiment_score", "urgency", "urgency_reason",
+        "reply_appropriate", "phrases_json", "model", "created_at",
+    )
+
     async def save_triage(self, triage: Triage):
-        """Store (or replace) the triage result for a mention."""
+        """Store (or replace) the triage result for a mention.
+
+        Every column is written, so the upsert leaves the same row the old
+        INSERT OR REPLACE did.
+        """
+        updates = ", ".join(f"{c} = excluded.{c}" for c in self._TRIAGE_COLUMNS)
         async with self._connect() as db:
             await db.execute(
-                """INSERT OR REPLACE INTO triage
-                   (mention_id, relevant, subject_type, subject, competitor,
-                    product, drug, category, sentiment, sentiment_score, urgency,
-                    urgency_reason, reply_appropriate, phrases_json, model,
-                    created_at)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                f"""INSERT INTO triage
+                   (mention_id, {", ".join(self._TRIAGE_COLUMNS)})
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                   ON CONFLICT(mention_id) DO UPDATE SET {updates}""",
                 (
-                    triage.mention_id, 1 if triage.relevant else 0,
+                    triage.mention_id, bool(triage.relevant),
                     triage.subject_type, triage.subject, triage.competitor,
                     triage.product, triage.drug, triage.category.value, triage.sentiment,
                     float(triage.sentiment_score), triage.urgency.value, triage.urgency_reason,
-                    1 if triage.reply_appropriate else 0,
+                    bool(triage.reply_appropriate),
                     json.dumps(triage.phrases), triage.model,
                     _ts(triage.created_at),
                 ),
@@ -781,7 +866,6 @@ class StateManager:
 
     async def get_triage(self, mention_id: int) -> Triage | None:
         async with self._connect() as db:
-            db.row_factory = aiosqlite.Row
             async with db.execute(
                 "SELECT * FROM triage WHERE mention_id = ?", (int(mention_id),)
             ) as cursor:
@@ -810,19 +894,21 @@ class StateManager:
                     review_reasons_json, tier, created_at)
                    VALUES (?, (SELECT COALESCE(MAX(version), 0) + 1
                                FROM drafts WHERE mention_id = ?),
-                           ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                           ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                   RETURNING id""",
                 (
                     draft.mention_id, draft.mention_id, draft.text,
                     json.dumps(draft.claim_ids), draft.model,
-                    None if draft.filter_ok is None else int(draft.filter_ok),
+                    None if draft.filter_ok is None else bool(draft.filter_ok),
                     json.dumps(draft.filter_hits),
                     draft.review_verdict.value if draft.review_verdict else None,
                     json.dumps(draft.review_reasons), draft.tier,
                     _ts(draft.created_at),
                 ),
             )
+            (draft_id,) = await cursor.fetchone()
             await db.commit()
-            return cursor.lastrowid
+            return draft_id
 
     async def get_latest_draft(self, mention_id: int) -> Draft | None:
         drafts = await self.list_drafts(mention_id, limit=1)
@@ -831,7 +917,6 @@ class StateManager:
     async def list_drafts(self, mention_id: int, limit: int = 50) -> list[Draft]:
         """Draft versions for a mention, newest first."""
         async with self._connect() as db:
-            db.row_factory = aiosqlite.Row
             async with db.execute(
                 "SELECT * FROM drafts WHERE mention_id = ? ORDER BY version DESC LIMIT ?",
                 (int(mention_id), max(int(limit), 0)),
@@ -840,7 +925,7 @@ class StateManager:
         return [self._draft_from_row(r) for r in rows]
 
     @staticmethod
-    def _draft_from_row(row: aiosqlite.Row) -> Draft:
+    def _draft_from_row(row) -> Draft:
         d = dict(row)
         d["claim_ids"] = _loads(d.pop("claim_ids_json", None), [])
         d["filter_hits"] = _loads(d.pop("filter_hits_json", None), [])
@@ -857,7 +942,8 @@ class StateManager:
                 """INSERT INTO audit_log
                    (mention_id, draft_id, event, actor, claim_ids_json,
                     filter_result_json, verdict_json, final_text, permalink, at)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                   RETURNING id""",
                 (
                     event.mention_id, event.draft_id, event.event.value,
                     event.actor, json.dumps(event.claim_ids),
@@ -865,13 +951,13 @@ class StateManager:
                     event.final_text, event.permalink, _ts(event.at),
                 ),
             )
+            (audit_id,) = await cursor.fetchone()
             await db.commit()
-            return cursor.lastrowid
+            return audit_id
 
     async def list_audit(self, mention_id: int) -> list[AuditEvent]:
         """Audit events for a mention, oldest first."""
         async with self._connect() as db:
-            db.row_factory = aiosqlite.Row
             async with db.execute(
                 "SELECT * FROM audit_log WHERE mention_id = ? ORDER BY id ASC",
                 (int(mention_id),),
@@ -894,19 +980,21 @@ class StateManager:
                 """INSERT INTO escalations
                    (mention_id, kind, owner, notified_at, sla_due_at,
                     acked_at, acked_by, breached, created_at)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                   RETURNING id""",
                 (
                     escalation.mention_id, escalation.kind, escalation.owner,
                     _ts(escalation.notified_at), _ts(escalation.sla_due_at),
                     _ts(escalation.acked_at), escalation.acked_by,
-                    1 if escalation.breached else 0, _ts(escalation.created_at),
+                    bool(escalation.breached), _ts(escalation.created_at),
                 ),
             )
+            (escalation_id,) = await cursor.fetchone()
             await db.commit()
-            return cursor.lastrowid
+            return escalation_id
 
     @staticmethod
-    def _escalation_from_row(row: aiosqlite.Row) -> Escalation:
+    def _escalation_from_row(row) -> Escalation:
         d = dict(row)
         d["breached"] = bool(d["breached"])
         d["acked_by"] = d["acked_by"] or ""
@@ -914,7 +1002,6 @@ class StateManager:
 
     async def get_escalation(self, escalation_id: int) -> Escalation | None:
         async with self._connect() as db:
-            db.row_factory = aiosqlite.Row
             async with db.execute(
                 "SELECT * FROM escalations WHERE id = ?", (int(escalation_id),)
             ) as cursor:
@@ -924,7 +1011,6 @@ class StateManager:
     async def get_open_escalation(self, mention_id: int) -> Escalation | None:
         """The oldest unacknowledged escalation for a mention, if any."""
         async with self._connect() as db:
-            db.row_factory = aiosqlite.Row
             async with db.execute(
                 "SELECT * FROM escalations WHERE mention_id = ? AND acked_at IS NULL "
                 "ORDER BY id ASC LIMIT 1",
@@ -948,8 +1034,8 @@ class StateManager:
         """Flag an open escalation as past its SLA. False if already flagged."""
         async with self._connect() as db:
             cursor = await db.execute(
-                "UPDATE escalations SET breached = 1 "
-                "WHERE id = ? AND breached = 0 AND acked_at IS NULL",
+                "UPDATE escalations SET breached = TRUE "
+                "WHERE id = ? AND breached = FALSE AND acked_at IS NULL",
                 (int(escalation_id),),
             )
             await db.commit()
@@ -971,7 +1057,6 @@ class StateManager:
     async def list_open_escalations(self) -> list[Escalation]:
         """Unacknowledged escalations, most pressing SLA first."""
         async with self._connect() as db:
-            db.row_factory = aiosqlite.Row
             async with db.execute(
                 "SELECT * FROM escalations WHERE acked_at IS NULL "
                 "ORDER BY sla_due_at IS NULL, sla_due_at ASC, id ASC"
@@ -996,7 +1081,7 @@ class StateManager:
             await db.execute(
                 """INSERT INTO usage_log (id, date, claude_calls)
                    VALUES (?, ?, 1)
-                   ON CONFLICT(date) DO UPDATE SET claude_calls = claude_calls + 1""",
+                   ON CONFLICT(date) DO UPDATE SET claude_calls = usage_log.claude_calls + 1""",
                 (_new_id(), today),
             )
             await db.commit()
@@ -1041,7 +1126,7 @@ class StateManager:
                     model, int(input_tokens or 0), int(output_tokens or 0),
                     int(cache_read_tokens or 0), int(cache_creation_tokens or 0),
                     float(cost_usd or 0.0), int(duration_ms or 0),
-                    int(num_turns or 0), 1 if is_error else 0, source,
+                    int(num_turns or 0), bool(is_error), source,
                 ),
             )
             await db.commit()
@@ -1057,7 +1142,7 @@ class StateManager:
     )
 
     @staticmethod
-    def _usage_row_to_dict(row: aiosqlite.Row) -> dict:
+    def _usage_row_to_dict(row) -> dict:
         d = dict(row)
         for key, value in d.items():
             if value is None and key != "period":
@@ -1067,15 +1152,16 @@ class StateManager:
         return d
 
     async def _usage_grouped(self, group_expr: str, alias: str, days: int) -> list[dict]:
+        # GROUP BY 1: the alias shadows a real column (agent/task/model), and
+        # Postgres would group by the column, not the CASE expression.
         sql = (
             f"SELECT {group_expr} AS {alias}, {self._USAGE_SUM} "
             f"FROM usage_events "
-            f"WHERE created_at >= datetime('now', ?) "
-            f"GROUP BY {alias} ORDER BY cost_usd DESC"
+            f"WHERE created_at >= ? "
+            f"GROUP BY 1 ORDER BY cost_usd DESC"
         )
         async with self._connect() as db:
-            db.row_factory = aiosqlite.Row
-            async with db.execute(sql, (f"-{int(days)} days",)) as cursor:
+            async with db.execute(sql, (_ago(days=int(days)),)) as cursor:
                 return [self._usage_row_to_dict(r) for r in await cursor.fetchall()]
 
     async def usage_by_agent(self, days: int = 30) -> list[dict]:
@@ -1097,26 +1183,20 @@ class StateManager:
         sql = (
             f"SELECT date(created_at) AS day, {self._USAGE_SUM} "
             f"FROM usage_events "
-            f"WHERE created_at >= datetime('now', ?) "
-            f"GROUP BY day ORDER BY day ASC"
+            f"WHERE created_at >= ? "
+            f"GROUP BY 1 ORDER BY day ASC"
         )
         async with self._connect() as db:
-            db.row_factory = aiosqlite.Row
-            async with db.execute(sql, (f"-{int(days)} days",)) as cursor:
+            async with db.execute(sql, (_ago(days=int(days)),)) as cursor:
                 return [self._usage_row_to_dict(r) for r in await cursor.fetchall()]
 
     async def usage_totals(self) -> dict:
         """Rollups for today / last 7 days / last 30 days (UTC)."""
         totals = {}
         async with self._connect() as db:
-            db.row_factory = aiosqlite.Row
-            for label, where in (
-                ("today", "date(created_at) = date('now')"),
-                ("week", "created_at >= datetime('now', '-7 days')"),
-                ("month", "created_at >= datetime('now', '-30 days')"),
-            ):
+            for label, where, params in usage_windows():
                 async with db.execute(
-                    f"SELECT {self._USAGE_SUM} FROM usage_events WHERE {where}"
+                    f"SELECT {self._USAGE_SUM} FROM usage_events WHERE {where}", params
                 ) as cursor:
                     row = await cursor.fetchone()
                     totals[label] = self._usage_row_to_dict(row) if row else {}

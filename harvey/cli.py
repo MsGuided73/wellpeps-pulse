@@ -5,9 +5,10 @@ Installed as both `pulse` and `harvey` (same entry point).
 """
 
 import argparse
-import asyncio
 import getpass
 import sys
+
+from harvey.db.postgres import run as run_async
 
 
 def cmd_run(args):
@@ -37,7 +38,7 @@ def _auth_store():
         await state.init_db()
         return AuthStore(state)
 
-    return asyncio.run(_open())
+    return run_async(_open())
 
 
 def cmd_user_add(args):
@@ -52,7 +53,7 @@ def cmd_user_add(args):
     try:
         check_password_policy(password)
         store = _auth_store()
-        asyncio.run(store.create_user(args.email, password, args.role, name=args.name))
+        run_async(store.create_user(args.email, password, args.role, name=args.name))
     except ValueError as exc:
         print(f"\n  {exc}; no user created.\n")
         sys.exit(1)
@@ -61,7 +62,7 @@ def cmd_user_add(args):
 
 def cmd_user_list(args):
     """List dashboard users (never their password hashes)."""
-    users = asyncio.run(_auth_store().list_users())
+    users = run_async(_auth_store().list_users())
     print("\n  Dashboard users")
     print("  " + "=" * 60)
     if not users:
@@ -74,7 +75,7 @@ def cmd_user_list(args):
 
 def cmd_user_disable(args):
     """Disable a user and end their sessions."""
-    if not asyncio.run(_auth_store().disable_user(args.email)):
+    if not run_async(_auth_store().disable_user(args.email)):
         print(f"\n  No user {args.email}.\n")
         sys.exit(1)
     print(f"\n  User {args.email.strip().lower()} disabled; their sessions are ended.\n")
@@ -99,7 +100,7 @@ def cmd_status(args):
         print(f"  {'Claude calls today':<22} {summary['usage_today']:>6}")
         print()
 
-    asyncio.run(_status())
+    run_async(_status())
 
 
 def cmd_usage(args):
@@ -161,7 +162,7 @@ def cmd_usage(args):
             "\n  counts, not costs.\n"
         )
 
-    asyncio.run(_usage())
+    run_async(_usage())
 
 
 def cmd_ingest(args):
@@ -190,7 +191,7 @@ def cmd_ingest(args):
             print(f"  {line}")
         print(f"  total: {report.created} created, {report.duplicates} duplicates\n")
 
-    asyncio.run(_ingest())
+    run_async(_ingest())
 
 
 def _sla_status(escalation, now) -> str:
@@ -234,7 +235,7 @@ def cmd_escalations(args):
             print(f"  {line}")
         print()
 
-    asyncio.run(_list())
+    run_async(_list())
 
 
 def cmd_ack(args):
@@ -251,7 +252,7 @@ def cmd_ack(args):
             print(f"\n  Escalation #{args.id} not found or already acknowledged.\n")
             sys.exit(1)
 
-    asyncio.run(_ack())
+    run_async(_ack())
 
 
 def trend_lines(report) -> list[str]:
@@ -305,7 +306,7 @@ def cmd_brief(args):
             print(f"  {line}")
         print()
 
-    asyncio.run(_brief())
+    run_async(_brief())
 
 
 def cmd_trends(args):
@@ -337,7 +338,7 @@ def cmd_trends(args):
             print(f"  {line}")
         print()
 
-    asyncio.run(_trends())
+    run_async(_trends())
 
 
 def build_parser() -> argparse.ArgumentParser:

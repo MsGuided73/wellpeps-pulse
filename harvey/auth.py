@@ -22,9 +22,10 @@ from collections import deque
 from datetime import datetime, timedelta, timezone
 from typing import Callable
 
-import aiosqlite
 from argon2 import PasswordHasher
 from argon2.exceptions import InvalidHashError, VerificationError, VerifyMismatchError
+
+from harvey.db import integrity_errors
 
 ROLES = ("viewer", "reviewer", "clinical", "admin")
 MIN_PASSWORD_LENGTH = 12
@@ -173,7 +174,6 @@ class AuthStore:
 
     async def _fetchone(self, sql: str, params: tuple = ()):
         async with self.state.connect() as db:
-            db.row_factory = aiosqlite.Row
             async with db.execute(sql, params) as cursor:
                 return await cursor.fetchone()
 
@@ -194,13 +194,14 @@ class AuthStore:
             try:
                 cursor = await db.execute(
                     "INSERT INTO users (email, display_name, role, password_hash, active) "
-                    "VALUES (?, ?, ?, ?, 1)",
+                    "VALUES (?, ?, ?, ?, TRUE) RETURNING id",
                     (email, (name or "").strip()[:120], role, password_hash),
                 )
-            except aiosqlite.IntegrityError as exc:
+            except integrity_errors() as exc:
                 raise ValueError(f"a user with email {email} already exists") from exc
+            (user_id,) = await cursor.fetchone()
             await db.commit()
-            return cursor.lastrowid
+            return user_id
 
     async def get_user(self, email: str) -> dict | None:
         try:
@@ -212,7 +213,6 @@ class AuthStore:
 
     async def list_users(self) -> list[dict]:
         async with self.state.connect() as db:
-            db.row_factory = aiosqlite.Row
             async with db.execute(f"SELECT {_USER_FIELDS} FROM users ORDER BY email") as cursor:
                 return [_public(r) for r in await cursor.fetchall()]
 
@@ -221,7 +221,7 @@ class AuthStore:
         return row["n"]
 
     async def count_active_admins(self) -> int:
-        row = await self._fetchone("SELECT COUNT(*) AS n FROM users WHERE role = 'admin' AND active = 1")
+        row = await self._fetchone("SELECT COUNT(*) AS n FROM users WHERE role = 'admin' AND active = TRUE")
         return row["n"]
 
     async def disable_user(self, email: str) -> bool:
@@ -229,7 +229,7 @@ class AuthStore:
         user = await self.get_user(email)
         if user is None:
             return False
-        await self._write("UPDATE users SET active = 0 WHERE id = ?", (user["id"],))
+        await self._write("UPDATE users SET active = FALSE WHERE id = ?", (user["id"],))
         await self._write("DELETE FROM sessions WHERE user_id = ?", (user["id"],))
         return True
 

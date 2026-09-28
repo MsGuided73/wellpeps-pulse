@@ -46,6 +46,14 @@ never enter this repo or any prompt.**
   Approval needs a non-red filter, >= 1 claim, and (default) publishable
   claims; editing an approved reply voids the approval (approved -> in_review).
 
+- Storage: SQLite stays the default and the test backend. Production data
+  goes to the Supabase project **wellpeps-pulse** (us-east-1, Postgres 17),
+  in a dedicated `pulse` schema with RLS on and no anon/authenticated
+  access. The schema is not exposed through the Data API. It is applied
+  from `db/postgres/*.sql`, never by the app. The app picks Postgres when
+  `PULSE_DATABASE_URL` is set, and `tests/test_postgres_schema.py` keeps
+  the two schemas in step.
+
 ## 1. Module fate
 | Module | Fate |
 |---|---|

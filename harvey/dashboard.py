@@ -24,7 +24,6 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Literal
 
-import aiosqlite
 from fastapi import Depends, FastAPI, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse, RedirectResponse, Response
 from pydantic import BaseModel, Field
@@ -34,7 +33,7 @@ from harvey.config import ConfigFileNotFoundError, PulseConfig, load_config, loa
 from harvey.escalation import ack as ack_escalation
 from harvey.models import MentionStatus
 from harvey.paths import DB_PATH, PROJECT_ROOT
-from harvey.state import StateManager
+from harvey.state import StateManager, usage_windows
 
 logger = logging.getLogger("harvey.dashboard")
 
@@ -88,10 +87,11 @@ def _config() -> PulseConfig:
 
 
 async def get_state() -> StateManager:
-    state = StateManager(str(DB_PATH))
-    if state.db_path not in _initialized:
+    """SQLite at DB_PATH, or Postgres when PULSE_DATABASE_URL is set."""
+    state = StateManager.from_env(DB_PATH)
+    if state.location not in _initialized:
         await state.init_db()
-        _initialized.add(state.db_path)
+        _initialized.add(state.location)
     return state
 
 
@@ -440,16 +440,15 @@ async def generate_brief(body: GenerateBriefBody, user: dict = ADMIN,
 
 async def query_db(sql: str, params: tuple = ()) -> list[dict]:
     """Run a read query; never raises (an empty install returns [])."""
-    db_path = Path(DB_PATH)
-    if not db_path.exists():
-        return []
     try:
-        async with aiosqlite.connect(str(db_path)) as db:
-            db.row_factory = aiosqlite.Row
+        state = StateManager.from_env(DB_PATH)
+        if state.db_path is not None and not Path(state.db_path).exists():
+            return []
+        async with state.connect() as db:
             async with db.execute(sql, params) as cursor:
                 return [dict(r) for r in await cursor.fetchall()]
     except Exception as e:
-        logger.warning("query_db failed (%s): %s", sql.split(None, 4)[:4], e)
+        logger.warning("query_db failed (%s): %s", sql.split(None, 4)[:4], type(e).__name__)
         return []
 
 
@@ -605,8 +604,13 @@ _USAGE_SUM = (
     "COALESCE(SUM(output_tokens), 0) AS output_tokens, "
     "COALESCE(SUM(cache_read_tokens), 0) AS cache_read_tokens, "
     "COALESCE(SUM(cache_creation_tokens), 0) AS cache_creation_tokens, "
-    "ROUND(COALESCE(SUM(cost_usd), 0), 4) AS cost_usd"
+    "COALESCE(SUM(cost_usd), 0) AS cost_usd"
 )
+
+
+def _round_cost(rows: list[dict]) -> list[dict]:
+    """cost_usd to 4 places in Python (Postgres has no ROUND(double, int))."""
+    return [{**r, "cost_usd": round(float(r.get("cost_usd") or 0.0), 4)} for r in rows]
 
 _quota_client = None
 
@@ -617,28 +621,29 @@ async def get_usage(user: dict = VIEW):
     global _quota_client
 
     totals = {}
-    for label, where in (
-        ("today", "date(created_at) = date('now')"),
-        ("week", "created_at >= datetime('now', '-7 days')"),
-        ("month", "created_at >= datetime('now', '-30 days')"),
-    ):
-        rows = await query_db(f"SELECT {_USAGE_SUM} FROM usage_events WHERE {where}")
+    windows = usage_windows()
+    for label, where, params in windows:
+        rows = _round_cost(await query_db(f"SELECT {_USAGE_SUM} FROM usage_events WHERE {where}",
+                                          params))
         totals[label] = rows[0] if rows else {}
+    month_start = next(params for label, _, params in windows if label == "month")
 
-    def grouped(expr, alias):
-        return (
+    async def grouped(expr, alias):
+        # GROUP BY 1: the alias shadows a real column on Postgres.
+        return _round_cost(await query_db(
             f"SELECT {expr} AS {alias}, {_USAGE_SUM} FROM usage_events "
-            f"WHERE created_at >= datetime('now', '-30 days') "
-            f"GROUP BY {alias} ORDER BY output_tokens DESC LIMIT 25"
-        )
+            f"WHERE created_at >= ? GROUP BY 1 ORDER BY output_tokens DESC LIMIT 25",
+            month_start,
+        ))
 
-    by_agent = await query_db(grouped("CASE WHEN agent = '' THEN 'other' ELSE agent END", "agent"))
-    by_task = await query_db(grouped("CASE WHEN task = '' THEN 'other' ELSE task END", "task"))
-    by_model = await query_db(grouped("CASE WHEN model = '' THEN 'unknown' ELSE model END", "model"))
-    by_day = await query_db(
+    by_agent = await grouped("CASE WHEN agent = '' THEN 'other' ELSE agent END", "agent")
+    by_task = await grouped("CASE WHEN task = '' THEN 'other' ELSE task END", "task")
+    by_model = await grouped("CASE WHEN model = '' THEN 'unknown' ELSE model END", "model")
+    by_day = _round_cost(await query_db(
         f"SELECT date(created_at) AS day, {_USAGE_SUM} FROM usage_events "
-        f"WHERE created_at >= datetime('now', '-30 days') GROUP BY day ORDER BY day ASC"
-    )
+        f"WHERE created_at >= ? GROUP BY 1 ORDER BY day ASC",
+        month_start,
+    ))
 
     quota = None
     try:
@@ -698,7 +703,9 @@ async def _prepare(state: StateManager) -> tuple[int, str]:
     env = load_env()
     message = await auth.bootstrap_admin(store, env.pulse_admin_email, env.pulse_admin_password)
     await store.purge_expired_sessions()
-    return await store.count_active_admins(), message
+    admins = await store.count_active_admins()
+    await state.close()  # the pool belongs to this event loop; uvicorn runs its own
+    return admins, message
 
 
 def _serve(host: str, port: int) -> None:
@@ -709,7 +716,7 @@ def _serve(host: str, port: int) -> None:
 
 def start_dashboard(port: int = 5555, host: str = LOOPBACK_HOST):
     """Start the dashboard. A non-loopback host needs an active admin."""
-    state = StateManager(str(DB_PATH))
+    state = StateManager.from_env(DB_PATH)
     admins, message = asyncio.run(_prepare(state))
     if message:
         print(f"\n  {message}")

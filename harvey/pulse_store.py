@@ -3,18 +3,17 @@
 Kept apart from ``harvey.state`` so the state manager doesn't keep growing;
 every function takes a ``StateManager`` and uses its ``connect()``.
 
-Timestamps are naive UTC ISO strings (``YYYY-MM-DDTHH:MM:SS``), so window
-filters compare as strings. A mention's time is ``posted_at`` when the
-platform gave one, else ``collected_at``.
+Timestamps are naive UTC ISO strings (``YYYY-MM-DDTHH:MM:SS``): SQLite
+compares them as strings, Postgres as ``timestamp`` values, and both hand
+them back in that same ISO form (see harvey.db.dialect). A mention's time
+is ``posted_at`` when the platform gave one, else ``collected_at``.
 """
 
 import json
 from datetime import datetime
 
-import aiosqlite
-
 # Triaged, relevant mentions only: never untriaged or dropped ones.
-RELEVANT_WHERE = "t.relevant = 1 AND m.status NOT IN ('new', 'dropped')"
+RELEVANT_WHERE = "t.relevant = TRUE AND m.status NOT IN ('new', 'dropped')"
 MENTION_TIME = "COALESCE(m.posted_at, m.collected_at)"
 LANGUAGE_SORTS = {"count": "count DESC, last_seen DESC, id ASC",
                   "recent": "last_seen DESC, count DESC, id ASC"}
@@ -37,7 +36,6 @@ def _loads(raw, default):
 
 async def _rows(state, sql: str, params: tuple = ()) -> list[dict]:
     async with state.connect() as db:
-        db.row_factory = aiosqlite.Row
         async with db.execute(sql, params) as cursor:
             return [dict(r) for r in await cursor.fetchall()]
 
@@ -98,9 +96,17 @@ async def bank_mention(state, mention: dict, phrases: list[tuple[str, str]]) -> 
                     example_mention_id, count, first_seen, last_seen)
                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
                    ON CONFLICT(phrase_norm, scope) DO UPDATE SET
-                     count = count + 1,
-                     first_seen = MIN(COALESCE(first_seen, excluded.first_seen), excluded.first_seen),
-                     last_seen = MAX(COALESCE(last_seen, excluded.last_seen), excluded.last_seen)""",
+                     count = language_bank.count + 1,
+                     first_seen = CASE
+                       WHEN excluded.first_seen IS NULL THEN NULL
+                       WHEN language_bank.first_seen IS NULL
+                         OR excluded.first_seen < language_bank.first_seen THEN excluded.first_seen
+                       ELSE language_bank.first_seen END,
+                     last_seen = CASE
+                       WHEN excluded.last_seen IS NULL THEN NULL
+                       WHEN language_bank.last_seen IS NULL
+                         OR excluded.last_seen > language_bank.last_seen THEN excluded.last_seen
+                       ELSE language_bank.last_seen END""",
                 (phrase, norm, scope, mention.get("product") or "", mention.get("drug") or "",
                  mention.get("category") or "", mention.get("sentiment") or "", mention["id"],
                  seen, seen),
@@ -193,8 +199,9 @@ async def save_brief(state, brief: dict, terms: list[dict]) -> int:
             """INSERT INTO trend_terms (brief_id, rank, term, count, baseline_count, velocity,
                                         score, is_new, example_ids_json)
                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-            [(brief_id, rank, t["term"], t["count"], t["baseline_count"], t["velocity"], t["score"],
-              1 if t["is_new"] else 0, json.dumps(list(t["example_ids"])))
+            [(brief_id, rank, t["term"], int(t["count"]), int(t["baseline_count"]),
+              float(t["velocity"]), float(t["score"]), bool(t["is_new"]),
+              json.dumps(list(t["example_ids"])))
              for rank, t in enumerate(terms, start=1)],
         )
         await db.commit()

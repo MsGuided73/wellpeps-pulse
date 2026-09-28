@@ -29,6 +29,7 @@ from harvey.agents.triager import Triager, triage_batch
 from harvey.brain import Brain
 from harvey.briefs import due_periods, run_due_briefs
 from harvey.config import ConfigError, PulseConfig, load_config
+from harvey.db.postgres import run as run_async
 from harvey.drafting import draft_batch
 from harvey.escalation import SweepReport, escalate, sweep
 from harvey.notify import SlackNotifier
@@ -216,7 +217,7 @@ async def heartbeat(stop_event: asyncio.Event | None = None):
     notifier = SlackNotifier.from_config(config)
 
     await state.init_db()
-    logger.info(f"Database initialized at {state.db_path}.")
+    logger.info(f"Database ready at {state.location}.")
 
     max_calls = max(int(200 * (config.usage.max_daily_claude_percent / 100)), 1)
     consecutive_errors = 0
@@ -335,7 +336,7 @@ async def _run_with_signals():
 def main():
     """Entry point."""
     try:
-        asyncio.run(_run_with_signals())
+        run_async(_run_with_signals())
     except KeyboardInterrupt:
         logger.info("Goodbye.")
 

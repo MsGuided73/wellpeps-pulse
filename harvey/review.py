@@ -15,8 +15,6 @@ import logging
 from dataclasses import dataclass
 from datetime import datetime, timezone
 
-import aiosqlite
-
 from harvey import knowledge
 from harvey.compliance import compliance_filter
 from harvey.config import ESCALATION_KINDS
@@ -78,7 +76,6 @@ def _parse_ts(value) -> datetime | None:
 
 async def _rows(state, sql: str, params: tuple = ()) -> list[dict]:
     async with state.connect() as db:
-        db.row_factory = aiosqlite.Row
         async with db.execute(sql, params) as cursor:
             return [dict(r) for r in await cursor.fetchall()]
 
@@ -154,6 +151,7 @@ async def feed(state, *, status=None, platform=None, competitor=None, product=No
     for row in rows:
         row["text_truncated"] = bool(row["text_truncated"])
         row["owned_channel"] = bool(row["owned_channel"])
+        row["relevant"] = None if row["relevant"] is None else bool(row["relevant"])
     return {"items": rows, "total": total, "limit": limit, "offset": offset}
 
 

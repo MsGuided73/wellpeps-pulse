@@ -14,9 +14,9 @@ Pulse never posts on its own, and nothing clinical is ever auto-published.
 
 ## Status
 
-**Phase 8 complete.** Harvey's sales functionality is gone. What's here:
+**Phase 8 complete, plus a Postgres (Supabase) backend.** Harvey's sales functionality is gone. What's here:
 
-- a data layer with mentions, triage, drafts, escalations, and an append-only audit log
+- a data layer with mentions, triage, drafts, escalations, and an append-only audit log, on SQLite (default, tests) or Postgres: the `pulse` schema in the Supabase project `wellpeps-pulse`, with RLS on and not exposed through the Data API (`db/postgres/`, selected by `PULSE_DATABASE_URL`)
 - config, plus WellPeps knowledge in `config/*.yaml` (competitors, products, keywords, compliance rules, a seed claims library pending sign-off)
 - a deterministic compliance filter for draft replies (`harvey/compliance.py`)
 - a collector framework (`harvey/collectors/`) with a JSONL fixture collector, and `pulse ingest --fixture [DIR]` to store mentions with dedupe, run records, and `collected` audit events
@@ -77,14 +77,14 @@ and HTTPS in front, with `dashboard.secure_cookies: true` in harvey.yaml.
 
 `harvey` is still installed as an alias for `pulse`. Configuration lives in
 `harvey.yaml`, and `harvey.local.yaml` (gitignored) overrides it. State is
-stored in `data/pulse.db`, or wherever `PULSE_DB_PATH` points.
+stored in `data/pulse.db`, or wherever `PULSE_DB_PATH` points. Set `PULSE_DATABASE_URL` to use Postgres instead: the `pulse` schema in the Supabase project `wellpeps-pulse` (see [db/postgres/README.md](db/postgres/README.md)).
 
 ## Ground rules
 
 - Collectors read public data only, keep only minimal author info, and store a permalink for every mention.
 - Claude calls are tool-less text in and text out, through `harvey/brain.py`.
 - No autonomous posting. A human approves every reply, with signed-off claims, and posts it by hand.
-- The audit log is append-only. SQLite triggers reject UPDATE and DELETE on it.
+- The audit log is append-only. Database triggers reject UPDATE and DELETE on it, and on Postgres TRUNCATE too.
 - Supplier costs never enter this repo or any prompt.
 
 ## Credits
