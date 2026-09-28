@@ -161,9 +161,16 @@ def _enum(value: str | None, enum, name: str) -> str | None:
         raise ReviewError(400, f"unknown {name} '{value}'")
 
 
+FEED_SORTS = {"newest": "DESC", "oldest": "ASC"}
+
+
 async def feed(state, *, status=None, platform=None, competitor=None, product=None, drug=None,
-               category=None, urgency=None, q=None, limit: int = 100, offset: int = 0) -> dict:
-    """Paginated mentions, newest first, with triage tags and a text preview."""
+               category=None, urgency=None, q=None, limit: int = 100, offset: int = 0,
+               sort: str = "newest") -> dict:
+    """Paginated mentions (newest collected first by default), with triage tags and a text preview."""
+    if sort not in FEED_SORTS:
+        raise ReviewError(400, f"unknown sort '{str(sort)[:20]}'; use newest or oldest")
+    direction = FEED_SORTS[sort]
     where, params = [], []
     for column, value in (
         ("m.status", _enum(status, MentionStatus, "status")),
@@ -190,7 +197,7 @@ async def feed(state, *, status=None, platform=None, competitor=None, product=No
         f"substr(m.text, 1, {PREVIEW_CHARS}) AS text, length(m.text) > {PREVIEW_CHARS} AS text_truncated, "
         "m.lang, m.posted_at, m.collected_at, m.owned_channel, m.status, "
         "t.category, t.urgency, t.competitor, t.product, t.drug, t.subject_type, t.sentiment, "
-        f"t.relevant {base} ORDER BY m.collected_at DESC, m.id DESC LIMIT ? OFFSET ?"
+        f"t.relevant {base} ORDER BY m.collected_at {direction}, m.id {direction} LIMIT ? OFFSET ?"
     ), (*params, limit, offset))
     for row in rows:
         row["text_truncated"] = bool(row["text_truncated"])

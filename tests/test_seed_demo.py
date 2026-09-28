@@ -64,3 +64,22 @@ def test_seed_builds_trend_history_briefs_and_language_bank(tmp_path):
     for row in asyncio.run(pulse_store.list_briefs(state)):
         stored = asyncio.run(pulse_store.get_brief(state, row["id"]))
         assert stored["data"]["verification"]["stripped"] == []  # the demo writer cites real numbers
+
+
+def test_seed_spreads_enough_for_the_analytics_charts(tmp_path):
+    from harvey import analytics
+
+    seed_demo = _load()
+    db = str(tmp_path / "demo.db")
+
+    asyncio.run(seed_demo.seed(db))
+
+    state = StateManager(db)
+    p = analytics.parse_params(days="35", tz="America/New_York")
+    rows = asyncio.run(analytics.fetch_mentions(state, p, p.start_utc, p.end_utc))
+    assert len({r["competitor"] for r in rows if r["competitor"]}) >= 5
+    assert len({round(r["sentiment_score"], 2) for r in rows}) >= 20  # not three flat values
+    assert len({analytics.local_day(p, r["at"]) for r in rows}) >= 30
+    stats = asyncio.run(analytics.chart(state, "escalations", p))
+    assert stats["acked"] >= 5 and stats["median_ack_minutes"] is not None
+    assert 0 < stats["breached_pct"] < 100

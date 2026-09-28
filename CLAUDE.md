@@ -61,6 +61,14 @@ deterministic compliance filter (`harvey/compliance.py`) exist.
   nothing seen in fewer than 2 mentions. Heartbeat priority: triage > draft >
   brief > idle; briefs respect quiet hours and the budget.
 
+- Feed home + Analytics: Feed is the default tab (no hash -> #feed); tabs and
+  Feed/Analytics filters live in the URL hash (app.js routing, harvey/web/feed.js).
+  `harvey/analytics.py` + `GET /api/analytics/<chart>` (options, summary, volume,
+  share, sentiment, complaints, emerging, drugs, escalations): aggregates only,
+  local-day buckets in the quiet-hours timezone, <= 366 days, MIN_COUNT 2
+  privacy floor, sentiment points need 3. Charts are hand-rolled SVG
+  (`harvey/web/charts.js`, no vendored library); tab UI in `harvey/web/analytics.js`.
+
 Later phases add everything else. Don't build ahead of the phase you've
 been asked to do.
 

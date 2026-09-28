@@ -31,7 +31,7 @@ from fastapi import Depends, FastAPI, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse, RedirectResponse, Response
 from pydantic import BaseModel, Field
 
-from harvey import auth, briefs, health, pulse_store, review, trends
+from harvey import analytics, auth, briefs, health, pulse_store, review, trends
 from harvey.config import ConfigFileNotFoundError, PulseConfig, load_config, load_env
 from harvey.escalation import ack as ack_escalation
 from harvey.models import MentionStatus
@@ -333,12 +333,12 @@ async def get_mentions(status: str | None = None, platform: str | None = None,
                        competitor: str | None = None, product: str | None = None,
                        drug: str | None = None, category: str | None = None,
                        urgency: str | None = None, q: str | None = None,
-                       limit: int = 100, offset: int = 0, user: dict = VIEW):
-    """Mentions, newest first, filtered and paginated (text is a preview)."""
+                       limit: int = 100, offset: int = 0, sort: str = "newest", user: dict = VIEW):
+    """Mentions, newest first (or ``sort=oldest``), filtered and paginated (text is a preview)."""
     return await review.feed(
         await get_state(), status=status, platform=platform, competitor=competitor,
         product=product, drug=drug, category=category, urgency=urgency, q=q,
-        limit=limit, offset=offset,
+        limit=limit, offset=offset, sort=sort,
     )
 
 
@@ -471,6 +471,44 @@ async def generate_brief(body: GenerateBriefBody, user: dict = ADMIN,
     logger.info("%s brief #%s requested by %s (created=%s)", body.period, brief["id"],
                 user["email"], brief["created"])
     return brief
+
+
+# ── Analytics: aggregate market charts (harvey/analytics.py) ──
+
+
+@app.exception_handler(analytics.AnalyticsError)
+async def _analytics_error(request: Request, exc: analytics.AnalyticsError):
+    return JSONResponse({"detail": str(exc)}, status_code=400)
+
+
+@app.get("/api/analytics/options")
+async def get_analytics_options(user: dict = VIEW):
+    """Filter choices for the Analytics tab (anchored competitors first)."""
+    return await analytics.options(await get_state())
+
+
+@app.get("/api/analytics/{chart}")
+async def get_analytics_chart(chart: str, days: str | None = Query(None, max_length=8),
+                              start: str | None = Query(None, alias="from", max_length=20),
+                              end: str | None = Query(None, alias="to", max_length=20),
+                              bucket: str = Query("auto", max_length=8),
+                              platform: list[str] = Query(default=[]),
+                              competitor: list[str] = Query(default=[]),
+                              drug: str | None = Query(None, max_length=200),
+                              category: str | None = Query(None, max_length=200),
+                              by: str = Query("category", max_length=20),
+                              user: dict = VIEW, config: PulseConfig = Depends(get_config)):
+    """One Analytics chart: aggregates only, bucketed in the org timezone."""
+    if chart not in analytics.CHARTS:
+        raise HTTPException(status_code=404, detail="unknown chart")
+    if len(platform) > 20 or len(competitor) > 20:
+        raise analytics.AnalyticsError("too many filter values")
+    params = analytics.parse_params(
+        days=days, start=start, end=end, bucket=bucket, platforms=platform, competitors=competitor,
+        drug=drug, category=category, tz=config.usage.quiet_hours.timezone,
+    )
+    return await analytics.chart(await get_state(), chart, params, baseline_days=config.pulse.baseline_days,
+                                 min_count=config.pulse.min_count, by=by)
 
 
 # ── Helpers ──

@@ -259,10 +259,7 @@ function loadPulse() {
 }
 
 function showTermInFeed(term) {
-  const q = document.getElementById('f-q');
-  if (q) q.value = term;
-  feedOffset = 0;
-  showTab('feed');
+  showFeedWith({q: term});
 }
 
 fillSelect('b-category', CATEGORIES, 'category');

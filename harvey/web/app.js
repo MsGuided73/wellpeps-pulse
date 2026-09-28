@@ -10,15 +10,13 @@
 // - Labels, times and platform icons come from labels.js (loaded first):
 //   raw enum codes are shown only in title attributes.
 
-let currentTab = 'urgent';
+let currentTab = 'feed';
 let ME = null;
 let CLAIMS = null;            // [{id, text, tier, publishable}]
 let reviewItems = [];         // mentions shown in the review desk list
 let reviewIndex = 0;
 let reviewDetail = null;      // detail of the selected review item
 let editClaims = [];          // claim ids in the editor
-let feedOffset = 0;
-const FEED_PAGE = 50;
 
 // ── Utilities ──
 
@@ -173,19 +171,56 @@ function can(permission) {
   return !!ME && (perms[ME.role] || []).includes(permission);
 }
 
-// ── Tabs ──
+// ── Tabs & routing ──
+// The URL hash names the tab (#feed, #urgent, #analytics…); Feed and
+// Analytics add their filters (#feed?q=…). Slack links use #escalation-<id>
+// (Urgent) and #pulse-brief-<id> (Pulse). No hash means Feed.
 
-function showTab(id) {
+const TABS = ['feed', 'urgent', 'review', 'analytics', 'pulse', 'usage', 'users', 'controls'];
+const TAB_HASH = {};          // tab -> () => hash with its filters (feed.js, analytics.js)
+const TAB_ROUTE = {};         // tab -> (query) => void, called before the tab loads
+
+function tabHash(id) {
+  return TAB_HASH[id] ? TAB_HASH[id]() : '#' + id;
+}
+
+function routeFromHash(hash) {
+  if (/^#escalation-\d+$/.test(hash)) return {tab: 'urgent', keep: true};
+  if (/^#pulse-brief-\d+$/.test(hash)) return {tab: 'pulse', keep: true};
+  const m = hash.match(/^#([a-z]+)(?:\?(.*))?$/);
+  if (m && TABS.includes(m[1])) return {tab: m[1], query: m[2] || '', keep: true};
+  return {tab: 'feed', query: '', keep: false};
+}
+
+function route() {
+  const r = routeFromHash(window.location.hash);
+  const tab = r.tab === 'users' && !can('admin') ? 'feed' : r.tab;
+  if (TAB_ROUTE[tab] && r.query !== undefined) TAB_ROUTE[tab](r.query);
+  showTab(tab, {keepHash: r.keep && tab === r.tab, replace: true});
+}
+
+function showTab(id, opts) {
   currentTab = id;
   document.querySelectorAll('.section').forEach(s => s.classList.toggle('active', s.id === id));
-  document.querySelectorAll('nav button').forEach(b => b.classList.toggle('active', b.dataset.tab === id));
+  document.querySelectorAll('nav button').forEach(b => {
+    b.classList.toggle('active', b.dataset.tab === id);
+    if (b.dataset.tab === id) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current');
+  });
+  if (!(opts && opts.keepHash)) {
+    const hash = tabHash(id);
+    if (window.location.hash !== hash) history[opts && opts.replace ? 'replaceState' : 'pushState'](null, '', hash);
+  }
+  if (typeof Charts !== 'undefined') Charts.hideTip();
   loadCurrentTab();
 }
+
+window.addEventListener('hashchange', () => { if (ME) route(); });
 
 function loadCurrentTab() {
   switch (currentTab) {
     case 'urgent': loadUrgent(); break;
     case 'review': loadReview(); break;
+    case 'analytics': loadAnalytics(); break;
     case 'pulse': loadPulse(); break;
     case 'feed': loadFeed(); break;
     case 'usage': loadUsage(); break;
@@ -221,6 +256,7 @@ async function pollUrgent() {
   if (!data) return null;
   const breached = data.items.filter(i => i.breached).length;
   navCount('nav-urgent', data.items.length, breached > 0);
+  renderUrgentBanner(data.items.length, breached);
   return data;
 }
 
@@ -539,8 +575,6 @@ async function escalateCurrent() {
   if (r.ok) { showToast('Escalated' + (r.data.paged ? ' and paged.' : '; page not sent (check Slack).'), 'success'); loadReview(); pollUrgent(); }
 }
 
-// ── Feed ──
-
 // Options show the human label; the raw code is the value (and tooltip).
 function fillSelect(id, values, group) {
   const sel = document.getElementById(id);
@@ -554,95 +588,7 @@ function fillSelect(id, values, group) {
   }
 }
 
-fillSelect('f-status', Object.keys(LABELS.status), 'status');
-fillSelect('f-platform', PLATFORMS, 'platform');
-fillSelect('f-category', CATEGORIES, 'category');
-fillSelect('f-urgency', URGENCIES, 'urgency');
-
-async function loadSummary() {
-  const el = document.getElementById('feed-summary');
-  const data = await api('/api/summary');
-  if (!data) { el.innerHTML = ''; return; }
-  const chips = Object.entries(data.mentions || {}).filter(([, n]) => n)
-    .map(([k, n]) => '<span class="chip">' + escHtml(statusMeta(k).label) + ' <b>' + escHtml(String(n)) + '</b></span>');
-  chips.unshift('<span class="chip">Total <b>' + escHtml(String(data.total || 0)) + '</b></span>');
-  el.innerHTML = chips.join('');
-}
-
-function feedQuery() {
-  const params = new URLSearchParams();
-  new FormData(document.getElementById('feed-filters')).forEach((v, k) => { if (String(v).trim()) params.set(k, String(v).trim()); });
-  params.set('limit', String(FEED_PAGE));
-  params.set('offset', String(feedOffset));
-  return params.toString();
-}
-
-async function loadFeed() {
-  const el = document.getElementById('feed-list');
-  loadSummary();
-  const data = await api('/api/mentions?' + feedQuery());
-  const pager = document.getElementById('feed-pager');
-  if (!data) { el.innerHTML = offlineState(); pager.innerHTML = ''; return; }
-  if (!data.items.length) {
-    el.innerHTML = emptyState('&#9678;', 'No mentions match', 'Change the filters, or wait for collectors to bring in new posts.');
-    pager.innerHTML = '';
-    return;
-  }
-  let html = '<div class="table-card"><table><thead><tr>' +
-    '<th>Collected</th><th>Platform</th><th>Mention</th><th>Triage</th><th>Status</th><th></th></tr></thead><tbody>';
-  for (const m of data.items) {
-    const body = m.title ? m.title + ' — ' + (m.text || '') : (m.text || '');
-    html += '<tr class="clickable" data-action="open-drawer" data-id="' + escHtml(String(m.id)) + '">' +
-      '<td class="muted nowrap">' + formatDate(m.collected_at) + '</td>' +
-      '<td class="nowrap">' + platformHtml(m.platform) + '</td>' +
-      '<td class="mention-cell">' + escHtml(truncate(body, 200)) + '</td>' +
-      '<td><div class="tag-row tight">' + labelTag('', 'category', m.category) + labelTag('', 'urgency', m.urgency === 'urgent' || m.urgency === 'high' ? m.urgency : '') +
-        tag('Drug', m.drug) + tag('', m.competitor) + '</div></td>' +
-      '<td>' + badge(m.status) + '</td>' +
-      '<td class="nowrap">' + extLink(m.url, 'Open ↗') + '</td></tr>';
-  }
-  el.innerHTML = html + '</tbody></table></div>';
-  const end = Math.min(data.offset + data.items.length, data.total);
-  pager.innerHTML = '<span>' + escHtml(String(data.offset + 1)) + '–' + escHtml(String(end)) + ' of ' + escHtml(String(data.total)) + '</span>' +
-    '<button class="btn btn-secondary btn-sm" data-action="feed-prev"' + (data.offset > 0 ? '' : ' disabled') + '>Previous</button>' +
-    '<button class="btn btn-secondary btn-sm" data-action="feed-next"' + (end < data.total ? '' : ' disabled') + '>Next</button>';
-}
-
-async function openDrawer(id) {
-  const drawer = document.getElementById('drawer');
-  const d = await api('/api/mentions/' + encodeURIComponent(id));
-  if (!d) return;
-  const m = d.mention;
-  let html = '<div class="drawer-head"><span class="drawer-id">Mention #' + escHtml(String(m.id)) + '</span>' +
-    '<button class="btn btn-secondary btn-sm" data-action="close-drawer">Close</button></div>' + mentionHead(m) +
-    '<h2 class="subject">' + escHtml(m.title || truncate(m.text, 90)) + '</h2>' + detailWhy(d) +
-    '<div class="body">' + escHtml(m.text) + '</div><p class="post-link">' + extLink(m.url, 'Open original ↗') + '</p>' +
-    triageTags(m, d.triage) +
-    (d.triage && d.triage.urgency_reason ? '<p class="reasoning"><span class="k">Triage reasoning</span> ' +
-      '<span title="' + escHtml(d.triage.urgency_reason) + '">' + escHtml(reasonText(d.triage.urgency_reason)) + '</span></p>' : '');
-  if (d.latest_draft) {
-    html += '<div class="desk-block"><div class="subhead">Latest draft · v' + escHtml(String(d.latest_draft.version)) +
-      ' · ' + escHtml(draftAuthor(d.latest_draft)) + '</div>' +
-      '<div class="body">' + escHtml(d.latest_draft.text) + '</div>' + tierBadge(d.latest_draft.tier) + ' ' +
-      verdictBadge(d.latest_draft.review_verdict) + '</div>';
-  }
-  if (d.escalations.length) {
-    html += '<div class="desk-block"><div class="subhead">Escalations</div>' + d.escalations.map(e =>
-      '<div class="esc-row"><span title="' + escHtml(e.kind) + '">#' + escHtml(String(e.id)) + ' ' + escHtml(label('kind', e.kind)) + '</span>' +
-      ownerHtml(e.owner) + '<span>SLA ' + timeHtml(e.sla_due_at) + '</span>' +
-      (e.breached ? toneBadge('SLA breached', 'bad') : '') +
-      (e.acked_at ? toneBadge('Acknowledged by ' + e.acked_by, 'good') : toneBadge('Open', 'waiting')) + '</div>').join('') + '</div>';
-  }
-  html += '<div class="desk-block"><div class="subhead">Audit trail</div>' + timeline(d.audit) + '</div>';
-  drawer.innerHTML = html;
-  drawer.classList.remove('hidden');
-  const closeBtn = drawer.querySelector('[data-action="close-drawer"]');
-  if (closeBtn) closeBtn.focus();
-}
-
-function closeDrawer() {
-  document.getElementById('drawer').classList.add('hidden');
-}
+// The Feed, the mention drawer and the urgent banner live in feed.js.
 
 // ── Users (admin) ──
 
@@ -817,10 +763,6 @@ const ACTIONS = {
   'copy-open': () => copyAndOpen(),
   'mark-posted': () => markPosted(),
   'escalate': () => escalateCurrent(),
-  'open-drawer': el => openDrawer(el.dataset.id),
-  'close-drawer': () => closeDrawer(),
-  'feed-prev': () => { feedOffset = Math.max(0, feedOffset - FEED_PAGE); loadFeed(); },
-  'feed-next': () => { feedOffset += FEED_PAGE; loadFeed(); },
   'disable-user': el => disableUser(el.dataset.email),
   'start': () => controlHarvey('start'),
   'stop': () => controlHarvey('stop'),
@@ -835,12 +777,6 @@ document.addEventListener('click', (event) => {
   if (!el || el.disabled) return;
   const handler = ACTIONS[el.dataset.action];
   if (handler) { event.preventDefault(); handler(el); }
-});
-
-document.getElementById('feed-filters').addEventListener('submit', (event) => {
-  event.preventDefault();
-  feedOffset = 0;
-  loadFeed();
 });
 
 document.getElementById('user-form').addEventListener('submit', (event) => {
@@ -866,8 +802,8 @@ async function init() {
   document.getElementById('user-chip').innerHTML = '<span>' + escHtml(ME.name || ME.email) + '</span>' +
     '<span class="role" title="' + escHtml(ME.role) + '">' + escHtml(label('role', ME.role)) + '</span>';
   document.getElementById('nav-users').classList.toggle('hidden', !can('admin'));
-  // Slack pages link to /#escalation-<id> (Urgent) or /#pulse-brief-<id> (Pulse).
-  showTab(/^#pulse-brief-\d+$/.test(window.location.hash) ? 'pulse' : 'urgent');
+  route();
+  if (currentTab !== 'urgent') pollUrgent();  // the nav badge and the Feed banner
   loadHarveyStatus();
   loadReviewCount();
   setInterval(pollUrgent, 30000);

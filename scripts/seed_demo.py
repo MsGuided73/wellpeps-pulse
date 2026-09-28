@@ -4,11 +4,14 @@
 
 Ingests tests/fixtures/mentions/sample.jsonl plus ~35 days of synthetic
 DEMO posts (fictional demo_user_* handles, r/DemoData links) with a few
-spiking terms, then runs the real triage -> escalation -> draft -> compliance
-filter -> review pipeline with a deterministic fake brain (keyword rules,
-canned replies), banks the language, and builds one daily and one weekly
+spiking terms, across several platforms and competitors, plus a month of
+urgent posts. Then it runs the real triage -> escalation -> draft ->
+compliance filter -> review pipeline with a deterministic fake brain
+(keyword rules, canned replies, jittered sentiment), back-dates the
+urgent-history escalations and acknowledges them after scripted delays (one
+misses the SLA), banks the language, and builds one daily and one weekly
 Pulse brief with a deterministic brief writer. No `claude` calls, no
-network, no Slack (escalations show as "not paged").
+network, no Slack (escalations show as "not paged"). SQLite only.
 
 DEMO DATA: every classification and draft here is fabricated by keyword
 rules, not by a model. Never point this at the real data/pulse.db; the
@@ -44,14 +47,17 @@ RULES = [
 # Tried only when no rule above matches (synthetic trend posts):
 # (pattern, category, sentiment score)
 TREND_RULES = [
-    (r"shipping delay|price hike|shortage|stuck|took two days|plateau|rough|creeping", "complaint", -0.6),
-    (r"finally quiet|best part|answered in a day|adjusted the plan|clear update|on time", "praise", 0.6),
+    (r"shipping delay|price hike|shortage|stuck|took two days|plateau|rough|creeping|tracking never|"
+     r"charged me twice|never answered|backorder", "complaint", -0.6),
+    (r"finally quiet|best part|answered in a day|adjusted the plan|clear update|on time|energy is better|"
+     r"works fine", "praise", 0.6),
     (r"comparing|talk about|switching", "purchase_intent", 0.1),
 ]
-DRUGS = ["semaglutide", "tirzepatide", "tadalafil", "minoxidil", "BPC-157"]
+DRUGS = ["semaglutide", "tirzepatide", "tadalafil", "minoxidil", "BPC-157", "NAD+"]
 DRUG_ALIASES = {"tirz": "tirzepatide", "wegovy": "semaglutide"}
 COMPETITORS = [(r"\bhims\b", "Hims & Hers"), (r"\bro\b", "Ro"), (r"\bnoom\b", "Noom Med"),
-               (r"\bhenry meds\b", "Henry Meds"), (r"\bmochi\b", "Mochi Health")]
+               (r"\bhenry meds\b", "Henry Meds"), (r"\bmochi\b", "Mochi Health"), (r"\beden\b", "Eden"),
+               (r"\blifemd\b", "LifeMD")]
 # Verbatim phrases the demo triage "extracts" when they appear in a post.
 PHRASES = ["food noise is finally quiet", "my provider adjusted the plan", "plateau at month four",
            "shedding phase is rough", "took two days to reply", "shipping delay", "stuck in transit",
@@ -69,6 +75,24 @@ STEADY = [
     "Minoxidil shedding phase is rough but hanging in there.",
     "Henry Meds support took two days to reply about my refill.",
     "Mochi dietitian sessions are the best part of the program.",
+    "Eden shipping took a week again and the tracking never updated.",
+    "Ro charged me twice this month for the same refill, billing is a mess.",
+    "Started NAD+ injections through LifeMD, energy is better than expected.",
+    "Tadalafil daily from Hims works fine, no side effects so far.",
+    "Noom Med support never answered my message about the dose.",
+    "Henry Meds refill on backorder at the pharmacy again.",
+]
+# Urgent DEMO posts spread over the month: their escalations are acknowledged
+# after varied delays (one late) so the SLA chart has a history.
+URGENT_HISTORY = [  # (days ago, text, minutes to acknowledge)
+    (3, "DEMO: vomiting all night after the semaglutide dose increase from WellPeps.", 4),
+    (6, "DEMO: my lawyer is reviewing the WellPeps cancellation terms.", 9),
+    (9, "DEMO: ended up in the emergency room after my third tirzepatide dose.", 12),
+    (13, "DEMO: WellPeps billing looks like fraud to me, three charges this month.", 7),
+    (17, "DEMO: vomiting and dizzy since switching pharmacies through WellPeps.", 22),
+    (21, "DEMO: talking to a lawyer about the WellPeps refund.", 3),
+    (26, "DEMO: emergency room visit after the new tirzepatide vial.", 14),
+    (30, "DEMO: bank flagged WellPeps charges as fraud.", 6),
 ]
 SPIKES = [
     "Another shipping delay from Hims, my refill is stuck in transit.",
@@ -105,6 +129,9 @@ def _phrases(text: str) -> list[str]:
     return [m.group(0) for m in found if m][:5]
 
 
+_JITTER = random.Random(21)  # deterministic spread around each rule's score
+
+
 def _triage_answer(text: str) -> dict:
     category, urgency, subject_type, reply = "other", "normal", "", False
     score = None
@@ -123,6 +150,7 @@ def _triage_answer(text: str) -> dict:
                         "competitor" if competitor else "category")
     if score is None:
         score = -0.6 if category in ("complaint", "adverse_event") else 0.6 if category == "praise" else 0.0
+    score = round(max(-1.0, min(1.0, score + _JITTER.uniform(-0.3, 0.3))), 2)
     label = "negative" if score < 0 else "positive" if score > 0 else "neutral"
     return {
         "relevant": subject_type != "none", "subject_type": subject_type, "subject": BANNER,
@@ -216,7 +244,7 @@ def _synthetic_posts(now: datetime, daily: tuple, weekly: tuple) -> list:
     rng = random.Random(8)  # deterministic
     posts: list[tuple[str, datetime]] = []
     for day in range(1, 36):
-        for text in rng.sample(STEADY, 4):
+        for text in rng.sample(STEADY, 7):
             posts.append((text, now - timedelta(days=day, hours=rng.uniform(0, 20))))
     posts.append((SPIKES[0], now - timedelta(days=12)))  # one old shipping delay: not "new"
     for start, end, per_spike in ((daily[0], daily[1], 4), (weekly[1] - timedelta(days=3), weekly[1], 3)):
@@ -226,16 +254,68 @@ def _synthetic_posts(now: datetime, daily: tuple, weekly: tuple) -> list:
                 posts.append((text, start + timedelta(seconds=rng.uniform(0.05, 0.95) * span)))
     mentions = []
     for i, (text, at) in enumerate(sorted(posts, key=lambda p: p[1])):
-        review = i % 5 == 0
+        platform, url = _demo_platform(i)
         mentions.append(Mention(
-            platform=Platform.TRUSTPILOT if review else Platform.REDDIT,
-            external_id=f"demo-syn-{i:04d}",
-            url=(f"https://www.trustpilot.com/reviews/demo-{i:04d}" if review
-                 else f"https://www.reddit.com/r/DemoData/comments/demo{i:04d}/"),
+            platform=platform, external_id=f"demo-syn-{i:04d}", url=url,
             author_handle=f"demo_user_{rng.randint(1, 400):03d}",
             text=text, posted_at=at, collected_at=min(at + timedelta(minutes=20), now),
         ))
+    for i, (days_ago, text, _) in enumerate(URGENT_HISTORY):
+        at = now - timedelta(days=days_ago, hours=rng.uniform(1, 8))
+        mentions.append(Mention(
+            platform=Platform.REDDIT, external_id=f"demo-urg-{i:02d}",
+            url=f"https://www.reddit.com/r/DemoData/comments/demourg{i:02d}/",
+            author_handle=f"demo_user_{rng.randint(1, 400):03d}", text=text, posted_at=at,
+            collected_at=at + timedelta(minutes=10),
+        ))
     return mentions
+
+
+def _demo_platform(i: int):
+    """A DEMO platform mix with a matching fake permalink."""
+    from harvey.models import Platform
+
+    slot = i % 10
+    if slot in (0, 5):
+        return Platform.TRUSTPILOT, f"https://www.trustpilot.com/reviews/demo-{i:04d}"
+    if slot in (2, 7):
+        return Platform.X, f"https://x.com/demo_user/status/{900000 + i}"
+    if slot == 4:
+        return Platform.INSTAGRAM, f"https://www.instagram.com/p/demo{i:04d}/"
+    if slot == 9:
+        return Platform.TIKTOK, f"https://www.tiktok.com/@demo_user/video/{700000 + i}"
+    return Platform.REDDIT, f"https://www.reddit.com/r/DemoData/comments/demo{i:04d}/"
+
+
+def _iso(value) -> datetime:
+    return datetime.fromisoformat(str(value).replace(" ", "T"))
+
+
+async def _backdate_escalations(state) -> int:
+    """DEMO: move the URGENT_HISTORY escalations back to their post time and
+    acknowledge them after the scripted delay (one misses the SLA). Only the
+    throwaway demo DB is touched; the audit log is left as written."""
+    from harvey.escalation import ack
+
+    delays = {f"demo-urg-{i:02d}": minutes for i, (_, _, minutes) in enumerate(URGENT_HISTORY)}
+    async with state.connect() as db:
+        async with db.execute(
+            "SELECT e.id, e.created_at, e.sla_due_at, m.external_id, m.collected_at FROM escalations e "
+            "JOIN mentions m ON m.id = e.mention_id WHERE m.external_id LIKE 'demo-urg-%'"
+        ) as cursor:
+            rows = [dict(r) for r in await cursor.fetchall()]
+    for row in rows:
+        created = _iso(row["collected_at"]) + timedelta(minutes=2)
+        sla = _iso(row["sla_due_at"]) - _iso(row["created_at"])
+        acked = created + timedelta(minutes=delays[row["external_id"]])
+        await ack(state, row["id"], "demo.reviewer@wellpeps.test")
+        async with state.connect() as db:
+            await db.execute(
+                "UPDATE escalations SET created_at = ?, sla_due_at = ?, acked_at = ?, breached = ? WHERE id = ?",
+                (created.isoformat(), (created + sla).isoformat(), acked.isoformat(), acked > created + sla,
+                 row["id"]))
+            await db.commit()
+    return len(rows)
 
 
 async def seed(db_path: str) -> None:
@@ -270,13 +350,15 @@ async def seed(db_path: str) -> None:
         escalate=lambda m, t: escalate(state, notifier, m, t, config),
     )
     drafts = await draft_batch(state, Drafter(brain), Reviewer(brain), limit=100)
+    history = await _backdate_escalations(state)
     banked = await bank_language(state)
     built = [await build_brief(state, brain, period, config=config, now=now) for period in ("daily", "weekly")]
     print(f"  {BANNER}")
     print(f"  db: {db_path}")
     print(f"  ingested {ingest.created} fixture + {synthetic} synthetic mention(s); triaged "
           f"{triage.processed} ({triage.escalated} escalated, {triage.dropped} dropped); "
-          f"drafted {drafts.processed}; banked language from {banked}")
+          f"drafted {drafts.processed}; banked language from {banked}; "
+          f"{history} escalation(s) acknowledged in the history")
     for brief in built:
         print(f"  {brief['period']} brief #{brief['id']}: {brief['headline']}")
 

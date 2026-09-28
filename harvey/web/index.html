@@ -30,11 +30,12 @@
   </div>
 </header>
 
-<nav>
-  <button class="active" data-tab="urgent">Urgent<span class="nav-count" id="nav-urgent"></span></button>
+<nav aria-label="Sections">
+  <button class="active" data-tab="feed" aria-current="page">Feed</button>
+  <button data-tab="urgent">Urgent<span class="nav-count" id="nav-urgent" aria-label="open urgent items"></span></button>
   <button data-tab="review">Review desk<span class="nav-count" id="nav-review"></span></button>
+  <button data-tab="analytics">Analytics</button>
   <button data-tab="pulse">Pulse</button>
-  <button data-tab="feed">Feed</button>
   <button data-tab="usage">Usage</button>
   <button data-tab="users" class="hidden" id="nav-users">Users</button>
   <button data-tab="controls">Controls</button>
@@ -42,8 +43,43 @@
 
 <main>
 
+<!-- Feed: every collected mention -->
+<div id="feed" class="section active">
+  <div class="section-head">
+    <h2>Feed</h2>
+    <p>Public mentions Pulse has collected, newest first. Click a row for its full record and audit trail. Filters stay in the address bar, so you can share a filtered view.</p>
+  </div>
+  <div class="urgent-banner hidden" id="urgent-banner" role="status"></div>
+  <form class="form-row" id="feed-filters">
+    <div class="form-group"><label class="form-label" for="f-q">Search text</label>
+      <input class="form-input" id="f-q" name="q" type="search" placeholder="contains…"></div>
+    <div class="form-group"><label class="form-label" for="f-status">Status</label>
+      <select class="form-input" id="f-status" name="status"><option value="">All</option></select></div>
+    <div class="form-group"><label class="form-label" for="f-platform">Platform</label>
+      <select class="form-input" id="f-platform" name="platform"><option value="">All</option></select></div>
+    <div class="form-group"><label class="form-label" for="f-category">Category</label>
+      <select class="form-input" id="f-category" name="category"><option value="">All</option></select></div>
+    <div class="form-group"><label class="form-label" for="f-urgency">Urgency</label>
+      <select class="form-input" id="f-urgency" name="urgency"><option value="">All</option></select></div>
+    <div class="form-group"><label class="form-label" for="f-drug">Drug</label>
+      <input class="form-input" id="f-drug" name="drug" placeholder="semaglutide"></div>
+    <div class="form-group"><label class="form-label" for="f-product">WellPeps product</label>
+      <input class="form-input" id="f-product" name="product"></div>
+    <div class="form-group"><label class="form-label" for="f-competitor">Competitor</label>
+      <input class="form-input" id="f-competitor" name="competitor"></div>
+    <div class="form-group fg-narrow"><label class="form-label" for="f-sort">Sort</label>
+      <select class="form-input" id="f-sort" name="sort"><option value="newest">Newest first</option><option value="oldest">Oldest first</option></select></div>
+    <div class="form-group form-actions"><button class="btn btn-secondary" type="submit">Apply</button>
+      <button class="btn btn-ghost" type="button" data-action="feed-clear">Clear</button></div>
+  </form>
+  <div id="feed-summary" class="breakdown"></div>
+  <div id="feed-list"></div>
+  <div class="pager" id="feed-pager"></div>
+</div>
+
+
 <!-- Urgent: open escalations, breached first -->
-<div id="urgent" class="section active">
+<div id="urgent" class="section">
   <div class="section-head">
     <h2>Urgent</h2>
     <p>Open escalations, breached first, then the soonest SLA. Adverse events are acknowledged by the clinical owner. Refreshes every 30 seconds.</p>
@@ -62,6 +98,42 @@
     <div class="desk-pane" id="review-pane"></div>
   </div>
   <p class="kbd-hint"><kbd>j</kbd>/<kbd>k</kbd> next/previous &middot; <kbd>e</kbd> edit &middot; <kbd>a</kbd> approve</p>
+</div>
+
+<!-- Analytics: graphic market intelligence (aggregates only) -->
+<div id="analytics" class="section">
+  <div class="section-head">
+    <h2>Analytics</h2>
+    <p>Market signals from triaged, relevant mentions: aggregates only, never individuals. Anything seen in fewer than 2 mentions folds into “Other” or is hidden. Days are local to <span id="an-tz">the org timezone</span>.</p>
+  </div>
+  <form class="an-filters" id="an-filters" aria-label="Analytics filters">
+    <div class="form-group"><label class="form-label" for="an-range">Date range</label>
+      <select class="form-input" id="an-range">
+        <option value="7">Last 7 days</option><option value="30" selected>Last 30 days</option>
+        <option value="90">Last 90 days</option><option value="custom">Custom…</option>
+      </select></div>
+    <div class="form-group an-custom hidden" id="an-custom">
+      <span class="an-dates"><label class="visually-hidden" for="an-from">From</label><input class="form-input" type="date" id="an-from">
+      <span class="muted">to</span><label class="visually-hidden" for="an-to">To</label><input class="form-input" type="date" id="an-to"></span></div>
+    <div class="form-group"><label class="form-label" for="an-bucket">Bucket</label>
+      <select class="form-input" id="an-bucket">
+        <option value="auto">Auto</option><option value="day">Day</option><option value="week">Week</option>
+      </select></div>
+    <div class="form-group"><span class="form-label" id="an-platform-label">Platforms</span>
+      <details class="multi" aria-labelledby="an-platform-label"><summary class="form-input" id="an-platform-sum">All platforms</summary>
+        <div class="check-list" id="an-platform-list"></div></details></div>
+    <div class="form-group"><span class="form-label" id="an-competitor-label">Competitors <span class="muted">(WellPeps always shown)</span></span>
+      <details class="multi" aria-labelledby="an-competitor-label"><summary class="form-input" id="an-competitor-sum">Top competitors</summary>
+        <div class="check-list" id="an-competitor-list"></div></details></div>
+    <div class="form-group"><label class="form-label" for="an-drug">Drug / topic</label>
+      <select class="form-input" id="an-drug"><option value="">All drugs &amp; topics</option></select></div>
+    <div class="form-group"><label class="form-label" for="an-category">Category</label>
+      <select class="form-input" id="an-category"><option value="">All categories</option></select></div>
+    <div class="form-group form-actions"><button class="btn btn-ghost" type="button" data-action="an-reset">Reset</button></div>
+  </form>
+  <p class="an-error hidden" id="an-error" role="alert"></p>
+  <div class="an-tiles" id="an-tiles" aria-live="polite"></div>
+  <div class="an-grid" id="an-grid"></div>
 </div>
 
 <!-- Pulse: market trends, briefs, language bank (aggregates only) -->
@@ -112,36 +184,6 @@
     <div id="bank-list"></div>
     <div class="pager" id="bank-pager"></div>
   </div>
-</div>
-
-<!-- Feed: every collected mention -->
-<div id="feed" class="section">
-  <div class="section-head">
-    <h2>Feed</h2>
-    <p>Public mentions Pulse has collected, newest first. Click a row for its full record and audit trail.</p>
-  </div>
-  <form class="form-row" id="feed-filters">
-    <div class="form-group"><label class="form-label" for="f-q">Search text</label>
-      <input class="form-input" id="f-q" name="q" type="search" placeholder="contains…"></div>
-    <div class="form-group"><label class="form-label" for="f-status">Status</label>
-      <select class="form-input" id="f-status" name="status"><option value="">All</option></select></div>
-    <div class="form-group"><label class="form-label" for="f-platform">Platform</label>
-      <select class="form-input" id="f-platform" name="platform"><option value="">All</option></select></div>
-    <div class="form-group"><label class="form-label" for="f-category">Category</label>
-      <select class="form-input" id="f-category" name="category"><option value="">All</option></select></div>
-    <div class="form-group"><label class="form-label" for="f-urgency">Urgency</label>
-      <select class="form-input" id="f-urgency" name="urgency"><option value="">All</option></select></div>
-    <div class="form-group"><label class="form-label" for="f-drug">Drug</label>
-      <input class="form-input" id="f-drug" name="drug" placeholder="semaglutide"></div>
-    <div class="form-group"><label class="form-label" for="f-product">WellPeps product</label>
-      <input class="form-input" id="f-product" name="product"></div>
-    <div class="form-group"><label class="form-label" for="f-competitor">Competitor</label>
-      <input class="form-input" id="f-competitor" name="competitor"></div>
-    <div class="form-group"><button class="btn btn-secondary" type="submit">Apply</button></div>
-  </form>
-  <div id="feed-summary" class="breakdown"></div>
-  <div id="feed-list"></div>
-  <div class="pager" id="feed-pager"></div>
 </div>
 
 <!-- Usage -->
@@ -205,6 +247,9 @@
 
 <script src="/static/labels.js"></script>
 <script src="/static/app.js"></script>
+<script src="/static/feed.js"></script>
 <script src="/static/pulse.js"></script>
+<script src="/static/charts.js"></script>
+<script src="/static/analytics.js"></script>
 </body>
 </html>
