@@ -4,15 +4,18 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>WellPeps Pulse</title>
+<link rel="icon" type="image/png" sizes="32x32" href="/static/brand/favicon-32.png">
+<link rel="apple-touch-icon" href="/static/brand/favicon-180.png">
+<link rel="preload" href="/static/fonts/inter-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="/static/app.css">
 </head>
 <body>
 
 <header>
   <div class="brand">
-    <div class="mark">P</div>
-    <div>
-      <h1>WellPeps Pulse</h1>
+    <img class="brand-logo" src="/static/brand/wellpeps-logo.png" width="183" height="36" alt="WellPeps">
+    <div class="brand-text">
+      <h1><span class="visually-hidden">WellPeps </span>Pulse</h1>
       <div class="tagline">Listen first. Humans approve every reply.</div>
     </div>
   </div>
@@ -22,8 +25,6 @@
       <span id="header-status-text">Checking…</span>
     </div>
     <div class="user-chip" id="user-chip"></div>
-    <button class="icon-btn" id="theme-btn" data-action="theme"
-            title="Appearance: follows your system until you pick one">auto</button>
     <button class="refresh-btn" data-action="refresh">Refresh</button>
     <button class="refresh-btn" data-action="logout">Sign out</button>
   </div>
@@ -80,7 +81,7 @@
       <select class="form-input" id="pulse-history"></select>
       <span class="admin-only hidden" id="pulse-generate-tools">
         <select class="form-input" id="pulse-period" aria-label="Brief period">
-          <option value="daily">daily</option><option value="weekly">weekly</option>
+          <option value="daily">Daily</option><option value="weekly">Weekly</option>
         </select>
         <button class="btn btn-secondary btn-sm" data-action="pulse-generate">Generate brief</button>
       </span>
@@ -162,8 +163,8 @@
       <input class="form-input" id="u-name" name="name" required></div>
     <div class="form-group"><label class="form-label" for="u-role">Role</label>
       <select class="form-input" id="u-role" name="role">
-        <option value="viewer">viewer</option><option value="reviewer">reviewer</option>
-        <option value="clinical">clinical</option><option value="admin">admin</option>
+        <option value="viewer">Viewer</option><option value="reviewer">Reviewer</option>
+        <option value="clinical">Clinical</option><option value="admin">Admin</option>
       </select></div>
     <div class="form-group"><label class="form-label" for="u-password">Password (min 12)</label>
       <input class="form-input" id="u-password" name="password" type="password" minlength="12" autocomplete="new-password" required></div>
@@ -202,6 +203,7 @@
 
 <aside class="drawer hidden" id="drawer" aria-label="Mention detail"></aside>
 
+<script src="/static/labels.js"></script>
 <script src="/static/app.js"></script>
 <script src="/static/pulse.js"></script>
 </body>

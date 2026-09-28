@@ -11,11 +11,12 @@ red, the draft cites at least one claim, and (when
 ``review.require_publishable_claims``) every cited claim is signed off.
 """
 
+import json
 import logging
 from dataclasses import dataclass
 from datetime import datetime, timezone
 
-from harvey import knowledge
+from harvey import explain, knowledge
 from harvey.compliance import compliance_filter
 from harvey.config import ESCALATION_KINDS
 from harvey.escalation import SEVERE_KINDS, escalate
@@ -84,28 +85,71 @@ async def _rows(state, sql: str, params: tuple = ()) -> list[dict]:
 
 
 async def urgent(state, now: datetime | None = None) -> dict:
-    """Open escalations with their mention: breached first, then soonest SLA."""
+    """Open escalations with their mention: breached first, then soonest SLA.
+
+    Each item carries what the Urgent card shows: a short excerpt of the post,
+    its title/author/times, and ``why`` (harvey.explain). Dashboard only.
+    """
     now = now or _utcnow()
     rows = await _rows(state, (
         "SELECT e.id, e.mention_id, e.kind, e.owner, e.sla_due_at, e.breached, e.notified_at, "
-        "e.created_at, m.platform, m.url AS permalink, m.status, t.category, t.urgency "
+        "e.created_at, m.platform, m.url AS permalink, m.status, m.text, m.title, m.posted_at, "
+        "m.collected_at, m.author_handle, t.category, t.urgency, t.urgency_reason "
         "FROM escalations e JOIN mentions m ON m.id = e.mention_id "
         "LEFT JOIN triage t ON t.mention_id = e.mention_id WHERE e.acked_at IS NULL"
     ))
+    evidence, manual_by = await _escalation_context(state, [r["mention_id"] for r in rows])
     items = []
     for row in rows:
         due = _parse_ts(row["sla_due_at"])
         breached = bool(row["breached"]) or (due is not None and due <= now)
+        triage = {k: row[k] for k in ("urgency_reason", "category", "urgency")}             if row["urgency"] is not None else None
         items.append({
             **{k: row[k] for k in ("id", "mention_id", "kind", "owner", "sla_due_at", "platform",
-                                   "permalink", "status", "category", "urgency", "created_at")},
+                                   "permalink", "status", "category", "urgency", "created_at",
+                                   "title", "posted_at", "collected_at", "author_handle")},
+            "excerpt": explain.excerpt(row["text"]),
+            "why": explain.urgency_explanation(row["text"] or "", triage,
+                                               evidence=evidence.get(row["mention_id"], ""),
+                                               manual_by=manual_by.get(row["id"])),
             "breached": breached,
             "notified": row["notified_at"] is not None,
+            "notified_at": row["notified_at"],
             "seconds_left": int((due - now).total_seconds()) if due else None,
         })
     items.sort(key=lambda r: (not r["breached"], r["seconds_left"] is None,
                               r["seconds_left"] or 0, r["id"]))
     return {"now": now.isoformat(), "items": items}
+
+
+def _json(value) -> dict:
+    try:
+        data = json.loads(value) if isinstance(value, str) else (value or {})
+    except ValueError:
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+async def _escalation_context(state, mention_ids: list[int]) -> tuple[dict, dict]:
+    """(mention_id -> latest safety-screen evidence, escalation_id -> manual actor)
+    from the audit log, in one query."""
+    if not mention_ids:
+        return {}, {}
+    marks = ", ".join("?" for _ in mention_ids)
+    rows = await _rows(state, (
+        f"SELECT mention_id, event, actor, verdict_json FROM audit_log WHERE mention_id IN ({marks}) "
+        "AND event IN ('triaged', 'escalated') ORDER BY id"
+    ), tuple(int(m) for m in mention_ids))
+    evidence, manual_by = {}, {}
+    for row in rows:
+        verdict = _json(row["verdict_json"])
+        if row["event"] == AuditEventType.TRIAGED.value:
+            quote = (verdict.get("safety_screen") or {}).get("evidence")
+            if quote:
+                evidence[row["mention_id"]] = str(quote)
+        elif verdict.get("action") == "manual" and verdict.get("escalation_id") is not None:
+            manual_by[verdict["escalation_id"]] = row["actor"]
+    return evidence, manual_by
 
 
 def _enum(value: str | None, enum, name: str) -> str | None:
@@ -185,6 +229,7 @@ async def detail(state, mention_id: int, config) -> dict:
     blockers = approval_blockers(mention.status, drafts[0] if drafts else None,
                                  mention.platform.value, config)
     return {
+        "why": _detail_why(mention, triage, escalations, audit),
         "mention": mention.model_dump(mode="json"),
         "triage": triage.model_dump(mode="json") if triage else None,
         "latest_draft": drafts[0].model_dump(mode="json") if drafts else None,
@@ -194,6 +239,20 @@ async def detail(state, mention_id: int, config) -> dict:
         "claims": _claim_info(claim_ids),
         "approval": {"allowed": not blockers, "blockers": blockers},
     }
+
+
+def _detail_why(mention, triage, escalations: list[dict], audit) -> dict | None:
+    """``why`` for the drawer / review desk: the open (else latest) escalation
+    decides whether it was manual."""
+    current = next((e for e in reversed(escalations) if not e.get("acked_at")),
+                   escalations[-1] if escalations else None)
+    manual_by = None
+    if current is not None:
+        manual_by = next((e.actor for e in audit if e.event is AuditEventType.ESCALATED
+                          and e.verdict.get("action") == "manual"
+                          and e.verdict.get("escalation_id") == current["id"]), None)
+    return explain.urgency_explanation(mention.text, triage, evidence=explain.screen_evidence(audit),
+                                       manual_by=manual_by)
 
 
 # --- Approval gate ------------------------------------------------------------------------------------

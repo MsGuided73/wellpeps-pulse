@@ -2,7 +2,7 @@
 
 // WellPeps Pulse — the Pulse tab (Phase 8). Loaded after app.js and uses its
 // helpers (api, send, escHtml, tag, toneBadge, emptyState, applyWidths, can,
-// showTab, ACTIONS). Same rules as app.js: no inline style or handlers, every
+// showTab, ACTIONS) and labels.js (label, labelHtml, timeHtml). Same rules as app.js: no inline style or handlers, every
 // server value through escHtml, and model-written text (headline, summary,
 // action cards) is rendered as escaped text; the summary's **bold** and "- "
 // lists go through the tiny whitelist renderer below, never as raw HTML.
@@ -84,15 +84,16 @@ function sentimentTable(rows) {
   if (!rows || !rows.length) return '<p class="muted">No scored mentions in this window.</p>';
   return '<div class="table-card"><table><thead><tr><th>Subject</th><th></th><th class="num">Mean</th>' +
     '<th class="num">Previous</th><th class="num">Change</th><th class="num">n</th></tr></thead><tbody>' +
-    rows.map(r => '<tr><td>' + escHtml(r.subject) + '</td><td class="muted">' + escHtml(r.kind) + '</td>' +
+    rows.map(r => '<tr><td>' + escHtml(r.subject) + '</td><td class="muted">' + labelHtml('subject', r.kind) + '</td>' +
       '<td class="num">' + escHtml(fmtNum(r.mean, 2)) + '</td><td class="num muted">' + escHtml(fmtNum(r.prev_mean, 2)) + '</td>' +
       '<td class="num">' + (r.mean === null ? '' : deltaChip(r.delta, '', 2)) + '</td>' +
       '<td class="num muted">' + escHtml(String(r.n)) + '</td></tr>').join('') + '</tbody></table></div>';
 }
 
-function mixList(rows, key) {
+function mixList(rows, key, group) {
   if (!rows || !rows.length) return '<p class="muted">Nothing yet.</p>';
-  return '<div class="mix">' + rows.map(r => '<div class="mix-row"><span>' + escHtml(String(r[key]).replace(/_/g, ' ')) + '</span>' +
+  return '<div class="mix">' + rows.map(r => '<div class="mix-row"><span>' +
+    (group ? labelHtml(group, r[key]) : escHtml(String(r[key]))) + '</span>' +
     '<span class="num">' + escHtml(String(r.count)) + ' ' + deltaChip(r.delta, '', 0) + '</span></div>').join('') + '</div>';
 }
 
@@ -110,7 +111,7 @@ function renderTables(data, terms) {
     block('Share of voice', shareBars(data.share_of_voice), 'WellPeps and competitors, change vs the previous window in points.') +
     block('Sentiment', sentimentTable(data.sentiment), 'Mean triage sentiment, −1 to 1.') +
     block('Complaint themes', themesList(data.complaint_themes)) +
-    block('Category mix', mixList(data.category_mix, 'category')) +
+    block('Category mix', mixList(data.category_mix, 'category', 'category')) +
     block('Drug mix', mixList(data.drug_mix, 'drug')) +
     '</div>';
 }
@@ -119,8 +120,8 @@ function renderTables(data, terms) {
 
 function actionCard(c) {
   return '<div class="action-card"><div class="ac-title">' + escHtml(c.title) + '</div>' +
-    '<div class="ac-chips">' + toneBadge(c.owner_hint, OWNER_TONE[c.owner_hint] || 'idle') + ' ' +
-    toneBadge(String(c.urgency || '').replace(/_/g, ' '), URGENCY_TONE[c.urgency] || 'idle') + '</div>' +
+    '<div class="ac-chips">' + toneBadge(label('owner', c.owner_hint), OWNER_TONE[c.owner_hint] || 'idle') + ' ' +
+    toneBadge(label('horizon', c.urgency), URGENCY_TONE[c.urgency] || 'idle') + '</div>' +
     '<p class="ac-why">' + escHtml(c.why) + '</p><p class="ac-action"><b>Do:</b> ' + escHtml(c.action) + '</p>' +
     ((c.evidence_terms || []).length ? '<div class="tag-row">' + c.evidence_terms.map(t => '<span class="tag">' + escHtml(t) + '</span>').join('') + '</div>' : '') +
     '</div>';
@@ -129,7 +130,7 @@ function actionCard(c) {
 function renderBrief(detail) {
   const data = detail.data || {};
   const fallback = detail.status === 'fallback';
-  let html = '<div class="brief-head"><div class="to-line">' + toneBadge(detail.period, 'active') + ' ' +
+  let html = '<div class="brief-head"><div class="to-line">' + toneBadge(label('period', detail.period), 'active') + ' ' +
     escHtml(windowLabel(detail)) + ' · ' + escHtml(String(data.mentions || 0)) + ' mention(s)' +
     (fallback ? ' ' + toneBadge('tables only', 'waiting') : '') +
     (detail.slack_sent_at ? ' ' + toneBadge('sent to Slack', 'good') : '') + '</div>' +
@@ -154,7 +155,7 @@ async function loadBriefView() {
   const list = await api('/api/briefs?limit=60');
   if (!list) { el.innerHTML = offlineState(); return; }
   const sel = document.getElementById('pulse-history');
-  sel.innerHTML = list.items.map(b => '<option value="' + escHtml(String(b.id)) + '">' + escHtml(b.period + ' · ' + windowLabel(b)) +
+  sel.innerHTML = list.items.map(b => '<option value="' + escHtml(String(b.id)) + '">' + escHtml(label('period', b.period) + ' · ' + windowLabel(b)) +
     (b.status === 'fallback' ? ' (tables only)' : '') + '</option>').join('');
   if (!list.items.length) {
     el.innerHTML = emptyState('&#9678;', 'No brief yet',
@@ -217,7 +218,7 @@ async function loadBankView() {
   el.innerHTML = '<div class="table-card"><table><thead><tr><th>Phrase</th><th>Product / drug</th><th>Category</th>' +
     '<th class="num">Mentions</th><th>First seen</th><th>Last seen</th><th></th></tr></thead><tbody>' +
     data.items.map((p, i) => '<tr><td class="phrase">“' + escHtml(p.phrase) + '”</td><td>' + escHtml(p.scope) + '</td>' +
-      '<td>' + escHtml(String(p.category || '').replace(/_/g, ' ')) + '</td><td class="num">' + escHtml(String(p.count)) + '</td>' +
+      '<td>' + labelHtml('category', p.category) + '</td><td class="num">' + escHtml(String(p.count)) + '</td>' +
       '<td class="muted">' + formatDate(p.first_seen) + '</td><td class="muted">' + formatDate(p.last_seen) + '</td>' +
       '<td><button class="btn btn-secondary btn-sm" data-action="bank-copy" data-index="' + i + '">Copy</button></td></tr>').join('') +
     '</tbody></table></div>';
@@ -264,7 +265,7 @@ function showTermInFeed(term) {
   showTab('feed');
 }
 
-fillSelect('b-category', CATEGORIES);
+fillSelect('b-category', CATEGORIES, 'category');
 
 Object.assign(ACTIONS, {
   'pulse-view': el => setPulseView(el.dataset.view),

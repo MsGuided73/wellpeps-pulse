@@ -499,6 +499,30 @@ def test_login_page_and_static_assets_are_public(app_state):
     assert client.get("/static/login.js").status_code == 200
 
 
+@pytest.mark.parametrize("path,media", [
+    ("/static/labels.js", "text/javascript"), ("/static/icons.svg", "image/svg+xml"),
+    ("/static/brand/wellpeps-logo.png", "image/png"), ("/static/brand/favicon-32.png", "image/png"),
+    ("/static/fonts/inter-latin-400-normal.woff2", "font/woff2"),
+    ("/static/fonts/lora-latin-700-normal.woff2", "font/woff2"),
+])
+def test_brand_assets_are_served_locally(app_state, path, media):
+    client, _ = client_for()
+    resp = client.get(path)
+    assert resp.status_code == 200
+    assert resp.headers["content-type"].startswith(media)
+
+
+def test_stylesheet_and_pages_make_no_external_requests():
+    for name in ("app.css", "index.html", "login.html", "icons.svg"):
+        text = (dashboard.WEB_DIR / name).read_text(encoding="utf-8")
+        assert not re.search(r"(?:url\(|href=|src=)['\"]?(?:https?:)?//", text), name
+
+
+def test_labels_load_before_the_scripts_that_use_them():
+    html = (dashboard.WEB_DIR / "index.html").read_text(encoding="utf-8")
+    assert html.index("/static/labels.js") < html.index("/static/app.js") < html.index("/static/pulse.js")
+
+
 def test_root_redirects_to_login_without_session(app_state):
     client, _ = client_for()
     resp = client.get("/", follow_redirects=False)
@@ -522,7 +546,7 @@ def test_pages_have_no_inline_script_or_style(name):
     assert "<style" not in html
 
 
-@pytest.mark.parametrize("name", ["app.js", "login.js"])
+@pytest.mark.parametrize("name", ["app.js", "login.js", "labels.js"])
 def test_scripts_build_no_inline_styles_or_handlers(name):
     js = (dashboard.WEB_DIR / name).read_text(encoding="utf-8")
     assert "style=" not in js

@@ -3,13 +3,6 @@
 // Sign-in page. No inline script (the CSP forbids it); the session cookie is
 // HttpOnly, so this page never sees the token.
 
-(function applySavedTheme() {
-  try {
-    const mode = localStorage.getItem('pulse-theme');
-    if (mode === 'light' || mode === 'dark') document.documentElement.setAttribute('data-theme', mode);
-  } catch { /* private mode */ }
-})();
-
 function showError(msg) {
   const el = document.getElementById('login-error');
   el.textContent = msg;

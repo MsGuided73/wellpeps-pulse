@@ -251,8 +251,16 @@ def urgent_override(text: str) -> tuple[str, str] | None:
 
     Scans at most MAX_MENTION_TEXT_CHARS characters.
     """
+    hit = urgent_override_match(text)
+    return (hit[0], hit[1]) if hit else None
+
+
+def urgent_override_match(text: str) -> tuple[str, str, re.Match[str]] | None:
+    """Like ``urgent_override`` but also returns the regex match, so callers
+    can show the words in the post that tripped the rule (never the regex)."""
     text = (text or "")[:MAX_MENTION_TEXT_CHARS]
     for category, pattern, compiled in _urgent_patterns(config_dir()):
-        if compiled.search(text):
-            return category, pattern
+        match = compiled.search(text)
+        if match:
+            return category, pattern, match
     return None

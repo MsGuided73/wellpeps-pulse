@@ -7,6 +7,8 @@
 // - Every value from the server passes through escHtml (text) or safeHref
 //   (links) before it reaches innerHTML.
 // - State-changing requests carry the session's CSRF token (X-CSRF-Token).
+// - Labels, times and platform icons come from labels.js (loaded first):
+//   raw enum codes are shown only in title attributes.
 
 let currentTab = 'urgent';
 let ME = null;
@@ -18,77 +20,37 @@ let editClaims = [];          // claim ids in the editor
 let feedOffset = 0;
 const FEED_PAGE = 50;
 
-// ── Appearance ──
-
-const THEMES = ['auto', 'light', 'dark'];
-const THEME_KEY = 'pulse-theme';
-
-function applyTheme(mode) {
-  const root = document.documentElement;
-  if (mode === 'auto') root.removeAttribute('data-theme');
-  else root.setAttribute('data-theme', mode);
-  const btn = document.getElementById('theme-btn');
-  if (btn) btn.textContent = mode;
-}
-
-function readTheme() {
-  try { return localStorage.getItem(THEME_KEY) || 'auto'; } catch { return 'auto'; }
-}
-
-function cycleTheme() {
-  const next = THEMES[(THEMES.indexOf(readTheme()) + 1) % THEMES.length];
-  try { localStorage.setItem(THEME_KEY, next); } catch { /* private mode */ }
-  applyTheme(next);
-}
-
-applyTheme(THEMES.includes(readTheme()) ? readTheme() : 'auto');
-
 // ── Utilities ──
-
-function escHtml(s) {
-  if (s === null || s === undefined || s === '') return '';
-  return String(s).replace(/[&<>"']/g, ch => (
-    {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]
-  ));
-}
 
 function safeHref(url) {
   // Only link out to http(s); anything else (javascript:, data:) is dropped.
   return /^https?:\/\//i.test(String(url || '')) ? escHtml(url) : '';
 }
 
-function extLink(url, label) {
+function extLink(url, text, cls) {
   const href = safeHref(url);
-  return href ? '<a href="' + href + '" target="_blank" rel="noopener noreferrer">' + escHtml(label) + '</a>' : '';
+  return href ? '<a' + (cls ? ' class="' + escHtml(cls) + '"' : '') + ' href="' + href +
+    '" target="_blank" rel="noopener noreferrer">' + escHtml(text) + '</a>' : '';
 }
 
-// Mention lifecycle vocabulary. tone: waiting | active | good | bad | idle
-const STATUS = {
-  new:        ['New', 'active'],
-  triaged:    ['Triaged', 'active'],
-  drafted:    ['Drafted', 'active'],
-  in_review:  ['Waiting on you', 'waiting'],
-  approved:   ['Approved — post by hand', 'good'],
-  rejected:   ['Rejected', 'idle'],
-  posted:     ['Posted', 'good'],
-  dropped:    ['Dropped', 'idle'],
-  escalated:  ['Escalated', 'bad'],
+// Mention lifecycle tone: waiting | active | good | bad | idle
+const STATUS_TONE = {
+  new: 'active', triaged: 'active', drafted: 'active', in_review: 'waiting', approved: 'good',
+  rejected: 'idle', posted: 'good', dropped: 'idle', escalated: 'bad',
 };
-const PLATFORMS = ['reddit', 'instagram', 'facebook', 'tiktok', 'x', 'youtube', 'trustpilot', 'bbb', 'google_reviews', 'web', 'other'];
-const CATEGORIES = ['complaint', 'question', 'purchase_intent', 'praise', 'misinformation', 'adverse_event', 'legal_regulatory', 'privacy', 'billing_fraud', 'other'];
-const URGENCIES = ['urgent', 'high', 'normal', 'low'];
-const ESC_KINDS = ['adverse_event', 'legal', 'privacy', 'billing_fraud', 'viral_negative'];
+const PLATFORMS = Object.keys(LABELS.platform);
+const CATEGORIES = Object.keys(LABELS.category);
+const URGENCIES = Object.keys(LABELS.urgency);
+const ESC_KINDS = Object.keys(LABELS.kind);
 
 function statusMeta(status) {
-  const hit = STATUS[String(status || '').toLowerCase()];
-  if (hit) return { label: hit[0], tone: hit[1] };
-  const label = String(status || 'unknown').replace(/_/g, ' ');
-  return { label: label.charAt(0).toUpperCase() + label.slice(1), tone: 'idle' };
+  const key = String(status || 'unknown').toLowerCase();
+  return { label: label('status', key), tone: STATUS_TONE[key] || 'idle' };
 }
 
 function badge(status) {
   const m = statusMeta(status);
-  return '<span class="badge t-' + m.tone + '">' + escHtml(m.label) + '</span>';
+  return '<span class="badge t-' + m.tone + '" title="' + escHtml(status || '') + '">' + escHtml(m.label) + '</span>';
 }
 
 function toneBadge(text, tone) {
@@ -97,23 +59,19 @@ function toneBadge(text, tone) {
 
 function tierBadge(tier) {
   const tone = {green: 'good', yellow: 'waiting', red: 'bad'}[tier] || 'idle';
-  return toneBadge(tier ? 'filter ' + tier : 'not filtered', tone);
+  return '<span class="badge t-' + tone + '" title="' + escHtml(tier || '') + '">' +
+    escHtml(tier ? label('tier', tier) : 'Not filtered') + '</span>';
 }
 
-// The DB stores naive UTC; without a zone suffix the browser would read it as local.
-const NAIVE_TS = /^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}(:\d{2}(\.\d+)?)?$/;
-
-function parseTs(d) {
-  if (!d) return null;
-  const s = String(d);
-  const dt = new Date(NAIVE_TS.test(s) ? s.replace(' ', 'T') + 'Z' : s);
-  return isNaN(dt) ? null : dt;
+function verdictBadge(verdict) {
+  const tone = verdict === 'pass' ? 'good' : verdict === 'reject' ? 'bad' : 'waiting';
+  return '<span class="badge t-' + tone + '" title="' + escHtml(verdict || '') + '">' +
+    escHtml(verdict ? label('verdict', verdict) : 'Not reviewed') + '</span>';
 }
 
+// Relative time ("3h ago") with the absolute time in the tooltip; escaped HTML.
 function formatDate(d) {
-  const dt = parseTs(d);
-  if (!dt) return escHtml(d || '');
-  return escHtml(dt.toLocaleString('en-US', {month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit'}));
+  return timeHtml(d);
 }
 
 function truncate(s, n) {
@@ -121,8 +79,28 @@ function truncate(s, n) {
   return s.length > n ? s.slice(0, n - 1) + '…' : s;
 }
 
-function tag(k, v) {
-  return v ? '<span class="tag"><span class="k">' + escHtml(k) + '</span>' + escHtml(v) + '</span>' : '';
+function tag(k, v, raw) {
+  return v ? '<span class="tag"' + (raw ? ' title="' + escHtml(raw) + '"' : '') + '>' +
+    (k ? '<span class="k">' + escHtml(k) + '</span>' : '') + escHtml(v) + '</span>' : '';
+}
+
+// A tag whose value is a raw code shown through the label map.
+function labelTag(k, group, raw) {
+  return raw ? tag(k, label(group, raw), raw) : '';
+}
+
+function whyHtml(why) {
+  if (!why || !why.text) return '';
+  return '<div class="why"><span class="why-src" title="' + escHtml(why.source) + '">' +
+    escHtml(label('why', why.source)) + '</span><span class="why-text">' + escHtml(why.text) + '</span></div>';
+}
+
+function authorText(platform, handle) {
+  handle = String(handle || '').trim();
+  if (!handle) return '';
+  if (platform === 'reddit' && !/^\/?u\//i.test(handle)) return 'u/' + handle;
+  if (['x', 'instagram', 'tiktok'].includes(platform) && handle[0] !== '@') return '@' + handle;
+  return handle;
 }
 
 function emptyState(glyph, title, copy) {
@@ -246,6 +224,56 @@ async function pollUrgent() {
   return data;
 }
 
+const UNASSIGNED_HINT = 'Set escalation.owners in harvey.yaml';
+
+function ownerHtml(owner) {
+  const o = String(owner || '').trim();
+  if (!o || /^UNASSIGNED/i.test(o)) {
+    return '<span class="badge t-waiting owner-missing" title="' + escHtml(UNASSIGNED_HINT) + '">Unassigned</span>';
+  }
+  return '<span class="owner">Owner <b>' + escHtml(o) + '</b></span>';
+}
+
+function pagedHtml(e) {
+  const at = parseTs(e.notified_at);
+  if (!e.notified || !at) return '<span class="badge t-waiting" title="Slack page not sent yet; the sweep retries">Not paged</span>';
+  const sameDay = at.toDateString() === new Date().toDateString();
+  return '<span class="paged" title="' + escHtml(absTime(e.notified_at)) + '">Paged ' +
+    escHtml(sameDay ? clockTime(at) : relTime(e.notified_at)) + '</span>';
+}
+
+function urgentCard(e) {
+  const id = escHtml(String(e.id));
+  const ackAllowed = e.kind === 'adverse_event' ? can('ack_adverse') : can('ack');
+  const ackHint = e.kind === 'adverse_event' ? 'Only clinical or admin can acknowledge adverse events'
+    : 'Your role cannot acknowledge escalations';
+  const posted = e.posted_at || e.collected_at;
+  const author = authorText(e.platform, e.author_handle);
+  return '<article class="ucard ' + (e.breached ? 'bad' : 'warn') + '" id="escalation-' + id + '">' +
+    '<div class="ucard-top">' + platformHtml(e.platform) +
+      '<span class="ucard-id">#' + id + '</span>' +
+      '<span class="ucard-sla"><span class="countdown' + (e.breached ? ' late' : '') + '" data-due="' +
+        escHtml(e.sla_due_at || '') + '" title="SLA due ' + escHtml(absTime(e.sla_due_at)) + '">' +
+        escHtml(countdownText(e.seconds_left)) + '</span>' +
+        (e.breached ? toneBadge('SLA breached', 'bad') : '') + '</span>' +
+    '</div>' +
+    '<h3 class="ucard-title" title="' + escHtml(e.kind) + '">' + escHtml(label('kind', e.kind)) + '</h3>' +
+    (e.title ? '<div class="ucard-subject">' + escHtml(e.title) + '</div>' : '') +
+    (e.excerpt ? '<blockquote class="ucard-quote">“' + escHtml(e.excerpt) + '”</blockquote>' : '') +
+    whyHtml(e.why) +
+    '<div class="ucard-meta">' +
+      (posted ? '<span>' + (e.posted_at ? 'posted ' : 'collected ') + timeHtml(posted) + '</span>' : '') +
+      (author ? '<span class="author">' + escHtml(author) + '</span>' : '') +
+      pagedHtml(e) + ownerHtml(e.owner) +
+    '</div>' +
+    '<div class="ucard-actions">' +
+      '<button class="btn btn-secondary btn-sm" data-action="view-details" data-id="' + escHtml(String(e.mention_id)) + '">View details</button>' +
+      extLink(e.permalink, 'Open post ↗', 'btn btn-ghost btn-sm') +
+      '<button class="btn btn-primary btn-sm" data-action="ack" data-id="' + id + '"' +
+        (ackAllowed ? '' : ' disabled title="' + escHtml(ackHint) + '"') + '>Ack</button>' +
+    '</div></article>';
+}
+
 async function loadUrgent() {
   const el = document.getElementById('urgent-list');
   const data = await pollUrgent();
@@ -254,30 +282,7 @@ async function loadUrgent() {
     el.innerHTML = emptyState('&#10003;', 'Nothing urgent', 'No open escalations. Adverse events, legal threats, privacy and billing-fraud posts appear here the moment triage flags them.');
     return;
   }
-  let html = '<div class="queue">';
-  for (const e of data.items) {
-    const ackAllowed = e.kind === 'adverse_event' ? can('ack_adverse') : can('ack');
-    html += '<div class="queue-item ' + (e.breached ? 'bad' : 'warn') + '" id="escalation-' + escHtml(String(e.id)) + '">' +
-      '<div class="qtext">' +
-        '<div class="qtitle">#' + escHtml(String(e.id)) + ' ' + escHtml(String(e.kind).replace(/_/g, ' ')) +
-          ' on ' + escHtml(e.platform) + '</div>' +
-        '<div class="urgent-meta">' +
-          '<span class="countdown' + (e.breached ? ' late' : '') + '" data-due="' + escHtml(e.sla_due_at || '') + '">' +
-            escHtml(countdownText(e.seconds_left)) + '</span>' +
-          (e.breached ? toneBadge('SLA breached', 'bad') : '') +
-          (e.notified ? '' : toneBadge('not paged', 'waiting')) +
-          '<span>Owner: <b>' + escHtml(e.owner || 'UNASSIGNED') + '</b></span>' +
-          (e.category ? tag('category', e.category) : '') +
-          extLink(e.permalink, 'Open post ↗') +
-        '</div>' +
-      '</div>' +
-      '<div class="urgent-actions">' +
-        '<button class="btn btn-primary btn-sm" data-action="ack" data-id="' + escHtml(String(e.id)) + '"' +
-          (ackAllowed ? '' : ' disabled title="' + (e.kind === 'adverse_event' ? 'Only clinical or admin can acknowledge adverse events' : 'Your role cannot acknowledge escalations') + '"') +
-          '>Ack</button>' +
-      '</div></div>';
-  }
-  el.innerHTML = html + '</div>';
+  el.innerHTML = '<div class="ucards">' + data.items.map(urgentCard).join('') + '</div>';
   tickCountdowns();
 }
 
@@ -317,7 +322,10 @@ async function loadReview(keepSelection) {
     const g = m.status === 'approved' ? 'Approved — post by hand' : 'Waiting on you';
     if (g !== group) { html += '<div class="desk-group">' + escHtml(g) + '</div>'; group = g; }
     html += '<div class="desk-item' + (i === reviewIndex ? ' active' : '') + '" data-action="review-select" data-index="' + i + '">' +
-      '<div class="to">' + escHtml(m.platform) + ' · ' + escHtml(m.category || '') + '</div>' +
+      '<div class="to">' + platformIcon(m.platform) + '<span>' + escHtml(label('platform', m.platform)) +
+        (m.category ? ' · ' + escHtml(label('category', m.category)) : '') + '</span>' +
+        (m.urgency === 'urgent' || m.urgency === 'high' ? toneBadge(label('urgency', m.urgency), m.urgency === 'urgent' ? 'bad' : 'waiting') : '') +
+      '</div>' +
       '<div class="sub">' + escHtml(truncate(m.title || m.text, 80)) + '</div></div>';
   });
   listEl.innerHTML = html;
@@ -357,23 +365,72 @@ function renderClaims() {
     : '<span class="muted">No claim IDs — approval needs at least one.</span>';
 }
 
+// Urgency reason codes read as words; keyword regexes never reach the screen
+// (the raw code stays in the tooltip).
+const SCREEN_FLAGS = {adverse_event: 'adverse event', self_harm: 'self-harm', minor: 'minor', failed: 'could not run'};
+
+function reasonText(reason) {
+  const r = String(reason || '');
+  if (r.startsWith('override:')) return 'Urgent keyword rule matched';
+  const screen = r.match(/^safety_screen:(\w+)/);
+  if (screen) return 'Independent safety check: ' + (SCREEN_FLAGS[screen[1]] || screen[1]);
+  if (r.startsWith('severe_category')) {
+    const rest = r.slice('severe_category'.length).replace(/^:\s*/, '');
+    return 'Severe category' + (rest ? ': ' + rest : '');
+  }
+  if (r.startsWith('manual:')) return 'Escalated manually';
+  if (r.startsWith('triage_failed')) return 'Triage failed';
+  return r;
+}
+
+function auditNote(e) {
+  const v = e.verdict || {};
+  if (v.reason) return {text: reasonText(v.reason), raw: v.reason};
+  if (['edited', 'approved', 'copied'].includes(e.event) && e.final_text) return {text: truncate(e.final_text, 160)};
+  if (v.kind) return {text: LABELS.kind[v.kind] || label('category', v.kind), raw: v.kind};
+  if (v.posted_url) return {text: 'posted at ' + v.posted_url};
+  if (e.filter_result && e.filter_result.tier) return {text: label('tier', e.filter_result.tier), raw: e.filter_result.tier};
+  if (v.verdict) return {text: label('verdict', v.verdict), raw: v.verdict};
+  if (v.urgency_reason) return {text: reasonText(v.urgency_reason), raw: v.urgency_reason};
+  return null;
+}
+
 function timeline(audit) {
   if (!audit || !audit.length) return '<p class="muted">No audit events yet.</p>';
   return '<div class="timeline">' + audit.map(e => {
-    const v = e.verdict || {};
-    const note = v.reason || (e.event === 'edited' || e.event === 'approved' || e.event === 'copied' ? truncate(e.final_text, 160) : '') ||
-      (v.kind ? 'kind: ' + v.kind : '') || (v.posted_url ? 'posted at ' + v.posted_url : '') ||
-      (e.filter_result && e.filter_result.tier ? 'filter ' + e.filter_result.tier : '') || (v.verdict ? 'verdict ' + v.verdict : '');
+    const note = auditNote(e);
     return '<div class="ev"><span class="when">' + formatDate(e.at) + '</span>' +
-      '<span class="what">' + escHtml(e.event) + '</span><span class="who">' + escHtml(e.actor) + '</span>' +
-      (note ? '<div class="note">' + escHtml(note) + '</div>' : '') + '</div>';
+      '<span class="what" title="' + escHtml(e.event) + '">' + escHtml(label('event', e.event)) + '</span>' +
+      '<span class="who">' + escHtml(e.actor) + '</span>' +
+      (note ? '<div class="note"' + (note.raw ? ' title="' + escHtml(note.raw) + '"' : '') + '>' + escHtml(note.text) + '</div>' : '') +
+      '</div>';
   }).join('') + '</div>';
 }
 
 function triageTags(m, t) {
   t = t || {};
-  return '<div class="tag-row">' + tag('platform', m.platform) + tag('category', t.category) + tag('urgency', t.urgency) +
-    tag('competitor', t.competitor) + tag('drug', t.drug) + tag('product', t.product) + '</div>';
+  return '<div class="tag-row">' + labelTag('Category', 'category', t.category) + labelTag('Urgency', 'urgency', t.urgency) +
+    labelTag('About', 'subject', t.subject_type) + labelTag('Sentiment', 'sentiment', t.sentiment) +
+    tag('Competitor', t.competitor) + tag('Drug', t.drug) + tag('Product', t.product) + '</div>';
+}
+
+// The why line, for high/urgent mentions and anything escalated.
+function detailWhy(d) {
+  const u = d.triage && d.triage.urgency;
+  return (u === 'urgent' || u === 'high' || (d.escalations || []).length) ? whyHtml(d.why) : '';
+}
+
+function mentionHead(m) {
+  const author = authorText(m.platform, m.author_handle);
+  return '<div class="to-line">' + platformHtml(m.platform) +
+    (author ? '<span>' + escHtml(author) + '</span>' : '') +
+    '<span>' + (m.posted_at ? 'posted ' + timeHtml(m.posted_at) : 'collected ' + timeHtml(m.collected_at)) + '</span>' +
+    badge(m.status) + '</div>';
+}
+
+function draftAuthor(draft) {
+  const model = String(draft.model || '');
+  return model.startsWith('human:') ? 'edited by ' + model.slice(6) : 'drafted by Pulse';
 }
 
 function renderReviewPane() {
@@ -384,14 +441,13 @@ function renderReviewPane() {
   const blockers = (d.approval && d.approval.blockers) || [];
   const claimOptions = (CLAIMS || []).map(c => '<option value="' + escHtml(c.id) + '">' + escHtml(c.id) +
     (c.publishable ? '' : ' (pending)') + ' — ' + escHtml(truncate(c.text, 70)) + '</option>').join('');
-  let html = '<div class="to-line">' + escHtml(m.platform) + ' · ' + escHtml(m.author_handle || 'unknown author') +
-      ' · collected ' + formatDate(m.collected_at) + ' · ' + badge(status) + '</div>' +
-    '<div class="subject">' + escHtml(m.title || truncate(m.text, 90)) + '</div>' +
+  let html = mentionHead(m) +
+    '<div class="subject">' + escHtml(m.title || truncate(m.text, 90)) + '</div>' + detailWhy(d) +
     '<div class="body">' + escHtml(m.text) + '</div>' +
-    '<p>' + extLink(m.url, 'Open original ↗') + '</p>' + triageTags(m, d.triage);
+    '<p class="post-link">' + extLink(m.url, 'Open original ↗') + '</p>' + triageTags(m, d.triage);
 
   html += '<div class="desk-block"><div class="subhead">Draft reply' + (draft ? ' · v' + escHtml(String(draft.version)) +
-      ' by ' + escHtml(draft.model) : '') + '</div>' +
+      ' · ' + escHtml(draftAuthor(draft)) : '') + '</div>' +
     '<textarea class="form-input editor" id="editor"' + (reviewer && (inReview || approved) ? '' : ' readonly') + '>' +
       escHtml(draft ? draft.text : '') + '</textarea>' +
     '<div class="desk-block"><div class="subhead">Claims</div><div id="claim-chips"></div>' +
@@ -400,7 +456,7 @@ function renderReviewPane() {
 
   if (draft) {
     html += '<div class="desk-block"><div class="subhead">Checks</div>' + tierBadge(draft.tier) + ' ' +
-      toneBadge('reviewer: ' + (draft.review_verdict || 'none'), draft.review_verdict === 'pass' ? 'good' : draft.review_verdict === 'reject' ? 'bad' : 'waiting') +
+      verdictBadge(draft.review_verdict) +
       (draft.filter_hits.length ? '<ul class="hit-list">' + draft.filter_hits.map(h => '<li>' + escHtml(h) + '</li>').join('') + '</ul>' : '') +
       (draft.review_reasons.length ? '<ul class="hit-list">' + draft.review_reasons.map(r => '<li>' + escHtml(r) + '</li>').join('') + '</ul>' : '') +
       '</div>';
@@ -418,7 +474,7 @@ function renderReviewPane() {
         '<button class="btn btn-secondary" data-action="mark-posted">Mark posted…</button>' +
         '<button class="btn btn-secondary" data-action="save-edit">Save edit (voids approval)</button>';
     }
-    html += '<select class="form-input" id="escalate-kind">' + ESC_KINDS.map(k => '<option value="' + k + '">' + escHtml(k.replace(/_/g, ' ')) + '</option>').join('') +
+    html += '<select class="form-input" id="escalate-kind">' + ESC_KINDS.map(k => '<option value="' + escHtml(k) + '" title="' + escHtml(k) + '">' + escHtml(label('kind', k)) + '</option>').join('') +
       '</select><button class="btn btn-danger btn-sm" data-action="escalate">Escalate</button></div>';
     if (inReview && blockers.length) {
       html += '<ul class="blockers">' + blockers.map(b => '<li>Approve is blocked: ' + escHtml(b) + '</li>').join('') + '</ul>';
@@ -478,28 +534,30 @@ async function markPosted() {
 
 async function escalateCurrent() {
   const kind = document.getElementById('escalate-kind').value;
-  if (!window.confirm('Escalate this mention as ' + kind.replace(/_/g, ' ') + '? The owner is paged.')) return;
+  if (!window.confirm('Escalate this mention as "' + label('kind', kind) + '"? The owner is paged.')) return;
   const r = await send('/api/mentions/' + currentMentionId() + '/escalate', {kind});
   if (r.ok) { showToast('Escalated' + (r.data.paged ? ' and paged.' : '; page not sent (check Slack).'), 'success'); loadReview(); pollUrgent(); }
 }
 
 // ── Feed ──
 
-function fillSelect(id, values, labeler) {
+// Options show the human label; the raw code is the value (and tooltip).
+function fillSelect(id, values, group) {
   const sel = document.getElementById(id);
   if (!sel) return;
   for (const v of values) {
     const opt = document.createElement('option');
     opt.value = v;
-    opt.textContent = labeler ? labeler(v) : v.replace(/_/g, ' ');
+    opt.title = v;
+    opt.textContent = label(group, v);
     sel.appendChild(opt);
   }
 }
 
-fillSelect('f-status', Object.keys(STATUS), k => STATUS[k][0]);
-fillSelect('f-platform', PLATFORMS);
-fillSelect('f-category', CATEGORIES);
-fillSelect('f-urgency', URGENCIES);
+fillSelect('f-status', Object.keys(LABELS.status), 'status');
+fillSelect('f-platform', PLATFORMS, 'platform');
+fillSelect('f-category', CATEGORIES, 'category');
+fillSelect('f-urgency', URGENCIES, 'urgency');
 
 async function loadSummary() {
   const el = document.getElementById('feed-summary');
@@ -531,16 +589,17 @@ async function loadFeed() {
     return;
   }
   let html = '<div class="table-card"><table><thead><tr>' +
-    '<th>Collected</th><th>Platform</th><th>Mention</th><th>Tags</th><th>Status</th><th></th></tr></thead><tbody>';
+    '<th>Collected</th><th>Platform</th><th>Mention</th><th>Triage</th><th>Status</th><th></th></tr></thead><tbody>';
   for (const m of data.items) {
     const body = m.title ? m.title + ' — ' + (m.text || '') : (m.text || '');
     html += '<tr class="clickable" data-action="open-drawer" data-id="' + escHtml(String(m.id)) + '">' +
-      '<td class="muted">' + formatDate(m.collected_at) + '</td>' +
-      '<td>' + escHtml(m.platform) + '</td>' +
-      '<td>' + escHtml(truncate(body, 200)) + '</td>' +
-      '<td>' + tag('', m.category) + ' ' + tag('drug', m.drug) + ' ' + tag('', m.competitor) + '</td>' +
+      '<td class="muted nowrap">' + formatDate(m.collected_at) + '</td>' +
+      '<td class="nowrap">' + platformHtml(m.platform) + '</td>' +
+      '<td class="mention-cell">' + escHtml(truncate(body, 200)) + '</td>' +
+      '<td><div class="tag-row tight">' + labelTag('', 'category', m.category) + labelTag('', 'urgency', m.urgency === 'urgent' || m.urgency === 'high' ? m.urgency : '') +
+        tag('Drug', m.drug) + tag('', m.competitor) + '</div></td>' +
       '<td>' + badge(m.status) + '</td>' +
-      '<td>' + extLink(m.url, 'Open ↗') + '</td></tr>';
+      '<td class="nowrap">' + extLink(m.url, 'Open ↗') + '</td></tr>';
   }
   el.innerHTML = html + '</tbody></table></div>';
   const end = Math.min(data.offset + data.items.length, data.total);
@@ -554,23 +613,31 @@ async function openDrawer(id) {
   const d = await api('/api/mentions/' + encodeURIComponent(id));
   if (!d) return;
   const m = d.mention;
-  let html = '<div class="drawer-head"><div class="to-line">#' + escHtml(String(m.id)) + ' · ' + badge(m.status) + '</div>' +
-    '<button class="btn btn-secondary btn-sm" data-action="close-drawer">Close</button></div>' +
-    '<h2 class="subject">' + escHtml(m.title || truncate(m.text, 90)) + '</h2>' +
-    '<div class="body">' + escHtml(m.text) + '</div><p>' + extLink(m.url, 'Open original ↗') + '</p>' +
-    triageTags(m, d.triage);
+  let html = '<div class="drawer-head"><span class="drawer-id">Mention #' + escHtml(String(m.id)) + '</span>' +
+    '<button class="btn btn-secondary btn-sm" data-action="close-drawer">Close</button></div>' + mentionHead(m) +
+    '<h2 class="subject">' + escHtml(m.title || truncate(m.text, 90)) + '</h2>' + detailWhy(d) +
+    '<div class="body">' + escHtml(m.text) + '</div><p class="post-link">' + extLink(m.url, 'Open original ↗') + '</p>' +
+    triageTags(m, d.triage) +
+    (d.triage && d.triage.urgency_reason ? '<p class="reasoning"><span class="k">Triage reasoning</span> ' +
+      '<span title="' + escHtml(d.triage.urgency_reason) + '">' + escHtml(reasonText(d.triage.urgency_reason)) + '</span></p>' : '');
   if (d.latest_draft) {
-    html += '<div class="desk-block"><div class="subhead">Latest draft · v' + escHtml(String(d.latest_draft.version)) + '</div>' +
-      '<div class="body">' + escHtml(d.latest_draft.text) + '</div>' + tierBadge(d.latest_draft.tier) + '</div>';
+    html += '<div class="desk-block"><div class="subhead">Latest draft · v' + escHtml(String(d.latest_draft.version)) +
+      ' · ' + escHtml(draftAuthor(d.latest_draft)) + '</div>' +
+      '<div class="body">' + escHtml(d.latest_draft.text) + '</div>' + tierBadge(d.latest_draft.tier) + ' ' +
+      verdictBadge(d.latest_draft.review_verdict) + '</div>';
   }
   if (d.escalations.length) {
     html += '<div class="desk-block"><div class="subhead">Escalations</div>' + d.escalations.map(e =>
-      '<div>#' + escHtml(String(e.id)) + ' ' + escHtml(e.kind) + ' · owner ' + escHtml(e.owner || 'UNASSIGNED') +
-      (e.acked_at ? ' · acked by ' + escHtml(e.acked_by) : ' · open') + '</div>').join('') + '</div>';
+      '<div class="esc-row"><span title="' + escHtml(e.kind) + '">#' + escHtml(String(e.id)) + ' ' + escHtml(label('kind', e.kind)) + '</span>' +
+      ownerHtml(e.owner) + '<span>SLA ' + timeHtml(e.sla_due_at) + '</span>' +
+      (e.breached ? toneBadge('SLA breached', 'bad') : '') +
+      (e.acked_at ? toneBadge('Acknowledged by ' + e.acked_by, 'good') : toneBadge('Open', 'waiting')) + '</div>').join('') + '</div>';
   }
   html += '<div class="desk-block"><div class="subhead">Audit trail</div>' + timeline(d.audit) + '</div>';
   drawer.innerHTML = html;
   drawer.classList.remove('hidden');
+  const closeBtn = drawer.querySelector('[data-action="close-drawer"]');
+  if (closeBtn) closeBtn.focus();
 }
 
 function closeDrawer() {
@@ -585,8 +652,8 @@ async function loadUsers() {
   if (!users) { el.innerHTML = offlineState(); return; }
   let html = '<div class="table-card"><table><thead><tr><th>Email</th><th>Name</th><th>Role</th><th>Status</th><th>Last sign-in</th><th></th></tr></thead><tbody>';
   for (const u of users) {
-    html += '<tr><td>' + escHtml(u.email) + '</td><td>' + escHtml(u.display_name) + '</td><td>' + escHtml(u.role) + '</td>' +
-      '<td>' + (u.active ? toneBadge('active', 'good') : toneBadge('disabled', 'idle')) + '</td>' +
+    html += '<tr><td>' + escHtml(u.email) + '</td><td>' + escHtml(u.display_name) + '</td><td>' + labelHtml('role', u.role) + '</td>' +
+      '<td>' + (u.active ? toneBadge('Active', 'good') : toneBadge('Disabled', 'idle')) + '</td>' +
       '<td class="muted">' + formatDate(u.last_login_at) + '</td>' +
       '<td>' + (u.active ? '<button class="btn btn-danger btn-sm" data-action="disable-user" data-email="' + escHtml(u.email) + '">Disable</button>' : '') + '</td></tr>';
   }
@@ -734,10 +801,10 @@ async function loadUsage() {
 // ── Events ──
 
 const ACTIONS = {
-  'theme': () => cycleTheme(),
   'refresh': () => loadCurrentTab(),
   'logout': async () => { await request('/api/logout', {method: 'POST', body: {}}); window.location.assign('/login'); },
   'ack': el => ackEscalation(el.dataset.id),
+  'view-details': el => openDrawer(el.dataset.id),
   'review-select': el => selectReview(Number(el.dataset.index)),
   'claim-remove': el => { editClaims = editClaims.filter(c => c !== el.dataset.claim); renderClaims(); },
   'claim-add': () => {
@@ -797,7 +864,7 @@ async function init() {
   ME = await api('/api/me');
   if (!ME) return;  // request() already redirected to /login on 401
   document.getElementById('user-chip').innerHTML = '<span>' + escHtml(ME.name || ME.email) + '</span>' +
-    '<span class="role">' + escHtml(ME.role) + '</span>';
+    '<span class="role" title="' + escHtml(ME.role) + '">' + escHtml(label('role', ME.role)) + '</span>';
   document.getElementById('nav-users').classList.toggle('hidden', !can('admin'));
   // Slack pages link to /#escalation-<id> (Urgent) or /#pulse-brief-<id> (Pulse).
   showTab(/^#pulse-brief-\d+$/.test(window.location.hash) ? 'pulse' : 'urgent');
