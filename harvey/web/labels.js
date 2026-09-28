@@ -53,6 +53,35 @@ const LABELS = {
     keyword: 'Keyword rule', safety_screen: 'Safety check', severe_category: 'Triage',
     model: 'Triage', triage_failed: 'Triage failed', manual: 'Manual',
   },
+  // Password dialogs (password.js). pwError keys are the server's `error`
+  // codes plus a few client-side checks.
+  pwError: {
+    current_password_incorrect: 'The current password is not correct.',
+    too_many_attempts: 'Too many failed attempts. Try again in 15 minutes.',
+    password_too_short: 'Use at least 12 characters.',
+    password_too_long: 'Use at most 1024 characters.',
+    password_is_email: 'The password can’t be the account’s email address.',
+    password_reused: 'Choose a password that is different from the current one.',
+    use_change_password: 'Use Change password in your account menu for your own account.',
+    mismatch: 'The new passwords don’t match.',
+    required: 'Fill in every field.',
+    network: 'Cannot reach the dashboard server.',
+    failed: 'That didn’t work. Try again.',
+  },
+  pw: {
+    title: 'Change password',
+    lede: 'Every other session you have open is signed out.',
+    forced_title: 'Choose a new password',
+    forced_lede: 'Your password was set by an admin. Choose your own to continue; nothing else is available until you do.',
+    submit: 'Change password',
+    forced_submit: 'Save and continue',
+    done: 'Password changed. Other sessions are signed out.',
+    show: 'Show', hide: 'Hide', show_label: 'Show password', hide_label: 'Hide password',
+    reset_lede: 'Set a temporary password for',
+    reset_done: 'Password reset. Their sessions have ended.',
+    copied: 'Copied.', copy_failed: 'Copy failed: select the password and copy it.',
+    reset_button: 'Reset password', pending: 'Must change password',
+  },
 };
 
 function titleCase(raw) {

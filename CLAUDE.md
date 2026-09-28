@@ -42,7 +42,7 @@ deterministic compliance filter (`harvey/compliance.py`) exist.
   `PERMISSIONS`, admin bootstrap from env, bind guard), `harvey/review.py`
   (urgent/feed/detail reads; edit/approve/reject/copied/mark-posted/manual
   escalate), `harvey/dashboard.py` (routes + auth/CSRF/security-header
-  middleware), `pulse user add|list|disable`, `scripts/seed_demo.py`
+  middleware), `pulse user add|list|disable|reset-password`, `scripts/seed_demo.py`
   (DEMO DATA into a throwaway `PULSE_DB_PATH`). The UI (`harvey/web/`)
   runs under a strict CSP: no inline script/style, no `on*=` handlers;
   render server data only through `escHtml`/`safeHref`.
@@ -107,7 +107,7 @@ Also:
 - Tests: `.venv/Scripts/python -m pytest -q`. Work test-first.
 - Imports smoke check: `.venv/Scripts/python -c "import harvey.main, harvey.dashboard, harvey.cli, harvey.state"`
 - CLI: `pulse run | dashboard [--host H] | status | health [--worker] |
-  ingest | usage | escalations | ack | user add|list|disable | brief |
+  ingest | usage | escalations | ack | user add|list|disable|reset-password | brief |
   trends` (`harvey` is an alias).
 - Deploy: `docker-compose.yml` (Coolify: `worker` + `dashboard`, env only,
   no bind mounts; `docker-compose.local.yml` is the laptop override). Env
@@ -117,6 +117,19 @@ Also:
   returns only `{"ok": ...}`. Use `dashboard.request_ip()` (harvey/netutil.py),
   never `request.client.host`, for anything security-related. The heartbeat
   stamps `settings.heartbeat_at` every cycle (`pulse health --worker`).
+- Passwords (migration v6, `db/postgres/0002_password_management.sql`): header
+  user menu -> Change password (`POST /api/me/password`; wrong current
+  password counts toward the login throttle; other sessions end, CSRF
+  rotates); admin Users tab -> Reset password (`POST /api/users/reset-password`,
+  not for yourself; ends all their sessions); `pulse user reset-password`.
+  Resets and admin-created users set `users.must_change_password` (opt out:
+  `--no-force-change` / the Users-tab checkbox); while set, every /api route
+  except /api/me, /api/me/password, /api/logout is 403
+  `{"error": "password_change_required"}` and the UI shows only the change
+  screen (`harvey/web/password.js`). The env bootstrap admin is not flagged
+  (its operator chose that password; see harvey/auth.py). Password events go to
+  the `actions` table (`password_changed` / `password_reset`), never with
+  password material.
 - The dashboard binds to 127.0.0.1 by default; `--host` anything else is
   refused until an active admin exists. Every /api route except /api/login
   needs a session; every POST needs X-CSRF-Token. Approval needs a non-red

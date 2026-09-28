@@ -24,7 +24,14 @@
       <span class="status-dot stopped" id="header-dot"></span>
       <span id="header-status-text">Checking…</span>
     </div>
-    <div class="user-chip" id="user-chip"></div>
+    <div class="user-menu-wrap">
+      <button type="button" class="user-chip" id="user-chip" data-action="user-menu" aria-haspopup="menu"
+        aria-expanded="false" aria-controls="user-menu"></button>
+      <div class="user-menu hidden" id="user-menu" role="menu" aria-label="Account">
+        <button type="button" role="menuitem" data-action="pw-open">Change password</button>
+        <button type="button" role="menuitem" data-action="logout">Sign out</button>
+      </div>
+    </div>
     <button class="refresh-btn" data-action="refresh">Refresh</button>
     <button class="refresh-btn" data-action="logout">Sign out</button>
   </div>
@@ -208,8 +215,10 @@
         <option value="viewer">Viewer</option><option value="reviewer">Reviewer</option>
         <option value="clinical">Clinical</option><option value="admin">Admin</option>
       </select></div>
-    <div class="form-group"><label class="form-label" for="u-password">Password (min 12)</label>
+    <div class="form-group"><label class="form-label" for="u-password">Temporary password (min 12)</label>
       <input class="form-input" id="u-password" name="password" type="password" minlength="12" autocomplete="new-password" required></div>
+    <div class="form-group form-check"><label for="u-force"><input type="checkbox" id="u-force" name="must_change_password" checked>
+      Must choose their own password at first sign-in</label></div>
     <div class="form-group"><button class="btn btn-primary" type="submit">Add user</button></div>
   </form>
   <div id="users-list"></div>
@@ -245,8 +254,57 @@
 
 <aside class="drawer hidden" id="drawer" aria-label="Mention detail"></aside>
 
+<!-- Change password (any user). In forced mode it cannot be dismissed. -->
+<dialog class="modal" id="pw-dialog" aria-labelledby="pw-title" aria-describedby="pw-lede">
+  <form class="modal-body" id="pw-form" novalidate>
+    <h2 id="pw-title">Change password</h2>
+    <p class="lede" id="pw-lede">Every other session you have open is signed out.</p>
+    <input class="visually-hidden" id="pw-username" type="email" autocomplete="username" tabindex="-1" aria-hidden="true" readonly>
+    <div class="form-group"><label class="form-label" for="pw-current">Current password</label>
+      <div class="pw-field"><input class="form-input" id="pw-current" type="password" autocomplete="current-password" maxlength="1024" required>
+        <button type="button" class="pw-toggle" data-action="pw-toggle" data-target="pw-current" aria-pressed="false" aria-label="Show password">Show</button></div></div>
+    <div class="form-group"><label class="form-label" for="pw-new">New password</label>
+      <div class="pw-field"><input class="form-input" id="pw-new" type="password" autocomplete="new-password" maxlength="1024" required minlength="12" aria-describedby="pw-hint">
+        <button type="button" class="pw-toggle" data-action="pw-toggle" data-target="pw-new" aria-pressed="false" aria-label="Show password">Show</button></div></div>
+    <div class="form-group"><label class="form-label" for="pw-confirm">Confirm new password</label>
+      <div class="pw-field"><input class="form-input" id="pw-confirm" type="password" autocomplete="new-password" maxlength="1024" required minlength="12">
+        <button type="button" class="pw-toggle" data-action="pw-toggle" data-target="pw-confirm" aria-pressed="false" aria-label="Show password">Show</button></div></div>
+    <p class="form-hint" id="pw-hint">At least 12 characters. Not your email address and not your current password.</p>
+    <p class="form-error hidden" id="pw-error" role="alert"></p>
+    <div class="modal-actions">
+      <button type="button" class="btn btn-ghost hidden" id="pw-signout" data-action="logout">Sign out</button>
+      <button type="button" class="btn btn-ghost" id="pw-cancel" data-action="pw-cancel">Cancel</button>
+      <button type="submit" class="btn btn-primary" id="pw-submit">Change password</button>
+    </div>
+  </form>
+</dialog>
+
+<!-- Admin: set a temporary password for someone else. -->
+<dialog class="modal" id="reset-dialog" aria-labelledby="reset-title" aria-describedby="reset-lede">
+  <form class="modal-body" id="reset-form" novalidate>
+    <h2 id="reset-title">Reset password</h2>
+    <p class="lede" id="reset-lede"></p>
+    <div class="form-group"><label class="form-label" for="reset-password">Temporary password</label>
+      <div class="pw-field"><input class="form-input" id="reset-password" type="password" autocomplete="new-password" maxlength="1024" required minlength="12" aria-describedby="reset-hint">
+        <button type="button" class="pw-toggle" data-action="pw-toggle" data-target="reset-password" aria-pressed="false" aria-label="Show password">Show</button></div></div>
+    <div class="btn-group tight">
+      <button type="button" class="btn btn-secondary btn-sm" data-action="reset-generate">Generate</button>
+      <button type="button" class="btn btn-secondary btn-sm hidden" id="reset-copy" data-action="reset-copy">Copy</button>
+      <span class="muted form-hint" id="reset-copied" role="status"></span>
+    </div>
+    <p class="form-hint" id="reset-hint">At least 12 characters. Give it to them in person or over a private channel; it is shown only here, once. All their sessions end now, and they must choose their own password at next sign-in.</p>
+    <p class="form-error hidden" id="reset-error" role="alert"></p>
+    <div class="modal-actions">
+      <button type="button" class="btn btn-ghost" data-action="reset-cancel">Cancel</button>
+      <button type="submit" class="btn btn-danger" id="reset-submit">Reset password</button>
+    </div>
+  </form>
+</dialog>
+
+
 <script src="/static/labels.js"></script>
 <script src="/static/app.js"></script>
+<script src="/static/password.js"></script>
 <script src="/static/feed.js"></script>
 <script src="/static/pulse.js"></script>
 <script src="/static/charts.js"></script>

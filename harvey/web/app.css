@@ -120,7 +120,23 @@ header {
 .status-dot { width: 8px; height: 8px; border-radius: 50%; flex: none; background: var(--border-strong); }
 .status-dot.running { background: var(--success); }
 .status-dot.offline { background: var(--error); }
-.user-chip { display: flex; gap: 7px; align-items: center; font-size: 12.5px; color: var(--text); }
+.user-menu-wrap { position: relative; }
+.user-chip {
+  display: flex; gap: 7px; align-items: center; font: 400 12.5px var(--sans); color: var(--text);
+  background: none; border: 1px solid transparent; border-radius: var(--r-btn); padding: 4px 8px; cursor: pointer;
+  transition: border-color .15s, background .15s;
+}
+.user-chip:hover, .user-chip[aria-expanded="true"] { border-color: var(--border-strong); background: var(--white); }
+.user-chip .caret { font-size: 10px; color: var(--text-3); }
+.user-menu {
+  position: absolute; right: 0; top: calc(100% + 6px); z-index: 40; min-width: 190px; padding: 6px;
+  background: var(--white); border: 1px solid var(--border); border-radius: var(--r-md); box-shadow: var(--shadow-lg);
+}
+.user-menu [role="menuitem"] {
+  display: block; width: 100%; text-align: left; font: 500 13px var(--sans); color: var(--navy);
+  background: none; border: none; border-radius: var(--r-sm); padding: 8px 10px; cursor: pointer;
+}
+.user-menu [role="menuitem"]:hover, .user-menu [role="menuitem"]:focus-visible { background: var(--wellness); color: var(--blue-deep); }
 .user-chip .role {
   font-size: 11.5px; font-weight: 500; color: var(--blue-deep); background: var(--wellness);
   border-radius: 99px; padding: 1px 9px;
@@ -450,6 +466,38 @@ td.phrase { font-family: var(--serif); font-size: 14px; color: var(--navy); }
   background: var(--bg); border: 1px solid var(--border); border-radius: var(--r-sm); padding: 12px 14px;
   font-family: var(--mono); font-size: 12px; line-height: 1.6; color: var(--text); height: 340px; overflow-y: auto; white-space: pre-wrap;
 }
+
+/* ── Dialogs & passwords ─────────────────────────────────────── */
+
+dialog.modal {
+  width: min(460px, calc(100% - 32px)); margin: auto; padding: 0; border: 1px solid var(--border);
+  border-radius: var(--r-lg); background: var(--white); color: var(--text); box-shadow: var(--shadow-lg);
+}
+dialog.modal::backdrop { background: rgba(8, 43, 89, 0.38); }
+.modal-body { padding: 24px 26px 22px; }
+.modal-body h2 { font-family: var(--serif); font-weight: 600; font-size: 20px; color: var(--navy); margin-bottom: 6px; }
+.modal-body .lede { font-size: 13.5px; color: var(--text); margin-bottom: 18px; line-height: 1.55; overflow-wrap: anywhere; }
+.modal-actions { display: flex; justify-content: flex-end; gap: 9px; margin-top: 20px; flex-wrap: wrap; }
+.form-hint { font-size: 12.5px; color: var(--text-3); line-height: 1.5; margin-top: 4px; }
+.form-error {
+  font-size: 13px; margin-top: 12px; padding: 9px 12px; border-radius: var(--r-sm);
+  background: var(--s-bad-bg); color: var(--s-bad); border: 1px solid var(--s-bad-line);
+}
+.pw-field { position: relative; }
+.pw-field .form-input { padding-right: 64px; font-family: var(--mono); }
+.pw-toggle {
+  position: absolute; right: 4px; top: 50%; transform: translateY(-50%); padding: 4px 10px;
+  font: 500 12px var(--sans); color: var(--blue); background: none; border: none; border-radius: var(--r-sm); cursor: pointer;
+}
+.pw-toggle:hover { background: var(--wellness); color: var(--blue-hover); }
+.btn-group.tight { margin-top: 0; align-items: center; }
+.form-check label { display: flex; gap: 8px; align-items: center; font-size: 12.5px; color: var(--text); cursor: pointer; }
+.form-check input { width: 16px; height: 16px; accent-color: var(--blue); }
+.form-row .form-group.form-check { flex: 0 1 auto; align-self: center; margin-bottom: 14px; }
+td.row-actions { white-space: nowrap; text-align: right; }
+td.row-actions .btn + .btn { margin-left: 6px; }
+/* Forced change: nothing but the dialog (and its Sign out) until it's done. */
+body.pw-forced nav, body.pw-forced main, body.pw-forced .header-controls { display: none; }
 
 /* ── Empty states & toasts ───────────────────────────────────── */
 

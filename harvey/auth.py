@@ -12,11 +12,25 @@
   15 minutes -> 429. Process-local by design (one dashboard process). Behind
   a proxy the client IP comes from harvey/netutil.py (trusted proxies only).
 - Roles: viewer < reviewer; clinical and admin see ``PERMISSIONS``.
+- Passwords change in three ways: a user changes their own (current password
+  required; failures count toward the login throttle; every other session
+  ends and the current one gets a new CSRF token), an admin resets someone
+  else's (all their sessions end), or ``pulse user reset-password``. A reset,
+  and a user an admin creates, set ``must_change_password``: until the
+  holder picks their own password the dashboard serves only /api/me,
+  /api/me/password and /api/logout, so only the account holder knows the
+  password they use. The env-var bootstrap admin (PULSE_ADMIN_EMAIL /
+  PULSE_ADMIN_PASSWORD) is *not* flagged: the operator chose that password
+  and keeps it in their own secret store (nobody handed it to them), and a
+  headless first deploy should not open on a forced screen. Password events
+  go to the ``actions`` table (``password_changed`` / ``password_reset``),
+  never with password material.
 """
 
 import hashlib
 import hmac
 import ipaddress
+import logging
 import secrets
 import time
 from collections import deque
@@ -27,6 +41,8 @@ from argon2 import PasswordHasher
 from argon2.exceptions import InvalidHashError, VerificationError, VerifyMismatchError
 
 from harvey.db import integrity_errors
+
+logger = logging.getLogger("harvey.auth")
 
 ROLES = ("viewer", "reviewer", "clinical", "admin")
 MIN_PASSWORD_LENGTH = 12
@@ -75,6 +91,32 @@ def check_password_policy(password: str) -> None:
         raise ValueError(f"password must be at least {MIN_PASSWORD_LENGTH} characters")
     if len(password) > MAX_PASSWORD_LENGTH:
         raise ValueError(f"password must be at most {MAX_PASSWORD_LENGTH} characters")
+
+
+class PasswordPolicyError(ValueError):
+    """A rejected new password; ``code`` is stable for the UI (labels.js)."""
+
+    def __init__(self, code: str, message: str):
+        super().__init__(message)
+        self.code = code
+
+
+class WrongPasswordError(Exception):
+    """The current password did not verify. Deliberately carries no detail."""
+
+
+def check_new_password(password: str, *, email: str = "", current: str | None = None) -> None:
+    """Policy for a password being set: length, not the email, not the current one."""
+    if not isinstance(password, str) or len(password) < MIN_PASSWORD_LENGTH:
+        raise PasswordPolicyError("password_too_short",
+                                  f"password must be at least {MIN_PASSWORD_LENGTH} characters")
+    if len(password) > MAX_PASSWORD_LENGTH:
+        raise PasswordPolicyError("password_too_long",
+                                  f"password must be at most {MAX_PASSWORD_LENGTH} characters")
+    if email and password.strip().lower() == email.strip().lower():
+        raise PasswordPolicyError("password_is_email", "password must not be the account's email address")
+    if current is not None and hmac.compare_digest(password.encode("utf-8"), current.encode("utf-8")):
+        raise PasswordPolicyError("password_reused", "new password must differ from the current one")
 
 
 def hash_password(password: str) -> str:
@@ -158,12 +200,14 @@ class LoginRateLimiter:
 
 # --- Users and sessions ------------------------------------------------------------------------
 
-_USER_FIELDS = "id, email, display_name, role, active, created_at, last_login_at"
+_USER_FIELDS = ("id, email, display_name, role, active, created_at, last_login_at, "
+                "must_change_password, password_changed_at")
 
 
 def _public(row) -> dict:
     user = {k: row[k] for k in row.keys() if k != "password_hash"}
     user["active"] = bool(user.get("active"))
+    user["must_change_password"] = bool(user.get("must_change_password"))
     return user
 
 
@@ -186,17 +230,21 @@ class AuthStore:
 
     # users
 
-    async def create_user(self, email: str, password: str, role: str, name: str = "") -> int:
+    async def create_user(self, email: str, password: str, role: str, name: str = "",
+                          must_change_password: bool = False) -> int:
+        """Create an active user. Admin-facing callers (the Users tab, ``pulse
+        user add``) pass ``must_change_password=True`` unless opted out."""
         email = normalize_email(email)
         if role not in ROLES:
             raise ValueError(f"unknown role '{role}'; use one of {', '.join(ROLES)}")
+        check_new_password(password, email=email)
         password_hash = hash_password(password)
         async with self.state.connect() as db:
             try:
                 cursor = await db.execute(
-                    "INSERT INTO users (email, display_name, role, password_hash, active) "
-                    "VALUES (?, ?, ?, ?, TRUE) RETURNING id",
-                    (email, (name or "").strip()[:120], role, password_hash),
+                    "INSERT INTO users (email, display_name, role, password_hash, active, "
+                    "must_change_password) VALUES (?, ?, ?, ?, TRUE, ?) RETURNING id",
+                    (email, (name or "").strip()[:120], role, password_hash, bool(must_change_password)),
                 )
             except integrity_errors() as exc:
                 raise ValueError(f"a user with email {email} already exists") from exc
@@ -233,6 +281,82 @@ class AuthStore:
         await self._write("UPDATE users SET active = FALSE WHERE id = ?", (user["id"],))
         await self._write("DELETE FROM sessions WHERE user_id = ?", (user["id"],))
         return True
+
+    async def verify_user_password(self, user_id: int, password: str) -> bool:
+        """Whether ``password`` is this active user's current one (argon2, constant-time)."""
+        row = await self._fetchone("SELECT password_hash, active FROM users WHERE id = ?", (int(user_id),))
+        if row is None or not row["password_hash"]:
+            _burn_verify(password)
+            return False
+        return verify_password(row["password_hash"], password or "") and bool(row["active"])
+
+    async def set_password(self, user_id: int, password: str, *, must_change: bool) -> None:
+        """Store a new argon2id hash (the caller has checked the policy)."""
+        await self._write(
+            "UPDATE users SET password_hash = ?, must_change_password = ?, password_changed_at = ? "
+            "WHERE id = ?",
+            (hash_password(password), bool(must_change), _utcnow().isoformat(), int(user_id)),
+        )
+
+    async def revoke_sessions(self, user_id: int, keep_token: str = "") -> int:
+        """End the user's sessions, except the one behind ``keep_token``."""
+        if keep_token:
+            return await self._write("DELETE FROM sessions WHERE user_id = ? AND id <> ?",
+                                     (int(user_id), token_digest(keep_token)))
+        return await self._write("DELETE FROM sessions WHERE user_id = ?", (int(user_id),))
+
+    async def rotate_csrf(self, token: str) -> str:
+        """A fresh CSRF token for the session behind ``token``."""
+        csrf = secrets.token_urlsafe(TOKEN_BYTES)
+        await self._write("UPDATE sessions SET csrf_token = ? WHERE id = ?", (csrf, token_digest(token)))
+        return csrf
+
+    async def change_own_password(self, user: dict, current: str, new: str, keep_token: str) -> str:
+        """Self-service change; returns the kept session's new CSRF token.
+
+        Raises ``WrongPasswordError`` (generic) or ``PasswordPolicyError``. The
+        current password is verified before the policy runs, so the policy's
+        "must differ" answer never confirms a guess.
+        """
+        if not await self.verify_user_password(user["id"], current):
+            raise WrongPasswordError()
+        check_new_password(new, email=user["email"], current=current)
+        # Other sessions end first: a failure after this point never leaves
+        # them alive under the new password.
+        ended = await self.revoke_sessions(user["id"], keep_token=keep_token)
+        await self.set_password(user["id"], new, must_change=False)
+        csrf = await self.rotate_csrf(keep_token)
+        await self._log_event("password_changed", "dashboard", {
+            "email": user["email"], "by": user["email"], "other_sessions_ended": ended})
+        return csrf
+
+    async def _log_event(self, action_type: str, agent: str, details: dict) -> None:
+        """Record a password event in ``actions``; the change itself already
+        happened, so a logging failure is reported, not raised."""
+        try:
+            await self.state.log_action(action_type, agent, details)
+        except Exception as exc:
+            logger.error("could not record %s for %s (%s)", action_type,
+                         details.get("email", "?"), type(exc).__name__)
+
+    async def reset_password(self, email: str, new: str, *, by: str, agent: str,
+                             must_change: bool = True) -> dict:
+        """Admin/CLI reset: new password, every session ended, change forced by default.
+
+        Raises LookupError (no such user) or ``PasswordPolicyError``.
+        """
+        target = await self.get_user(email)
+        if target is None:
+            raise LookupError("no such user")
+        check_new_password(new, email=target["email"])
+        await self.set_password(target["id"], new, must_change=must_change)
+        # Even if this delete failed, their sessions are gated by the flag
+        # (must_change) until someone who knows the new password changes it.
+        ended = await self.revoke_sessions(target["id"])
+        await self._log_event("password_reset", agent, {
+            "email": target["email"], "by": by, "must_change_password": bool(must_change),
+            "sessions_ended": ended})
+        return target
 
     async def authenticate(self, email: str, password: str) -> dict | None:
         """The active user for these credentials, else None (timing-flat)."""
@@ -280,7 +404,8 @@ class AuthStore:
             return None
         digest = token_digest(token)
         row = await self._fetchone(
-            f"SELECT s.expires_at, s.csrf_token, u.id, u.email, u.display_name, u.role, u.active "
+            f"SELECT s.expires_at, s.csrf_token, u.id, u.email, u.display_name, u.role, u.active, "
+            f"u.must_change_password "
             f"FROM sessions s JOIN users u ON u.id = s.user_id WHERE s.id = ?",
             (digest,),
         )
@@ -295,7 +420,8 @@ class AuthStore:
             ((now + timedelta(hours=hours)).isoformat(), now.isoformat(), digest),
         )
         return {"id": row["id"], "email": row["email"], "name": row["display_name"] or "",
-                "role": row["role"], "csrf": row["csrf_token"] or ""}
+                "role": row["role"], "csrf": row["csrf_token"] or "",
+                "must_change_password": bool(row["must_change_password"])}
 
     async def delete_session(self, token: str) -> None:
         if token:

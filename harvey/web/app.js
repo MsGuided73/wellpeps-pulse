@@ -130,6 +130,8 @@ async function request(path, opts) {
     if (r.status === 401) { window.location.assign('/login'); return {ok: false, status: 401, data: null}; }
     let data = null;
     try { data = await r.json(); } catch { data = null; }
+    // An admin reset the password: only the change-password screen (password.js) works now.
+    if (r.status === 403 && data && data.error === 'password_change_required') enterForcedChange();
     return {ok: r.ok, status: r.status, data};
   } catch {
     return {ok: false, status: 0, data: null};
@@ -598,16 +600,21 @@ async function loadUsers() {
   if (!users) { el.innerHTML = offlineState(); return; }
   let html = '<div class="table-card"><table><thead><tr><th>Email</th><th>Name</th><th>Role</th><th>Status</th><th>Last sign-in</th><th></th></tr></thead><tbody>';
   for (const u of users) {
+    const self = ME && u.email === ME.email;
     html += '<tr><td>' + escHtml(u.email) + '</td><td>' + escHtml(u.display_name) + '</td><td>' + labelHtml('role', u.role) + '</td>' +
-      '<td>' + (u.active ? toneBadge('Active', 'good') : toneBadge('Disabled', 'idle')) + '</td>' +
+      '<td>' + (u.active ? toneBadge('Active', 'good') : toneBadge('Disabled', 'idle')) +
+      (u.active && u.must_change_password ? ' ' + toneBadge(LABELS.pw.pending, 'waiting') : '') + '</td>' +
       '<td class="muted">' + formatDate(u.last_login_at) + '</td>' +
-      '<td>' + (u.active ? '<button class="btn btn-danger btn-sm" data-action="disable-user" data-email="' + escHtml(u.email) + '">Disable</button>' : '') + '</td></tr>';
+      '<td class="row-actions">' + (u.active && !self ? '<button class="btn btn-secondary btn-sm" data-action="reset-user" data-email="' + escHtml(u.email) + '">' +
+        escHtml(LABELS.pw.reset_button) + '</button>' : '') +
+      (u.active ? '<button class="btn btn-danger btn-sm" data-action="disable-user" data-email="' + escHtml(u.email) + '">Disable</button>' : '') + '</td></tr>';
   }
   el.innerHTML = html + '</tbody></table></div>';
 }
 
 async function createUser(form) {
-  const body = Object.fromEntries(new FormData(form).entries());
+  const body = {...Object.fromEntries(new FormData(form).entries()),
+    must_change_password: form.elements.must_change_password.checked};
   const r = await send('/api/users', body);
   if (r.ok) { showToast('User ' + body.email + ' created.', 'success'); form.reset(); loadUsers(); }
 }
@@ -785,6 +792,7 @@ document.getElementById('user-form').addEventListener('submit', (event) => {
 });
 
 document.addEventListener('keydown', (event) => {
+  if (document.querySelector('dialog[open]')) return;  // dialogs handle their own keys (password.js)
   if (event.key === 'Escape') { closeDrawer(); return; }
   const typing = event.target.closest('input, textarea, select, [contenteditable]');
   if (typing || event.ctrlKey || event.metaKey || event.altKey || currentTab !== 'review') return;
@@ -800,7 +808,9 @@ async function init() {
   ME = await api('/api/me');
   if (!ME) return;  // request() already redirected to /login on 401
   document.getElementById('user-chip').innerHTML = '<span>' + escHtml(ME.name || ME.email) + '</span>' +
-    '<span class="role" title="' + escHtml(ME.role) + '">' + escHtml(label('role', ME.role)) + '</span>';
+    '<span class="role" title="' + escHtml(ME.role) + '">' + escHtml(label('role', ME.role)) + '</span>' +
+    '<span class="caret" aria-hidden="true">&#9662;</span>';
+  if (ME.must_change_password) { enterForcedChange(); return; }  // nothing else loads until it's done
   document.getElementById('nav-users').classList.toggle('hidden', !can('admin'));
   route();
   if (currentTab !== 'urgent') pollUrgent();  // the nav badge and the Feed banner

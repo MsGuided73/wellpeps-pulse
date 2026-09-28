@@ -10,6 +10,9 @@ Security (Phase 7, see harvey/auth.py):
 - Security headers on every response: a strict CSP (no inline script or
   style), nosniff, DENY framing, no referrer.
 - ``GET /healthz`` is public and says only {"ok": true|false} (200/503).
+- A user flagged ``must_change_password`` (admin reset, or created by an
+  admin) gets 403 {"error": "password_change_required"} from every /api
+  route except ``PASSWORD_CHANGE_ALLOWED`` until they pick a new password.
 - The login throttle keys on the real client IP: X-Forwarded-For is
   believed only from ``dashboard.trusted_proxies`` (harvey/netutil.py).
 
@@ -50,6 +53,8 @@ MENTION_PREVIEW_CHARS = review.PREVIEW_CHARS
 SESSION_COOKIE = "pulse_session"
 CSRF_HEADER = "X-CSRF-Token"
 PUBLIC_API = frozenset({"/api/login"})
+# All a user with must_change_password may reach until they change it.
+PASSWORD_CHANGE_ALLOWED = frozenset({"/api/me", "/api/me/password", "/api/logout"})
 HEALTH_TIMEOUT_SECONDS = 5.0
 SAFE_METHODS = frozenset({"GET", "HEAD", "OPTIONS"})
 SECURITY_HEADERS = {
@@ -155,8 +160,11 @@ async def _session_user(request: Request) -> dict | None:
     return await store.session_user(token, hours=_config().dashboard.session_hours)
 
 
-def _deny(status: int, detail: str) -> JSONResponse:
-    return JSONResponse({"detail": detail}, status_code=status)
+def _deny(status: int, detail: str, error: str = "") -> JSONResponse:
+    body = {"detail": detail}
+    if error:
+        body["error"] = error
+    return JSONResponse(body, status_code=status)
 
 
 @app.middleware("http")
@@ -169,6 +177,8 @@ async def security_middleware(request: Request, call_next):
         elif request.method not in SAFE_METHODS and not auth.tokens_match(
                 user["csrf"], request.headers.get(CSRF_HEADER, "")):
             response = _deny(403, "missing or invalid CSRF token")
+        elif user["must_change_password"] and path not in PASSWORD_CHANGE_ALLOWED:
+            response = _deny(403, "choose a new password before continuing", "password_change_required")
         else:
             request.state.user = user
             response = await call_next(request)
@@ -237,7 +247,8 @@ async def login(body: LoginBody, request: Request):
     config = _config()
     token, csrf = await store.create_session(user["id"], hours=config.dashboard.session_hours)
     response = JSONResponse({"email": user["email"], "name": user["display_name"] or "",
-                             "role": user["role"], "csrf": csrf})
+                             "role": user["role"], "csrf": csrf,
+                             "must_change_password": user["must_change_password"]})
     response.set_cookie(SESSION_COOKIE, token, httponly=True, samesite="strict",
                         secure=config.dashboard.secure_cookies, path="/")
     return response
@@ -253,7 +264,39 @@ async def logout(request: Request, user: dict = VIEW):
 
 @app.get("/api/me")
 async def me(user: dict = VIEW):
-    return {"email": user["email"], "name": user["name"], "role": user["role"], "csrf": user["csrf"]}
+    return {"email": user["email"], "name": user["name"], "role": user["role"], "csrf": user["csrf"],
+            "must_change_password": user["must_change_password"]}
+
+
+class ChangePasswordBody(BaseModel):
+    current_password: str = Field(max_length=auth.MAX_PASSWORD_LENGTH)
+    new_password: str = Field(max_length=auth.MAX_PASSWORD_LENGTH)
+
+
+def _login_keys(email: str, request: Request) -> tuple[str, str]:
+    """The login throttle's keys; password changes count against the same ones."""
+    return f"email:{email.strip().lower()}", f"ip:{request_ip(request)}"
+
+
+@app.post("/api/me/password")
+async def change_my_password(body: ChangePasswordBody, request: Request, user: dict = VIEW):
+    """Change your own password: other sessions end, this one gets a new CSRF token."""
+    keys = _login_keys(user["email"], request)
+    if any(LOGIN_LIMITER.is_blocked(k) for k in keys):
+        return _deny(429, "too many failed attempts; try again in 15 minutes", "too_many_attempts")
+    store = auth.AuthStore(await get_state())
+    try:
+        csrf = await store.change_own_password(user, body.current_password, body.new_password,
+                                               keep_token=request.cookies.get(SESSION_COOKIE, ""))
+    except auth.WrongPasswordError:
+        for key in keys:
+            LOGIN_LIMITER.record_failure(key)
+        return _deny(400, "the current password is not correct", "current_password_incorrect")
+    except auth.PasswordPolicyError as exc:
+        return _deny(400, str(exc), exc.code)
+    LOGIN_LIMITER.reset(keys[0])
+    logger.info("user %s changed their password", user["email"])
+    return {"success": True, "csrf": csrf}
 
 
 # ── Users (admin) ──
@@ -264,6 +307,12 @@ class NewUserBody(BaseModel):
     name: str = Field(default="", max_length=120)
     role: str
     password: str = Field(max_length=auth.MAX_PASSWORD_LENGTH)
+    must_change_password: bool = True
+
+
+class ResetPasswordBody(BaseModel):
+    email: str = Field(max_length=254)
+    new_password: str = Field(max_length=auth.MAX_PASSWORD_LENGTH)
 
 
 class EmailBody(BaseModel):
@@ -279,7 +328,10 @@ async def list_users(user: dict = ADMIN):
 async def create_user(body: NewUserBody, user: dict = ADMIN):
     store = auth.AuthStore(await get_state())
     try:
-        user_id = await store.create_user(body.email, body.password, body.role, name=body.name)
+        user_id = await store.create_user(body.email, body.password, body.role, name=body.name,
+                                          must_change_password=body.must_change_password)
+    except auth.PasswordPolicyError as exc:
+        return _deny(400, str(exc), exc.code)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
     logger.info("user %s created by %s", body.email.strip().lower(), user["email"])
@@ -296,6 +348,24 @@ async def disable_user(body: EmailBody, user: dict = ADMIN):
         raise HTTPException(status_code=409, detail="cannot disable the last active admin")
     await store.disable_user(body.email)
     logger.info("user %s disabled by %s", target["email"], user["email"])
+    return {"success": True}
+
+
+@app.post("/api/users/reset-password")
+async def reset_user_password(body: ResetPasswordBody, user: dict = ADMIN):
+    """Set a temporary password for someone else; all their sessions end and
+    they must choose their own at next sign-in. Not for your own account."""
+    if body.email.strip().lower() == user["email"]:
+        return _deny(400, "use Change password for your own account", "use_change_password")
+    store = auth.AuthStore(await get_state())
+    try:
+        target = await store.reset_password(body.email, body.new_password, by=user["email"],
+                                            agent="dashboard")
+    except LookupError:
+        raise HTTPException(status_code=404, detail="no such user")
+    except auth.PasswordPolicyError as exc:
+        return _deny(400, str(exc), exc.code)
+    logger.info("password of %s reset by %s", target["email"], user["email"])
     return {"success": True}
 
 

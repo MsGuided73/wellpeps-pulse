@@ -461,6 +461,14 @@ MIGRATIONS: list[str] = [
         banked_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     );
     """,
+    # ── v6: password management ──
+    # must_change_password: set by an admin reset and (by default) on users an
+    # admin creates; while set, the dashboard allows only /api/me,
+    # /api/me/password and /api/logout. password_changed_at is naive UTC.
+    """
+    ALTER TABLE users ADD COLUMN must_change_password INTEGER NOT NULL DEFAULT 0;
+    ALTER TABLE users ADD COLUMN password_changed_at TIMESTAMP;
+    """,
 ]
 
 

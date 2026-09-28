@@ -41,23 +41,59 @@ def _auth_store():
     return run_async(_open())
 
 
-def cmd_user_add(args):
-    """Create a dashboard user; the password is read with getpass, twice."""
-    from harvey.auth import MIN_PASSWORD_LENGTH, check_password_policy
+def _read_new_password(email: str, what: str) -> str:
+    """getpass twice; exits (nothing changed) when they differ."""
+    from harvey.auth import MIN_PASSWORD_LENGTH
 
-    password = getpass.getpass(f"  Password for {args.email} (min {MIN_PASSWORD_LENGTH} chars): ")
+    password = getpass.getpass(f"  Password for {email} (min {MIN_PASSWORD_LENGTH} chars): ")
     confirm = getpass.getpass("  Confirm password: ")
     if password != confirm:
-        print("\n  Passwords do not match; no user created.\n")
+        print(f"\n  Passwords do not match; {what}.\n")
         sys.exit(1)
+    return password
+
+
+def cmd_user_add(args):
+    """Create a dashboard user; the password is read with getpass, twice.
+
+    The user must choose their own password at first sign-in unless
+    --no-force-change (e.g. you are creating your own account).
+    """
+    from harvey.auth import check_new_password
+
+    password = _read_new_password(args.email, "no user created")
+    force = not args.no_force_change
     try:
-        check_password_policy(password)
+        check_new_password(password, email=args.email)
         store = _auth_store()
-        run_async(store.create_user(args.email, password, args.role, name=args.name))
+        run_async(store.create_user(args.email, password, args.role, name=args.name,
+                                    must_change_password=force))
     except ValueError as exc:
         print(f"\n  {exc}; no user created.\n")
         sys.exit(1)
-    print(f"\n  User {args.email.strip().lower()} created with role {args.role}.\n")
+    note = " They must choose a new password at first sign-in." if force else ""
+    print(f"\n  User {args.email.strip().lower()} created with role {args.role}.{note}\n")
+
+
+def cmd_user_reset_password(args):
+    """Set a new password (getpass, twice), end every session, force a change."""
+    from harvey.auth import check_new_password
+
+    store = _auth_store()
+    if run_async(store.get_user(args.email)) is None:
+        print(f"\n  No user {args.email}.\n")
+        sys.exit(1)
+    password = _read_new_password(args.email, "password unchanged")
+    force = not args.no_force_change
+    try:
+        check_new_password(password, email=args.email)
+        target = run_async(store.reset_password(args.email, password, by="cli", agent="cli",
+                                                must_change=force))
+    except (ValueError, LookupError) as exc:
+        print(f"\n  {exc}; password unchanged.\n")
+        sys.exit(1)
+    note = " They must choose a new password at next sign-in." if force else ""
+    print(f"\n  Password reset for {target['email']}; their sessions are ended.{note}\n")
 
 
 def cmd_user_list(args):
@@ -69,7 +105,8 @@ def cmd_user_list(args):
         print("  No users. Create one with `pulse user add EMAIL --role admin --name NAME`.")
     for user in users:
         state = "active" if user["active"] else "disabled"
-        print(f"  {user['email']:<32} {user['role']:<10} {state:<9} {user['display_name']}")
+        pending = "  (must change password)" if user["must_change_password"] else ""
+        print(f"  {user['email']:<32} {user['role']:<10} {state:<9} {user['display_name']}{pending}")
     print()
 
 
@@ -412,7 +449,15 @@ def build_parser() -> argparse.ArgumentParser:
     sub.add_argument("email")
     sub.add_argument("--role", required=True, choices=ROLES)
     sub.add_argument("--name", required=True, help="Display name")
+    sub.add_argument("--no-force-change", action="store_true",
+                     help="Don't make them choose a new password at first sign-in")
     sub.set_defaults(func=cmd_user_add)
+    sub = user_sub.add_parser("reset-password",
+                              help="Set a new password (prompts), end their sessions, force a change")
+    sub.add_argument("email")
+    sub.add_argument("--no-force-change", action="store_true",
+                     help="Don't make them choose a new password at next sign-in")
+    sub.set_defaults(func=cmd_user_reset_password)
     sub = user_sub.add_parser("list", help="List users")
     sub.set_defaults(func=cmd_user_list)
     sub = user_sub.add_parser("disable", help="Disable a user and end their sessions")

@@ -139,7 +139,8 @@ def test_me_returns_identity_and_csrf(app_state):
     client, csrf = client_for(CLINICAL)
     body = client.get("/api/me").json()
 
-    assert body == {"email": CLINICAL, "name": "Clinical", "role": "clinical", "csrf": csrf}
+    assert body == {"email": CLINICAL, "name": "Clinical", "role": "clinical", "csrf": csrf,
+                    "must_change_password": False}
 
 
 def test_logout_deletes_the_session(app_state):
@@ -546,7 +547,7 @@ def test_pages_have_no_inline_script_or_style(name):
     assert "<style" not in html
 
 
-@pytest.mark.parametrize("name", ["app.js", "login.js", "labels.js"])
+@pytest.mark.parametrize("name", ["app.js", "login.js", "labels.js", "password.js"])
 def test_scripts_build_no_inline_styles_or_handlers(name):
     js = (dashboard.WEB_DIR / name).read_text(encoding="utf-8")
     assert "style=" not in js

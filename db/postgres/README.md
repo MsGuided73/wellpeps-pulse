@@ -15,6 +15,7 @@ and stops with a pointer to this file if it hasn't.
 | File | What it is |
 | --- | --- |
 | `0001_pulse_schema.sql` | Schema `pulse`, equivalent to SQLite migrations v1-v5. Records `schema_version` 5. Idempotent: re-running it changes nothing. |
+| `0002_password_management.sql` | SQLite migration v6: `users.must_change_password` (boolean, default false) and `users.password_changed_at`. Records `schema_version` 6. Idempotent (`add column if not exists`). |
 
 ## How the schema maps to SQLite
 
@@ -78,13 +79,16 @@ Then connect as `pulse_login` (through the pooler the user name becomes
 
 Pick one:
 
-- **Supabase SQL editor:** paste `0001_pulse_schema.sql` and run it.
-- **psql:** `psql "$PULSE_DATABASE_URL" -v ON_ERROR_STOP=1 -1 -f db/postgres/0001_pulse_schema.sql`
-- **Supabase MCP / management API:** `apply_migration` with the file's
-  contents, named `0001_pulse_schema`.
+Apply every numbered file in order (already-applied ones are safe to re-run):
 
-To check it worked, run `select * from pulse.schema_version;`. It should
-return version 5.
+- **Supabase SQL editor:** paste each file and run it.
+- **psql:** `psql "$PULSE_DATABASE_URL" -v ON_ERROR_STOP=1 -1 -f db/postgres/0001_pulse_schema.sql`,
+  then the same with `0002_password_management.sql`.
+- **Supabase MCP / management API:** `apply_migration` with each file's
+  contents, named after the file (`0001_pulse_schema`, `0002_password_management`).
+
+To check it worked, run `select * from pulse.schema_version;`. The highest
+version should equal `len(MIGRATIONS)` (6).
 
 ## Connection string
 
