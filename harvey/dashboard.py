@@ -23,6 +23,7 @@ what a human did by hand.
 import asyncio
 import logging
 import os
+import secrets
 import signal
 import subprocess
 import sys
@@ -152,12 +153,41 @@ async def _review_error(request: Request, exc: review.ReviewError):
 # ── Session + security middleware ──
 
 
+DEV_NO_AUTH_ENV = "PULSE_DEV_NO_AUTH"
+# Fresh per process; the UI reads it from /api/me like a real session's token.
+_DEV_CSRF = secrets.token_urlsafe(32)
+DEV_USER = {"id": 0, "email": "dev@localhost", "name": "Local dev (no sign-in)",
+            "display_name": "Local dev (no sign-in)", "role": "admin", "csrf": _DEV_CSRF,
+            "must_change_password": False}
+
+
+def dev_no_auth() -> bool:
+    """PULSE_DEV_NO_AUTH: skip sign-in for local development only.
+
+    Never honored inside a container (PULSE_REQUIRE_POSTGRES); the server
+    also refuses to start in this mode on a non-loopback address, and
+    _session_user only grants it to loopback peers.
+    """
+    from harvey.config import env_setting, parse_bool
+    from harvey.db import require_postgres
+
+    raw = env_setting(DEV_NO_AUTH_ENV)
+    if not raw or not parse_bool(raw, DEV_NO_AUTH_ENV):
+        return False
+    return not require_postgres()
+
+
 async def _session_user(request: Request) -> dict | None:
     token = request.cookies.get(SESSION_COOKIE, "")
-    if not token:
-        return None
-    store = auth.AuthStore(await get_state())
-    return await store.session_user(token, hours=_config().dashboard.session_hours)
+    if token:
+        store = auth.AuthStore(await get_state())
+        user = await store.session_user(token, hours=_config().dashboard.session_hours)
+        if user is not None:
+            return user
+    peer = request.client.host if request.client else ""
+    if dev_no_auth() and auth.is_loopback(peer):
+        return dict(DEV_USER)
+    return None
 
 
 def _deny(status: int, detail: str, error: str = "") -> JSONResponse:
@@ -281,6 +311,8 @@ def _login_keys(email: str, request: Request) -> tuple[str, str]:
 @app.post("/api/me/password")
 async def change_my_password(body: ChangePasswordBody, request: Request, user: dict = VIEW):
     """Change your own password: other sessions end, this one gets a new CSRF token."""
+    if user["id"] == DEV_USER["id"]:
+        return _deny(400, f"the local dev user has no password ({DEV_NO_AUTH_ENV} is on)", "dev_no_auth")
     keys = _login_keys(user["email"], request)
     if any(LOGIN_LIMITER.is_blocked(k) for k in keys):
         return _deny(429, "too many failed attempts; try again in 15 minutes", "too_many_attempts")
@@ -869,11 +901,16 @@ def start_dashboard(port: int = 5555, host: str = LOOPBACK_HOST):
     if message:
         print(f"\n  {message}")
     error = auth.bind_error(host, admins, _config().dashboard.secure_cookies)
+    if dev_no_auth() and not auth.is_loopback(host):
+        error = (f"Refusing to bind to {host} with {DEV_NO_AUTH_ENV} on: sign-in would be "
+                 f"skipped for anyone who can reach it. Remove {DEV_NO_AUTH_ENV} from .env.")
     if error:
         print(f"\n  {error}\n")
         raise SystemExit(2)
     if admins == 0:
         print("\n  No admin user yet: create one with `pulse user add EMAIL --role admin --name NAME`.")
+    if dev_no_auth():
+        print(f"\n  !! {DEV_NO_AUTH_ENV} is on: sign-in is skipped for this machine (local dev only).")
     print(f"\n  WellPeps Pulse dashboard running at http://{host}:{port}")
     print("  Press Ctrl+C to stop.\n")
     _serve(host, port)

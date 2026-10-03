@@ -148,3 +148,10 @@ Also:
   translates it for Postgres and rejects SQLite-only SQL on both backends.
 - Mention status changes go through `StateManager.set_mention_status`, which
   enforces the allowed transitions.
+
+## Local dev sign-in bypass
+
+`PULSE_DEV_NO_AUTH=true` (local `.env` only) skips sign-in for loopback
+requests as a synthetic `dev@localhost` admin. It is ignored when
+`PULSE_REQUIRE_POSTGRES` is on, and `pulse dashboard` refuses a non-loopback
+`--host` while it is set. Never add it to docker-compose or Coolify.
