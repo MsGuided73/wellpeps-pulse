@@ -1,5 +1,5 @@
 """WellPeps Pulse CLI: run, dashboard, status, health, ingest, usage, escalations,
-ack, user, brief, trends, slackbot, slack-test.
+ack, user, brief, trends, slackbot, slack-test, links check.
 
 Installed as both `pulse` and `harvey` (same entry point).
 """
@@ -452,6 +452,40 @@ def cmd_slack_test(args):
     sys.exit(0 if sent and all(outcome == "ok" for outcome in sent) else 1)
 
 
+def links_check_lines(results, suggestions) -> list[str]:
+    lines = ["Public links registry check", "=" * 52]
+    for r in results:
+        outcome = "ok" if r.ok else "FAILED"
+        detail = str(r.status) if r.status is not None else r.error
+        marked = "live" if r.live_in_config else "not live"
+        lines.append(f"{r.id:<34} {outcome:<6} {detail:<14} ({marked} in links.yaml)")
+    if suggestions:
+        lines += ["", "Suggested edits to config/links.yaml (this command never edits it):",
+                  *(f"- {s}" for s in suggestions)]
+    return lines
+
+
+def cmd_links_check(args, transport=None):
+    """HEAD/GET each registry URL; print and record the result (settings
+    ``links_check``); suggest live flips. Exit 1 if any link failed."""
+    from harvey import links
+    from harvey.state import StateManager
+
+    async def _check():
+        results = await links.check_links(transport=transport)
+        state = StateManager()
+        await state.init_db()
+        await links.record_check(state, results)
+        return results
+
+    results = run_async(_check())
+    print()
+    for line in links_check_lines(results, links.suggestions(results)):
+        print(f"  {line}")
+    print()
+    sys.exit(0 if all(r.ok for r in results) else 1)
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="WellPeps Pulse: social listening with human-reviewed replies.",
@@ -540,6 +574,11 @@ def build_parser() -> argparse.ArgumentParser:
     sub = subparsers.add_parser("usage", help="Show Claude usage and quota")
     sub.add_argument("--days", type=int, default=30, help="Breakdown window (default: 30)")
     sub.set_defaults(func=cmd_usage)
+
+    links_parser = subparsers.add_parser("links", help="Public links registry (config/links.yaml)")
+    links_sub = links_parser.add_subparsers(dest="links_command", required=True)
+    sub = links_sub.add_parser("check", help="Request every registry URL and record the result")
+    sub.set_defaults(func=cmd_links_check)
 
     return parser
 

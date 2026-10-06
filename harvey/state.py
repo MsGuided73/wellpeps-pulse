@@ -469,6 +469,12 @@ MIGRATIONS: list[str] = [
     ALTER TABLE users ADD COLUMN must_change_password INTEGER NOT NULL DEFAULT 0;
     ALTER TABLE users ADD COLUMN password_changed_at TIMESTAMP;
     """,
+    # ── v7: tracked reply links ──
+    # link_json: the registry link a draft carries (harvey/links.link_record:
+    # id, label, url, utm_content, utm_term), or NULL. Reply analytics read it.
+    """
+    ALTER TABLE drafts ADD COLUMN link_json TEXT;
+    """,
 ]
 
 
@@ -903,10 +909,10 @@ class StateManager:
                 """INSERT INTO drafts
                    (mention_id, version, text, claim_ids_json, model,
                     filter_ok, filter_hits_json, review_verdict,
-                    review_reasons_json, tier, created_at)
+                    review_reasons_json, tier, created_at, link_json)
                    VALUES (?, (SELECT COALESCE(MAX(version), 0) + 1
                                FROM drafts WHERE mention_id = ?),
-                           ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                           ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                    RETURNING id""",
                 (
                     draft.mention_id, draft.mention_id, draft.text,
@@ -916,6 +922,7 @@ class StateManager:
                     draft.review_verdict.value if draft.review_verdict else None,
                     json.dumps(draft.review_reasons), draft.tier,
                     _ts(draft.created_at),
+                    json.dumps(draft.link) if draft.link else None,
                 ),
             )
             (draft_id,) = await cursor.fetchone()
@@ -942,6 +949,7 @@ class StateManager:
         d["claim_ids"] = _loads(d.pop("claim_ids_json", None), [])
         d["filter_hits"] = _loads(d.pop("filter_hits_json", None), [])
         d["review_reasons"] = _loads(d.pop("review_reasons_json", None), [])
+        d["link"] = _loads(d.pop("link_json", None), {}) or None
         if d["filter_ok"] is not None:
             d["filter_ok"] = bool(d["filter_ok"])
         return Draft(**d)

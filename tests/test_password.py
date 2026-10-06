@@ -418,4 +418,4 @@ def test_postgres_0002_adds_the_columns_idempotently_and_bumps_the_version():
     assert "add column if not exists password_changed_at timestamp" in body
     assert re.search(r"values\s*\(\s*6\s*,", body)
     assert "on conflict (version) do nothing" in body
-    assert len(MIGRATIONS) == 6
+    assert len(MIGRATIONS) >= 6

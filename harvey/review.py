@@ -7,7 +7,8 @@ record that a human copied an approved reply and posted it by hand.
 
 Approval gate ("no claim ID, no publish"): the mention is ``in_review``, the
 latest draft has text, re-running the deterministic compliance filter is not
-red, the draft cites at least one claim, and (when
+red, no registry link in the text is still ``live: false`` (config/links.yaml),
+the draft cites at least one claim, and (when
 ``review.require_publishable_claims``) every cited claim is signed off.
 """
 
@@ -16,7 +17,7 @@ import logging
 from dataclasses import dataclass
 from datetime import datetime, timezone
 
-from harvey import explain, knowledge
+from harvey import explain, knowledge, links
 from harvey.compliance import compliance_filter
 from harvey.config import ESCALATION_KINDS
 from harvey.escalation import SEVERE_KINDS, escalate
@@ -244,6 +245,7 @@ async def detail(state, mention_id: int, config) -> dict:
         "escalations": escalations,
         "audit": [e.model_dump(mode="json") for e in audit],
         "claims": _claim_info(claim_ids),
+        "tracked_link": tracked_link(drafts[0] if drafts else None),
         "approval": {"allowed": not blockers, "blockers": blockers},
     }
 
@@ -262,6 +264,14 @@ def _detail_why(mention, triage, escalations: list[dict], audit) -> dict | None:
                                        manual_by=manual_by)
 
 
+def tracked_link(draft: Draft | None) -> dict | None:
+    """The registry link in the draft's text, with the registry's current
+    label and live flag (for the review desk chip)."""
+    if draft is None:
+        return None
+    return links.describe(links.link_record(draft.text) or draft.link)
+
+
 # --- Approval gate ------------------------------------------------------------------------------------
 
 
@@ -276,6 +286,9 @@ def approval_blockers(status: MentionStatus, draft: Draft | None, platform: str,
     if gate.tier == "red":
         reasons = "; ".join(f"{h.rule_id}: {h.reason}" for h in gate.hits if h.rule_id != "CLAIMS")
         blockers.append("compliance filter is red" + (f" ({reasons})" if reasons else ""))
+    for link in links.not_live(draft.text):
+        blockers.append(f"tracked link \"{link.label}\" ({link.id}) is not live yet: deploy the page, "
+                        "confirm it with `pulse links check`, then set live: true in config/links.yaml")
     if not draft.claim_ids:
         blockers.append("the draft cites no approved claim IDs (no claim ID, no publish)")
     elif config.review.require_publishable_claims:
@@ -344,7 +357,7 @@ async def edit(state, mention_id: int, text: str, claim_ids: list[str], actor: s
     draft_id = await state.add_draft(Draft(
         mention_id=mention_id, text=text, claim_ids=claim_ids, model=f"human:{actor}",
         filter_ok=gate.ok, filter_hits=hits, review_verdict=verdict, review_reasons=reasons,
-        tier=gate.tier,
+        tier=gate.tier, link=links.link_record(text),
     ))
     if mention.status is MentionStatus.APPROVED:
         await _move(state, mention_id, MentionStatus.IN_REVIEW)  # an edit voids the approval

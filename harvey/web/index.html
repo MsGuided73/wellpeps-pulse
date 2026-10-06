@@ -141,6 +141,14 @@
   <p class="an-error hidden" id="an-error" role="alert"></p>
   <div class="an-tiles" id="an-tiles" aria-live="polite"></div>
   <div class="an-grid" id="an-grid"></div>
+  <section class="card an-card rp-card" id="rp-card" aria-labelledby="rp-title">
+    <div class="an-card-head"><div><h3 class="an-title" id="rp-title">Replies &amp; links</h3>
+      <p class="an-takeaway" id="rp-take">Approved and posted replies by platform and tracked link. Uses the date range above (custom ranges count the last 30 days).</p></div>
+      <div class="an-card-tools"><a class="btn btn-ghost btn-sm" id="rp-csv" href="/api/analytics/replies?format=csv" download>Export utm_content CSV</a></div></div>
+    <div class="an-extra" id="rp-tiles"></div>
+    <div class="rp-tables" id="rp-tables"></div>
+    <p class="an-note muted">Match conversions in Google Analytics 4: Explore, dimension &ldquo;Session manual ad content&rdquo; (utm_content), campaign &ldquo;pulse&rdquo;; join on the CSV&rsquo;s utm_content column.</p>
+  </section>
 </div>
 
 <!-- Pulse: market trends, briefs, language bank (aggregates only) -->
@@ -309,5 +317,6 @@
 <script src="/static/pulse.js"></script>
 <script src="/static/charts.js"></script>
 <script src="/static/analytics.js"></script>
+<script src="/static/replies.js"></script>
 </body>
 </html>

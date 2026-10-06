@@ -5,8 +5,12 @@ and the claims library. It never calls Claude, so the same input always gives
 the same result. Tiers follow reply-compliance-rules.md:
 
 - red:    a hard block (R13-R39 "never write this", R31 privacy, missing or
-          unknown claim IDs, limits). ``ok`` is False.
-- yellow: allowed as a draft but needs human compliance review (R10).
+          unknown claim IDs, limits, no disclosure in the first sentence
+          (R2/R3), a link outside config/links.yaml or not backed by a
+          cited claim's ``link_id``). ``ok`` is False.
+- yellow: allowed as a draft but needs human compliance review (R10), incl.
+          a registry link that is not live yet (approval is blocked on it
+          separately, see harvey/review.py).
 - green:  nothing found. A human still approves every post (R1).
 """
 
@@ -15,17 +19,14 @@ from dataclasses import dataclass, field
 from functools import lru_cache
 from typing import Literal, NamedTuple
 
-from harvey import knowledge
-from harvey.models.knowledge import PatternRule
+from harvey import knowledge, links
+from harvey.models.knowledge import Disclosure, PatternRule
 from harvey.models.mention import MAX_MENTION_TEXT_CHARS
 
 TierName = Literal["green", "yellow", "red"]
 
 _MAX_MATCH_CHARS = 80
-_LINK_RE = re.compile(
-    r"https?://\S+|www\.\S+|\b[a-z0-9-]+(?:\.[a-z0-9-]+)*\.(?:com|co|org|net|io|health|us|ly|app)\b(?:/\S*)?",
-    re.IGNORECASE,
-)
+_LINK_RE = links.LINK_RE
 _HASHTAG_RE = re.compile(r"(?<![\w#&])#\w+")
 
 
@@ -86,6 +87,12 @@ def _medication_rx(names: tuple[str, ...]) -> re.Pattern[str] | None:
     return re.compile(rf"(?<!\w)(?:{alternation})(?!\w)", re.IGNORECASE)
 
 
+def names_medication(text: str) -> bool:
+    """True if ``text`` names a generic or brand drug from products.yaml."""
+    rx = _medication_rx(tuple(knowledge.medication_names()))
+    return bool(rx and rx.search(links.mask_registry_links(text or "")))
+
+
 def _medication_hits(text: str, forbid: bool) -> list[Hit]:
     rx = _medication_rx(tuple(knowledge.medication_names()))
     found = rx.search(text) if rx else None
@@ -94,6 +101,56 @@ def _medication_hits(text: str, forbid: bool) -> list[Hit]:
     if forbid:
         return [Hit("R38", "medication_name", found.group(0), "medication or brand name in a reply (pre-certification limit)")]
     return [Hit("R10", "medication_name", found.group(0), "medication name needs compliance review")]
+
+
+_SENTENCE_END = re.compile(r"[.!?](?=\s|$)|\n")
+
+
+def first_sentence(text: str) -> str:
+    """The reply's first sentence (or first line), stripped."""
+    body = (text or "").strip()
+    end = _SENTENCE_END.search(body)
+    return body[:end.end()].strip() if end else body
+
+
+@lru_cache(maxsize=None)
+def _form_rx(form: str) -> re.Pattern[str]:
+    words = [re.escape(w).replace("'", "['’]") for w in form.split()]
+    return re.compile(r"(?<!\w)" + r"\s+".join(words) + r"(?!\w)", re.IGNORECASE)
+
+
+def has_disclosure(text: str, disclosure: Disclosure | None = None) -> bool:
+    """The first sentence carries one of the approved disclosure forms."""
+    disclosure = disclosure or knowledge.compliance_rules().disclosure
+    opening = first_sentence(text)
+    return any(_form_rx(f.strip()).search(opening) for f in disclosure.forms if f.strip())
+
+
+def _disclosure_hits(text: str, disclosure: Disclosure, toggles: dict[str, bool]) -> list[Hit]:
+    """R2/R3: a brand reply opens with the disclosure; without it, third-person
+    talk about WellPeps reads as astroturfing."""
+    if not disclosure.required or has_disclosure(text, disclosure):
+        return []
+    return [
+        Hit("R3", "disclosure", _clip(first_sentence(text)),
+            "no approved disclosure in the first sentence (e.g. \"Disclosure: I work with WellPeps\")"),
+        *_pattern_hits(text, disclosure.third_person, "disclosure", toggles),
+    ]
+
+
+def _link_hits(text: str, claim_ids: list[str]) -> tuple[list[Hit], list[Hit]]:
+    """(red, yellow) for links: registry only, backed by a cited claim, live."""
+    by_id = knowledge.claims_by_id()
+    backed = {by_id[c].link_id for c in claim_ids if c in by_id and by_id[c].link_id}
+    red, yellow = [], []
+    for use in links.find_links(text):
+        if use.link is None:
+            red.append(Hit("R8", "links", _clip(use.raw), "link not in the public links registry (config/links.yaml)"))
+        elif use.link.id not in backed:
+            red.append(Hit("R8", "links", use.link.id, "link not backed by a cited claim (claims.yaml link_id)"))
+        elif not use.link.live:
+            yellow.append(Hit("R8", "links", use.link.id, "link not live yet"))
+    return red, yellow
 
 
 def _limit_hits(text: str, platform: str, length: int | None = None) -> list[Hit]:
@@ -127,21 +184,27 @@ def compliance_filter(
     """
     full_text = text
     text = text[:MAX_MENTION_TEXT_CHARS]
+    # Our own registry URLs (guide paths, utm_term) are not reply wording.
+    scan = links.mask_registry_links(text)
     rules = knowledge.compliance_rules()
     toggles = rules.toggles.model_dump()
     platform = platform.strip().lower()
     forbid_meds = rules.toggles.forbid_medication_names_in_replies
 
+    link_red, link_yellow = _link_hits(text, claim_ids)
     red = [
         *_claim_hits(claim_ids, require_publishable),
-        *_pattern_hits(text, rules.prohibited, "prohibited", toggles),
-        *_pattern_hits(text, rules.patient_confirmation, "patient_confirmation", toggles),
-        *(_medication_hits(text, forbid_meds) if forbid_meds else []),
+        *_disclosure_hits(scan, rules.disclosure, toggles),
+        *_pattern_hits(scan, rules.prohibited, "prohibited", toggles),
+        *_pattern_hits(scan, rules.patient_confirmation, "patient_confirmation", toggles),
+        *(_medication_hits(scan, forbid_meds) if forbid_meds else []),
+        *link_red,
         *_limit_hits(text, platform, length=len(full_text)),
     ]
     yellow = [
-        *_pattern_hits(text, rules.yellow, "yellow", toggles),
-        *([] if forbid_meds else _medication_hits(text, forbid=False)),
+        *_pattern_hits(scan, rules.yellow, "yellow", toggles),
+        *([] if forbid_meds else _medication_hits(scan, forbid=False)),
+        *link_yellow,
     ]
     if platform == "tiktok":
         yellow.append(Hit("R34", "platform", "tiktok", "TikTok gets the strictest standard; needs separate approval"))

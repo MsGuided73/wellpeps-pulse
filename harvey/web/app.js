@@ -492,6 +492,8 @@ function renderReviewPane() {
     (reviewer && inReview ? '<div class="claim-add"><select class="form-input" id="claim-select">' + claimOptions +
       '</select><button class="btn btn-secondary btn-sm" data-action="claim-add">Add claim</button></div>' : '') + '</div>';
 
+  html += trackedLinkHtml(d.tracked_link);
+
   if (draft) {
     html += '<div class="desk-block"><div class="subhead">Checks</div>' + tierBadge(draft.tier) + ' ' +
       verdictBadge(draft.review_verdict) +
@@ -523,6 +525,18 @@ function renderReviewPane() {
   html += '<div class="desk-block"><div class="subhead">Audit trail</div>' + timeline(d.audit) + '</div>';
   document.getElementById('review-pane').innerHTML = html;
   renderClaims();
+}
+
+// The registry link the draft carries: label, live / not-live badge, UTM tag.
+function trackedLinkHtml(t) {
+  if (!t) return '';
+  const tag = t.utm_content ? '<span class="muted">utm_content=' + escHtml(t.utm_content) + '</span>'
+    : '<span class="muted">no utm_content (not tracked)</span>';
+  return '<div class="desk-block"><div class="subhead">Tracked link</div><div class="tracked-link">' +
+    '<span class="claim-chip ' + (t.live ? 'ok' : 'pending') + '" title="' + escHtml(t.url || '') + '">Tracked link: ' +
+    escHtml(t.label || t.id) + '</span> ' + (t.live ? toneBadge('Live', 'good') : toneBadge('Not live yet', 'bad')) + ' ' + tag +
+    (t.live ? '' : '<p class="muted">Approval stays blocked until this page is live (pulse links check, then live: true in config/links.yaml).</p>') +
+    '</div></div>';
 }
 
 function currentMentionId() {

@@ -156,6 +156,8 @@ class Draft(BaseModel):
     review_reasons: list[str] = Field(default_factory=list)
     tier: str = ""
     created_at: datetime = Field(default_factory=_utcnow)
+    # The registry link the text carries (harvey.links.link_record), or None.
+    link: dict | None = None
 
 
 class Escalation(BaseModel):

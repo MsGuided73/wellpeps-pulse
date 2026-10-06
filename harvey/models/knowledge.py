@@ -186,12 +186,27 @@ class Limits(_Strict):
         return self.max_chars.get(platform, self.max_chars["default"])
 
 
+class Disclosure(_Strict):
+    """R2/R3: the first sentence of every reply must carry an approved form."""
+
+    required: bool = False
+    forms: list[str] = Field(default_factory=list)
+    third_person: list[PatternRule] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def _forms_when_required(self) -> "Disclosure":
+        if self.required and not any(f.strip() for f in self.forms):
+            raise ValueError("disclosure.required needs at least one form")
+        return self
+
+
 class ComplianceRulesFile(_Strict):
     toggles: Toggles
     limits: Limits
     prohibited: list[PatternRule]
     patient_confirmation: list[PatternRule]
     yellow: list[PatternRule]
+    disclosure: Disclosure = Field(default_factory=Disclosure)
 
 
 # --- claims.yaml ------------------------------------------------------------
@@ -208,6 +223,7 @@ class Claim(_Strict):
     approved_at: date | None = None
     expires: date | None = None
     source: str
+    link_id: str | None = None  # an id from config/links.yaml
 
     def is_publishable(self, today: date) -> bool:
         approved = bool(self.approved_by.strip()) and self.approved_by != PENDING
@@ -217,3 +233,39 @@ class Claim(_Strict):
 
 class ClaimsFile(_Strict):
     claims: list[Claim]
+
+
+# --- links.yaml ---------------------------------------------------------------
+
+
+class PublicLink(_Strict):
+    id: Annotated[str, Field(pattern=r"^LNK-[A-Z0-9-]+$")]
+    url: str
+    label: str
+    programs: list[str]
+    live: bool = False
+    checked_at: date | None = None
+
+
+class LinksFile(_Strict):
+    allowed_domains: list[str]
+    links: list[PublicLink] = Field(default_factory=list)
+
+
+# --- reply_examples.yaml -------------------------------------------------------
+
+
+class ReplyExample(_Strict):
+    id: str
+    category: Literal["purchase_intent", "question", "praise"]
+    platform: str
+    program: str = ""
+    post: str
+    reply: str
+    claim_ids: list[str]
+
+
+class ReplyExamplesFile(_Strict):
+    status: str                  # PENDING until compliance signs the examples off
+    usage: str
+    examples: list[ReplyExample] = Field(default_factory=list)

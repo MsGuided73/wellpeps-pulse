@@ -17,7 +17,7 @@ running it locally against that database, and deploying it on Coolify.
 | **Project** | One hosted Postgres database plus Supabase's extras. Pulse's project is **`wellpeps-pulse`** (ref `sgzundcnvsmvqdwshcxp`, region us-east-1). |
 | **Postgres** | The database engine. Pulse uses SQLite on your laptop for tests and Postgres on Supabase for real use. |
 | **Schema** | A folder of tables inside the database. Pulse's tables live in the **`pulse`** schema, not the default `public` one. |
-| **Migration** | A SQL file that creates or changes tables. Pulse's are the numbered files in `db/postgres/`: `0001_pulse_schema.sql` and `0002_password_management.sql` are **already applied** (see step 1); apply any newer ones the same way, in order. |
+| **Migration** | A SQL file that creates or changes tables. Pulse's are the numbered files in `db/postgres/`: `0001_pulse_schema.sql` and `0002_password_management.sql` are **already applied** (see step 1); apply any newer ones the same way, in order (`0003_draft_links.sql`, schema version 7, is new: apply it before deploying that build). |
 | **Row-Level Security (RLS)** | Per-row access rules. On for every Pulse table, with no access for the public API roles. |
 | **anon / publishable key** | A browser-safe key for Supabase's public data API. **Pulse doesn't use it.** The `pulse` schema isn't exposed to that API. |
 | **service_role / secret key** | A key that bypasses security on the data API. **Pulse doesn't use it either. Don't put it anywhere.** |

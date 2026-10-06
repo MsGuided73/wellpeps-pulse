@@ -11,7 +11,8 @@ from harvey import knowledge
 from harvey.paths import PROJECT_ROOT
 
 CONFIG_DIR = PROJECT_ROOT / "config"
-YAML_FILES = ["competitors.yaml", "products.yaml", "keywords.yaml", "compliance_rules.yaml", "claims.yaml"]
+YAML_FILES = ["competitors.yaml", "products.yaml", "keywords.yaml", "compliance_rules.yaml", "claims.yaml",
+              "links.yaml", "reply_examples.yaml"]
 
 # --- Leak guard ------------------------------------------------------------
 # products.md in the registry holds internal cost data from the pricing
@@ -75,7 +76,7 @@ def test_config_file_exists_with_header(name):
     head = "\n".join(text.splitlines()[:12])
     assert head.startswith("#")
     assert "Source:" in head
-    assert "2026-09-27" in head
+    assert re.search(r"Generated: 2026-\d\d-\d\d", head)
     assert "do not add internal costs" in head.lower()
 
 
@@ -346,9 +347,11 @@ def test_compliance_rules_shape():
 
 def test_claims_seeded_all_pending():
     claims = knowledge.claims()
-    assert 5 <= len(claims) <= 20
+    assert 5 <= len(claims) <= 40
     assert all(c.approved_by == "PENDING" and c.approved_at is None for c in claims)
-    assert all(c.source.startswith("reply-compliance-rules.md R") for c in claims)
+    # Each claim cites its source: the rules registry, or the website source files.
+    assert all(c.source.startswith("reply-compliance-rules.md R") or "wellpeps-site/src/" in c.source
+               for c in claims)
     assert set(knowledge.claims_by_id()) == {c.id for c in claims}
 
 

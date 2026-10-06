@@ -11,8 +11,9 @@ from harvey.paths import PROJECT_ROOT
 
 CONFIG_DIR = PROJECT_ROOT / "config"
 
+DISCLOSURE = "Disclosure: I work with WellPeps, so I am not neutral."
 CLEAN = (
-    "Thanks for asking. A few things worth checking with any provider are whether "
+    DISCLOSURE + " Thanks for asking. A few things worth checking with any provider are whether "
     "you are actually reviewed by a licensed clinician, what follow-up is included, "
     "and how questions are handled between visits."
 )
@@ -49,7 +50,7 @@ def test_clean_reply_is_green(claim_id):
 
 def test_approved_disclosure_wording_is_not_blocked(claim_id):
     text = (
-        "Compounded medications are not FDA-approved finished drug products. A licensed "
+        DISCLOSURE + " Compounded medications are not FDA-approved finished drug products. A licensed "
         "healthcare provider determines whether a particular treatment and formulation may "
         "be appropriate for an individual patient."
     )
@@ -195,7 +196,7 @@ def test_medication_names_yellow_when_toggle_off(tmp_path, monkeypatch, claim_id
     monkeypatch.setenv("PULSE_CONFIG_DIR", str(tmp_path))
     knowledge.reload()
 
-    result = compliance_filter("Semaglutide is one option.", "facebook", [claim_id])
+    result = compliance_filter(DISCLOSURE + " Semaglutide is one option.", "facebook", [claim_id])
     assert result.ok is True and result.tier == "yellow"
     assert any(h.kind == "medication_name" and h.rule_id == "R10" for h in result.hits)
 
@@ -203,11 +204,15 @@ def test_medication_names_yellow_when_toggle_off(tmp_path, monkeypatch, claim_id
 # --- Limits ----------------------------------------------------------------
 
 
+GUIDES_URL = "https://wellpeps.com/smart-patient-guides"
+
+
 def test_one_link_ok_two_links_red(claim_id):
-    one = compliance_filter(CLEAN + " More at https://wellpeps.com/learn", "facebook", [claim_id])
-    two = compliance_filter(CLEAN + " https://wellpeps.com/learn and www.example.org/x", "facebook", [claim_id])
-    assert "links" not in kinds(one)
-    assert two.tier == "red" and "links" in kinds(two)
+    one = compliance_filter(CLEAN + f" More at {GUIDES_URL}", "facebook", [claim_id, "CLM-EDU-GUIDES"])
+    two = compliance_filter(CLEAN + f" {GUIDES_URL} and www.example.org/x", "facebook",
+                            [claim_id, "CLM-EDU-GUIDES"])
+    assert not [h for h in one.hits if h.kind == "links" and h.reason != "link not live yet"]
+    assert two.tier == "red" and any(h.rule_id == "R6" for h in two.hits)
 
 
 def test_hashtags_red_on_reddit(claim_id):
@@ -244,7 +249,7 @@ def test_length_limit_per_platform(platform, limit, claim_id):
     ],
 )
 def test_yellow_needs_review_but_ok(text, claim_id):
-    result = compliance_filter(text, "facebook", [claim_id])
+    result = compliance_filter(f"{DISCLOSURE} {text}", "facebook", [claim_id])
     assert result.ok is True and result.tier == "yellow", result.hits
 
 
@@ -264,7 +269,7 @@ def test_hit_shape(claim_id):
 def test_seeded_claim_wording_is_never_hard_blocked(claim):
     # Approved-library wording must not trip the prohibited/privacy rules.
     # Only the R38 medication-name toggle may block it (e.g. the NAD+ claim).
-    result = compliance_filter(claim.text, "facebook", [claim.id])
+    result = compliance_filter(f"{DISCLOSURE} {claim.text}", "facebook", [claim.id])
     blocking = [h for h in result.hits if h.kind != "yellow" and h.rule_id != "R38"]
     assert blocking == []
 

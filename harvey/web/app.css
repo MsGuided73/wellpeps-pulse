@@ -756,3 +756,9 @@ body.pw-forced nav, body.pw-forced main, body.pw-forced .header-controls { displ
   *, *::before, *::after { animation-duration: .001ms !important; transition-duration: .001ms !important; }
   html { scroll-behavior: auto; }
 }
+
+/* Replies & links card (replies.js) and the review desk's tracked-link chip */
+.rp-card { margin-top: 16px; }
+.rp-tables { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; }
+.tracked-link { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.tracked-link p { flex-basis: 100%; margin: 4px 0 0; }

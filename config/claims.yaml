@@ -12,7 +12,9 @@
 # Do not invent new claim wording here; add only wording from approved material.
 #
 # Fields: id, text, products (product names from products.yaml, or ["*"]),
-# tier (green|yellow per R10), approved_by, approved_at, expires, source.
+# tier (green|yellow per R10), approved_by, approved_at, expires, source, and
+# optional link_id (an id from config/links.yaml: the one link a draft citing
+# this claim may carry).
 
 claims:
   - id: CLM-R3-DISCLOSURE
@@ -132,3 +134,85 @@ claims:
     approved_at: null
     expires: null
     source: "reply-compliance-rules.md R17 ([CS] Rule 5); never rescues a claim (R26)"
+
+  # --- Conversion playbook (2026-10-06). Facts confirmed by the client on
+  # 2026-10-06; wording from the WellPeps website source (read-only copy at
+  # C:/dev/W/wellpeps-site). Every claim below is PENDING compliance and
+  # physician sign-off like the rest of this file. ---------------------------
+  - id: CLM-PRICE-FOLLOWUP
+    text: "Follow-up care with a licensed clinician is included in the one monthly price."
+    products: ["*"]
+    tier: yellow
+    approved_by: PENDING
+    approved_at: null
+    expires: null
+    source: "Client confirmation 2026-10-06 (every program); C:/dev/W/wellpeps-site/src/config.ts PRICE_NOTE. Pricing-structure claim: yellow per R10/R11"
+
+  - id: CLM-PRICE-ALLIN
+    text: "One monthly price covers the licensed clinician's review, follow-up care, the medication if prescribed, messaging with the care team, and standard shipping."
+    products: ["*"]
+    tier: yellow
+    approved_by: PENDING
+    approved_at: null
+    expires: null
+    source: "C:/dev/W/wellpeps-site/src/config.ts PRICE_NOTE (first sentence; 'your' -> 'the' because R31 blocks 'your care team'; the lab-billing and pay-nothing-unless-prescribed sentences are left out). CHECK: config/products.yaml membership.shipping_note says shipping is shown at checkout"
+
+  - id: CLM-EDU-GUIDES
+    text: "WellPeps offers free Smart Patient's Guides, including questions to ask before choosing a provider."
+    products: ["*"]
+    tier: green
+    link_id: LNK-GUIDES
+    approved_by: PENDING
+    approved_at: null
+    expires: null
+    source: "C:/dev/W/wellpeps-site/src/data/ebooks.ts (EBOOKS) and src/data/guide-pages.ts (series intro: 'know what questions to ask'; LAST_POINT). Only the GLP-1 guide lists a checklist, so the series claim says 'questions to ask'"
+
+  - id: CLM-EDU-GUIDE-GLP-1-WEIGHT-LOSS
+    text: "Free guide: The Smart Patient's Guide to GLP-1 Weight Loss — What you should know before choosing a GLP-1 weight loss program. It includes questions to ask before choosing a provider and a checklist."
+    products: [Compounded Semaglutide, Compounded Tirzepatide, Oral Semaglutide, Oral Tirzepatide]
+    tier: green
+    link_id: LNK-GUIDE-GLP-1-WEIGHT-LOSS
+    approved_by: PENDING
+    approved_at: null
+    expires: null
+    source: "C:/dev/W/wellpeps-site/src/data/ebooks.ts (slug glp-1-weight-loss: title, subtitle); src/data/guide-pages.ts inside: 'Questions to ask before choosing a provider', 'The Smart Patient's GLP-1 checklist'"
+
+  - id: CLM-EDU-GUIDE-SEXUAL-WELLNESS
+    text: "Free guide: The Smart Patient's Guide to Sexual Wellness — Understanding today's treatment options and finding the right care. It includes questions to ask before choosing care."
+    products: [Tadalafil Daily, Tadalafil As Needed, Sildenafil As Needed]
+    tier: green
+    link_id: LNK-GUIDE-SEXUAL-WELLNESS
+    approved_by: PENDING
+    approved_at: null
+    expires: null
+    source: "C:/dev/W/wellpeps-site/src/data/ebooks.ts (slug sexual-wellness); src/data/guide-pages.ts ('the questions worth asking before choosing care', LAST_POINT). No checklist listed"
+
+  - id: CLM-EDU-GUIDE-HAIR-RESTORATION
+    text: "Free guide: The Smart Patient's Guide to Hair Restoration — Understanding hair loss, today's treatment options, and what to realistically expect. It includes questions to ask before choosing a treatment program."
+    products: [Topical Treatments, Oral Treatments, Combination Therapy, Advanced Liposomal Formulas]
+    tier: green
+    link_id: LNK-GUIDE-HAIR-RESTORATION
+    approved_by: PENDING
+    approved_at: null
+    expires: null
+    source: "C:/dev/W/wellpeps-site/src/data/ebooks.ts (slug hair-restoration); src/data/guide-pages.ts ('the questions worth asking before choosing a treatment program', LAST_POINT). No checklist listed. Hair Restoration is coming_soon (R21: say only 'on the way')"
+
+  - id: CLM-EDU-GUIDE-HEALTHY-AGING-VITALITY
+    text: "Free guide: The Smart Patient's Guide to Healthy Aging & Vitality — What to know about supporting energy, strength, sleep, recovery and cognitive wellness as you age. It includes questions to ask before choosing a treatment program."
+    products: [Sermorelin, NAD+, Glutathione, MIC + B12, Lipo-C, Methylene Blue]
+    tier: yellow
+    link_id: LNK-GUIDE-HEALTHY-AGING-VITALITY
+    approved_by: PENDING
+    approved_at: null
+    expires: null
+    source: "C:/dev/W/wellpeps-site/src/data/ebooks.ts (slug healthy-aging-vitality); src/data/guide-pages.ts (PROGRAM_BAND_COPY healthy-aging, LAST_POINT). No checklist listed. Wellness-outcome wording in the subtitle: yellow (R13/R18)"
+
+  - id: CLM-EDU-GUIDE-NAD-THERAPY
+    text: "Free guide: The Smart Patient's Guide to NAD+ Therapy — What it is, what we know, and questions to ask before treatment."
+    products: [NAD+]
+    tier: yellow
+    link_id: LNK-GUIDE-NAD-THERAPY
+    approved_by: PENDING
+    approved_at: null
+    expires: null
+    source: "C:/dev/W/wellpeps-site/src/data/ebooks.ts (slug nad-therapy: title, subtitle). Names a molecule, so blocked while the R38 toggle is on (the drafter then offers the Healthy Aging guide)"

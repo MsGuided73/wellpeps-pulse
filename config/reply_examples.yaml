@@ -1,0 +1,53 @@
+# Source: conversion reply playbook brief (2026-10-06); claims from
+#         config/claims.yaml, links from config/links.yaml.
+# Generated: 2026-10-06 for the conversion reply playbook.
+# Do not add internal costs, prices, real people's posts or handles here.
+#
+# Few-shot STYLE GUIDANCE for the drafter (prompts/draft.md). These are not
+# approved replies and are never posted as written: status stays PENDING
+# until compliance signs them off, and every real draft still goes through the
+# compliance filter, the adversarial reviewer and a human.
+#
+# Each example follows the purchase-intent / question playbook: disclosure
+# first, a general provider-neutral answer, ONE WellPeps fact from a claim,
+# at most one registry link (only via a cited guide claim), then the
+# provider-determines line. Reddit examples stay under 90 words.
+# tests/test_reply_playbook.py checks each reply passes compliance_filter
+# (only "link not live yet" may show while the guide pages are not deployed).
+# In the prompt, registry URLs are shown as <guide link>.
+
+status: PENDING
+usage: style guidance only
+
+examples:
+  - id: EX-PURCHASE-FOLLOWUP
+    category: purchase_intent
+    platform: reddit
+    program: Weight Loss
+    post: "anyone tried compounded tirzepatide via telehealth? Trying to figure out which providers include the follow-up visits in the price."
+    reply: "Full disclosure: I work with WellPeps, so I'm not neutral. When you compare telehealth programs, it's worth asking whether follow-up visits with a licensed clinician are included or billed separately, how dose adjustments are handled, and which pharmacy prepares the medication. At WellPeps, follow-up care is included in the one monthly price. We also have a free guide with questions to ask before choosing a provider and a checklist: https://wellpeps.com/smart-patient-guides/glp-1-weight-loss. Whether treatment is right for you is always up to a licensed clinician."
+    claim_ids: [CLM-R3-DISCLOSURE, CLM-R7-PROVIDER-CHECKLIST, CLM-PRICE-FOLLOWUP, CLM-EDU-GUIDE-GLP-1-WEIGHT-LOSS, CLM-R22-PROVIDER-DETERMINES]
+
+  - id: EX-QUESTION-ONLINE-CLINIC
+    category: question
+    platform: reddit
+    program: Sexual Wellness
+    post: "How do you tell if an online ED clinic is legit? So many ads lately."
+    reply: "Full disclosure: I work with WellPeps, so I'm not neutral. A few things worth checking with any online clinic: whether you are actually reviewed by a licensed clinician, what follow-up is included, and which pharmacy dispenses the medication. At WellPeps, follow-up care with a licensed clinician is included in the one monthly price. Our free guide has questions to ask before choosing care: https://wellpeps.com/smart-patient-guides/sexual-wellness. A licensed healthcare provider determines whether treatment is appropriate."
+    claim_ids: [CLM-R3-DISCLOSURE, CLM-R7-PROVIDER-CHECKLIST, CLM-PRICE-FOLLOWUP, CLM-EDU-GUIDE-SEXUAL-WELLNESS, CLM-R22-PROVIDER-DETERMINES]
+
+  - id: EX-QUESTION-WHAT-TO-ASK
+    category: question
+    platform: facebook
+    program: Healthy Aging & Vitality
+    post: "Thinking about peptide therapy through an online clinic. What should I ask first?"
+    reply: "Disclosure: I work with WellPeps, so I am not neutral. Good thing to ask up front. It's worth checking whether you are actually reviewed by a licensed clinician, what follow-up is included, and which pharmacy dispenses the medication. At WellPeps, follow-up care with a licensed clinician is included in the one monthly price. Our free guide covers questions to ask before choosing a treatment program: https://wellpeps.com/smart-patient-guides/healthy-aging-vitality. A licensed healthcare provider determines whether treatment is appropriate."
+    claim_ids: [CLM-R3-DISCLOSURE, CLM-R7-PROVIDER-CHECKLIST, CLM-PRICE-FOLLOWUP, CLM-EDU-GUIDE-HEALTHY-AGING-VITALITY, CLM-R22-PROVIDER-DETERMINES]
+
+  - id: EX-QUESTION-NO-LINK
+    category: question
+    platform: facebook
+    program: ""
+    post: "Do these telehealth places charge extra for follow-up visits?"
+    reply: "Disclosure: I work with WellPeps, so I am not neutral. It's worth asking any provider whether follow-up visits are included or billed separately. At WellPeps, follow-up care with a licensed clinician is included in the one monthly price. A licensed healthcare provider determines whether treatment is appropriate."
+    claim_ids: [CLM-R3-DISCLOSURE, CLM-R7-PROVIDER-CHECKLIST, CLM-PRICE-FOLLOWUP, CLM-R22-PROVIDER-DETERMINES]

@@ -93,6 +93,18 @@ deterministic compliance filter (`harvey/compliance.py`) exist.
   message per webhook and never prints URLs. Channel IDs live in env only.
   Manifest: `docs/slack-app-manifest.yaml`; setup: DEPLOY doc section 9.
 
+- Conversion playbook (2026-10-06): `config/links.yaml` (public links registry,
+  `live:` flags flipped by hand), `harvey/links.py` (UTM `tracked_url`,
+  registry matching, `pulse links check`), claim `link_id`,
+  `config/reply_examples.yaml` (PENDING few-shot style guidance), the
+  purchase-intent/question playbook in `prompts/draft.md` (claim selection in
+  `drafter.candidate_claims` / `guide_claim`), deterministic disclosure rules
+  (`disclosure:` in compliance_rules.yaml: first sentence must disclose),
+  link rules in the filter (outside registry / unbacked -> red, not live ->
+  yellow + approval blocker), migration v7 (`drafts.link_json`,
+  `db/postgres/0003_draft_links.sql`), `harvey/reply_analytics.py` +
+  `GET /api/analytics/replies` (CSV export) and `harvey/web/replies.js`.
+
 Later phases add everything else. Don't build ahead of the phase you've
 been asked to do.
 
@@ -133,7 +145,7 @@ Also:
 - Imports smoke check: `.venv/Scripts/python -c "import harvey.main, harvey.dashboard, harvey.cli, harvey.state"`
 - CLI: `pulse run | dashboard [--host H] | status | health [--worker] |
   ingest | usage | escalations | ack | user add|list|disable|reset-password | brief |
-  trends | slackbot | slack-test` (`harvey` is an alias); `health --slackbot`.
+  trends | slackbot | slack-test | links check` (`harvey` is an alias); `health --slackbot`.
 - Deploy: `docker-compose.yml` (Coolify: `worker` + `dashboard` + `slackbot`, env only,
   no bind mounts; `docker-compose.local.yml` is the laptop override). Env
   `PULSE_SECURE_COOKIES` / `PULSE_DASHBOARD_URL` / `PULSE_TRUSTED_PROXIES`
@@ -158,7 +170,8 @@ Also:
 - The dashboard binds to 127.0.0.1 by default; `--host` anything else is
   refused until an active admin exists. Every /api route except /api/login
   needs a session; every POST needs X-CSRF-Token. Approval needs a non-red
-  filter result and publishable claims (`review.require_publishable_claims`).
+  filter result, publishable claims (`review.require_publishable_claims`) and
+  no registry link that is still `live: false`.
   Nothing posts automatically: "copied" / "mark posted" only record what a
   human did by hand.
 - The DB is `data/pulse.db`, and `PULSE_DB_PATH` overrides it. Setting

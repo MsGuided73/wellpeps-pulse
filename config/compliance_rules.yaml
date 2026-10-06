@@ -32,6 +32,24 @@ limits:
     instagram: 2200
     facebook: 8000
 
+# R2/R3 disclosure: every Pulse reply is a brand reply, so its FIRST sentence
+# must carry one of the approved disclosure forms (case-insensitive; "Full
+# disclosure: I work with WellPeps, so I'm not neutral." passes). Missing ->
+# RED. third_person patterns talk about WellPeps like a neutral customer or
+# bystander ("I signed up with WellPeps", "check out WellPeps"); they are RED
+# when the disclosure is missing too (astroturfing), with their own reason.
+disclosure:
+  required: true
+  forms:
+    - "I work with WellPeps"
+    - "I work for WellPeps"
+    - "I'm with WellPeps"
+    - "I am with WellPeps"
+  third_person:
+    - {id: R2, pattern: '\b(?:I|we)\s+(?:used|use|tried|chose|picked|went\s+with|signed\s+up\s+(?:with|for)|switched\s+to|love|recommend)\s+WellPeps\b', reason: "talks about WellPeps as a customer would (astroturfing) without disclosure", source: "R2 ([PB] §05, §14 RED) + R3", examples: ["I went with WellPeps"]}
+    - {id: R2, pattern: '\b(?:check\s+out|try|look\s+into|go\s+with|give)\s+WellPeps\b', reason: "recommends WellPeps like a neutral bystander without disclosure", source: "R2 + R3", examples: ["check out WellPeps"]}
+    - {id: R2, pattern: '\bWellPeps\s+(?:offers?|includes?|has|gives|provides?|was|is)\b|\b(?:they|them)\s+(?:offer|include|have|were|are)\s+(?:great|good|legit|amazing|awesome|solid)\b', reason: "describes WellPeps in the third person without disclosure", source: "R2 + R3", examples: ["WellPeps offers"]}
+
 prohibited:
   # --- R2: approved, disclosed identities; the AI never poses as a clinician or customer
   - {id: R2, pattern: '(?:,|\s-|—|–)\s*(?:(?-i:MD|RN|NP|PA-C|PharmD)(?![\w-])|M\.D\.)', reason: "clinical credential sign-off; drafts must not carry MD/RN/NP titles", source: "R2 ([PB] §04-05)"}

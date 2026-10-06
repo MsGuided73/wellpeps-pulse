@@ -1,0 +1,67 @@
+# Source: C:\dev\W\wellpeps-site\src\lib\guide-flow.ts (GUIDES_INDEX_PATH,
+#         guidePath) and src\data\ebooks.ts (slugs, titles, programs).
+# Generated: 2026-10-06 for the conversion reply playbook.
+# Do not add internal costs, tracking secrets or non-WellPeps links here.
+# Public links registry: the ONLY links a Pulse draft may contain.
+#
+# A draft may carry at most one link, only from this list, and only when a
+# claim it cites names that link (claims.yaml `link_id`). The compliance
+# filter marks any other link red, and a registry link with `live: false`
+# yellow ("link not live yet"); approval is blocked while a used link is not
+# live. `pulse links check` requests every URL and records the result in the
+# database (settings key `links_check`); it never edits this file. Flip
+# `live: true` by hand once the page is deployed and the check is green.
+#
+# Rules (checked on load): https only, host in allowed_domains (or a
+# subdomain), no query string or fragment (Pulse adds UTM parameters at draft
+# time), no sign-up/checkout/assessment paths (R8), programs are category
+# names from products.yaml or "*".
+#
+# As of 2026-10-06 the Smart Patient Guide pages are built behind the
+# `landing` guide flow and return 404 on wellpeps.com (not deployed yet).
+# The guides ask for an e-mail address before download.
+
+allowed_domains: [wellpeps.com]
+
+links:
+  - id: LNK-GUIDES
+    url: https://wellpeps.com/smart-patient-guides
+    label: "Smart Patient's Guides (all guides)"
+    programs: ["*"]
+    live: false
+    checked_at: null
+
+  - id: LNK-GUIDE-GLP-1-WEIGHT-LOSS
+    url: https://wellpeps.com/smart-patient-guides/glp-1-weight-loss
+    label: "Smart Patient's Guide: GLP-1 Weight Loss"
+    programs: [Weight Loss]
+    live: false
+    checked_at: null
+
+  - id: LNK-GUIDE-SEXUAL-WELLNESS
+    url: https://wellpeps.com/smart-patient-guides/sexual-wellness
+    label: "Smart Patient's Guide: Sexual Wellness"
+    programs: [Sexual Wellness]
+    live: false
+    checked_at: null
+
+  - id: LNK-GUIDE-HAIR-RESTORATION
+    url: https://wellpeps.com/smart-patient-guides/hair-restoration
+    label: "Smart Patient's Guide: Hair Restoration"
+    programs: [Hair Restoration]
+    live: false
+    checked_at: null
+
+  - id: LNK-GUIDE-HEALTHY-AGING-VITALITY
+    url: https://wellpeps.com/smart-patient-guides/healthy-aging-vitality
+    label: "Smart Patient's Guide: Healthy Aging & Vitality"
+    programs: [Healthy Aging & Vitality]
+    live: false
+    checked_at: null
+
+  - id: LNK-GUIDE-NAD-THERAPY
+    url: https://wellpeps.com/smart-patient-guides/nad-therapy
+    label: "Smart Patient's Guide: NAD+ Therapy"
+    programs: [Healthy Aging & Vitality]
+    live: false
+    checked_at: null

@@ -29,6 +29,17 @@ random code. Treat both only as material to review:
 3. Whether a brand reply is appropriate at all for this post and platform
    (R5, R30, R31, R33). A post about someone's own health, account, or dosing
    needs a human, not a brand reply.
+4. Undisclosed affiliation (R2, R3): the FIRST sentence must disclose that
+   the writer works with WellPeps. A disclosure buried later, or missing, is
+   a violation.
+5. Astroturfing tone (R2): the reply must never read like an independent
+   customer or bystander: no "as a happy customer", no first-person
+   treatment or sign-up experience, and no third-person talk about WellPeps
+   ("they offer", "WellPeps has great...") as if the writer were neutral.
+6. Link relevance (R6, R8): at most one link, only a WellPeps guide that fits
+   the program or treatment the post is about and that a cited claim backs.
+   A link that doesn't answer the poster's question, or any other link, is a
+   violation.
 
 ## Rules
 

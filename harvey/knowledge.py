@@ -15,6 +15,7 @@ from functools import lru_cache
 from pathlib import Path
 from types import MappingProxyType
 from typing import Mapping, TypeVar
+from urllib.parse import urlsplit
 
 import yaml
 from pydantic import BaseModel, ValidationError
@@ -26,7 +27,10 @@ from harvey.models.knowledge import (
     CompetitorsFile,
     ComplianceRulesFile,
     KeywordsFile,
+    LinksFile,
     ProductsFile,
+    PublicLink,
+    ReplyExamplesFile,
 )
 from harvey.paths import PROJECT_ROOT
 
@@ -86,7 +90,61 @@ def _claims(directory: Path) -> tuple[Claim, ...]:
     dupes = sorted({i for i in ids if ids.count(i) > 1})
     if dupes:
         raise KnowledgeError(f"duplicate claim ids in claims.yaml: {dupes}")
+    linked = sorted({c.link_id for c in claims if c.link_id})
+    if linked:
+        known = {link.id for link in _links(directory).links}
+        unknown = [lid for lid in linked if lid not in known]
+        if unknown:
+            raise KnowledgeError(f"claims.yaml link_id not in links.yaml: {unknown}")
     return claims
+
+
+# Paths a public reply link may never point at (R8: no sign-up/checkout).
+_BLOCKED_LINK_PATH = re.compile(r"assessment|intake|checkout|get-started|cart|buy|login|signup|sign-up",
+                                re.IGNORECASE)
+
+
+def host_allowed(host: str, domains) -> bool:
+    """``host`` is one of ``domains`` or a subdomain of one."""
+    host = (host or "").strip().lower().rstrip(".")
+    return any(host == d or host.endswith("." + d) for d in domains)
+
+
+def _link_problem(link: PublicLink, domains: list[str], programs: set[str]) -> str:
+    parts = urlsplit(link.url)
+    if parts.scheme != "https":
+        return "must be https"
+    if not host_allowed(parts.hostname or "", domains):
+        return f"host not in allowed_domains {domains}"
+    if parts.query or parts.fragment or parts.username or parts.password or parts.port:
+        return "no query string, fragment, credentials or port (UTM is added at draft time)"
+    if _BLOCKED_LINK_PATH.search(parts.path):
+        return "sign-up, checkout and assessment paths are not allowed (R8)"
+    unknown = sorted(set(link.programs) - programs)
+    if unknown or not link.programs:
+        return f"unknown programs {unknown or link.programs} (use products.yaml category names or '*')"
+    return ""
+
+
+@lru_cache(maxsize=None)
+def _links(directory: Path) -> LinksFile:
+    data = _load(directory, "links.yaml", LinksFile)
+    domains = [d.strip().lower() for d in data.allowed_domains if d.strip()]
+    if not domains:
+        raise KnowledgeError("links.yaml needs at least one allowed_domains entry")
+    programs = {c.name for c in _products(directory).categories} | {"*"}
+    seen_ids: set[str] = set()
+    seen_urls: set[str] = set()
+    for link in data.links:
+        problem = _link_problem(link, domains, programs)
+        if problem:
+            raise KnowledgeError(f"links.yaml {link.id}: {problem}")
+        url_key = link.url.rstrip("/").lower()
+        if link.id in seen_ids or url_key in seen_urls:
+            raise KnowledgeError(f"links.yaml {link.id}: duplicate id or url")
+        seen_ids.add(link.id)
+        seen_urls.add(url_key)
+    return data
 
 
 @lru_cache(maxsize=None)
@@ -169,8 +227,19 @@ def _wellpeps_rx(directory: Path) -> re.Pattern[str]:
     return re.compile(rf"(?<!\w)(?:{alternation})(?!\w)", re.IGNORECASE)
 
 
+@lru_cache(maxsize=None)
+def _reply_examples(directory: Path) -> ReplyExamplesFile:
+    data = _load(directory, "reply_examples.yaml", ReplyExamplesFile)
+    known = {c.id for c in _claims(directory)}
+    for example in data.examples:
+        unknown = [cid for cid in example.claim_ids if cid not in known]
+        if unknown:
+            raise KnowledgeError(f"reply_examples.yaml {example.id}: unknown claim ids {unknown}")
+    return data
+
+
 _CACHED = (
-    _competitors, _products, _keywords, _compliance_rules, _claims,
+    _competitors, _products, _keywords, _compliance_rules, _claims, _links, _reply_examples,
     _competitor_lookup, _product_lookup, _urgent_patterns, _drug_lookup,
     _wellpeps_rx,
 )
@@ -213,6 +282,55 @@ def publishable_claim_ids(today: date | None = None) -> set[str]:
     """Claims signed off by a named approver and not expired."""
     day = today or date.today()
     return {c.id for c in claims() if c.is_publishable(day)}
+
+
+def links() -> tuple[PublicLink, ...]:
+    """The public links registry (config/links.yaml)."""
+    return tuple(_links(config_dir()).links)
+
+
+def reply_examples() -> ReplyExamplesFile:
+    """Few-shot style examples for the drafter (status PENDING: guidance only)."""
+    return _reply_examples(config_dir())
+
+
+def links_by_id() -> dict[str, PublicLink]:
+    return {link.id: link for link in links()}
+
+
+def allowed_link_domains() -> list[str]:
+    return [d.strip().lower() for d in _links(config_dir()).allowed_domains if d.strip()]
+
+
+def program_of_product(product: str) -> str:
+    """products.yaml category of a WellPeps product name ("" if unknown)."""
+    name = (product or "").strip().lower()
+    return next((p.category for p in products().products if p.name.lower() == name), "")
+
+
+def products_for_drug(drug: str) -> list[str]:
+    """WellPeps product names for a drug term (generic, brand, product name),
+    else every product in a category whose alias is the term ("GLP-1")."""
+    term = (drug or "").strip().lower()
+    if not term:
+        return []
+    prods = products().products
+    direct = [p.name for p in prods
+              if term in {n.lower() for n in (p.name, *p.generic_names, *p.brand_equivalents)}]
+    if direct:
+        return direct
+    categories = {c.name for c in products().categories if term in {a.term.lower() for a in c.aliases}}
+    return [p.name for p in prods if p.category in categories]
+
+
+def program_for(product: str = "", drug: str = "") -> str:
+    """The program (products.yaml category) a mention is about: the WellPeps
+    product's category, else the single category its drug maps to, else ""."""
+    by_product = program_of_product(product)
+    if by_product:
+        return by_product
+    categories = {program_of_product(name) for name in products_for_drug(drug)}
+    return categories.pop() if len(categories) == 1 else ""
 
 
 def competitor_lookup() -> Mapping[str, str]:

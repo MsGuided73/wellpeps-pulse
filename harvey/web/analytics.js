@@ -408,6 +408,7 @@ async function loadAnalytics() {
   anWriteHash();
   await anLoadAll();
   document.getElementById('an-tz').textContent = anData.summary ? anData.summary.params.timezone : '';
+  if (typeof rpLoad === 'function') rpLoad(anState.days);
 }
 
 function anOpenFeed(filters) {

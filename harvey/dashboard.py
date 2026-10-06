@@ -35,7 +35,7 @@ from fastapi import Depends, FastAPI, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse, RedirectResponse, Response
 from pydantic import BaseModel, Field
 
-from harvey import analytics, auth, briefs, health, pulse_store, review, trends
+from harvey import analytics, auth, briefs, health, pulse_store, reply_analytics, review, trends
 from harvey.config import ConfigFileNotFoundError, PulseConfig, load_config, load_env
 from harvey.escalation import ack as ack_escalation
 from harvey.models import MentionStatus
@@ -594,6 +594,23 @@ async def _analytics_error(request: Request, exc: analytics.AnalyticsError):
 async def get_analytics_options(user: dict = VIEW):
     """Filter choices for the Analytics tab (anchored competitors first)."""
     return await analytics.options(await get_state())
+
+
+@app.exception_handler(reply_analytics.RepliesError)
+async def _replies_error(request: Request, exc: reply_analytics.RepliesError):
+    return JSONResponse({"detail": str(exc)}, status_code=400)
+
+
+@app.get("/api/analytics/replies")
+async def get_reply_analytics(days: str | None = Query(None, max_length=8),
+                              format: Literal["json", "csv"] = "json", user: dict = VIEW):
+    """Approved/posted replies by platform and tracked link; ``format=csv``
+    exports the utm_content list for joining with site analytics."""
+    report = await reply_analytics.replies(await get_state(), reply_analytics.parse_days(days))
+    if format == "csv":
+        return Response(reply_analytics.to_csv(report), media_type="text/csv",
+                        headers={"Content-Disposition": 'attachment; filename="pulse-replies.csv"'})
+    return report
 
 
 @app.get("/api/analytics/{chart}")

@@ -27,7 +27,7 @@ import logging
 from dataclasses import dataclass
 from typing import Awaitable, Callable
 
-from harvey import knowledge
+from harvey import knowledge, links
 from harvey.compliance import GateResult, compliance_filter
 from harvey.models import (
     AuditEvent,
@@ -141,6 +141,7 @@ async def _record_superseded(state, mention: Mention, proposal, gate: GateResult
         mention_id=mention.id, text=proposal.reply, claim_ids=proposal.claim_ids,
         model=proposal.model, filter_ok=gate.ok, filter_hits=lines,
         review_verdict=ReviewVerdict.REJECT, review_reasons=[SUPERSEDED, *lines], tier=gate.tier,
+        link=links.link_record(proposal.reply),
     ))
     common = {"mention_id": mention.id, "draft_id": draft_id, "permalink": mention.url}
     await state.append_audit(AuditEvent(
@@ -161,6 +162,7 @@ async def _record_reply(state, mention: Mention, proposal, gate, verdict, lines,
         mention_id=mention.id, text=proposal.reply, claim_ids=proposal.claim_ids,
         model=proposal.model, filter_ok=gate.ok, filter_hits=[_hit_line(h) for h in gate.hits],
         review_verdict=verdict, review_reasons=lines, tier=gate.tier,
+        link=links.link_record(proposal.reply),
     ))
     common = {"mention_id": mention.id, "draft_id": draft_id, "permalink": mention.url}
     await state.append_audit(AuditEvent(

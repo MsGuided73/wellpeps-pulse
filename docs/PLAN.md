@@ -162,7 +162,66 @@ Steps 4–6 respect quiet hours and budget; 1–3 do not (triage has budget prio
   characters with links/handles/e-mails stripped, for audit.
 - Quiet hours don't apply to the bot (on-demand, staff-initiated).
 
+## Conversion playbook decisions (2026-10-06)
+- **Playbook** (`prompts/draft.md`): for `purchase_intent` and `question`,
+  (1) disclosure as the first sentence, (2) a general, provider-neutral answer
+  (what to ask any provider), (3) ONE WellPeps fact from a claim, (4) at most
+  one guide link through a guide claim for the program discussed, (5) the
+  provider-determines close. One CTA, no hype/urgency, no prices unless a
+  claim states one, no medication names while R38 is on, Reddit under 90
+  words. The drafter always offers disclosure, the program's guide claim,
+  provider checklist, `CLM-PRICE-FOLLOWUP` and provider-determines first for
+  those categories; triage `drug` maps to a program through products.yaml
+  (tirzepatide/semaglutide -> Weight Loss guide, minoxidil/finasteride ->
+  Hair, tadalafil/sildenafil -> Sexual Wellness, sermorelin/glutathione/NAD+
+  -> Healthy Aging; the NAD+ guide names the molecule, so R38 skips it).
+  Few-shot examples in `config/reply_examples.yaml` (PENDING, style only;
+  each must pass the filter apart from "link not live yet").
+- **Disclosure is deterministic** (`disclosure:` in compliance_rules.yaml):
+  every Pulse reply is a brand reply, so a first sentence without an approved
+  form ("I work with WellPeps", ...) is RED (R3); third-person / customer-voice
+  talk about WellPeps without it is RED too, with its own R2 reason. The
+  reviewer also checks undisclosed affiliation, astroturfing tone and link
+  relevance.
+- **Links registry** (`config/links.yaml`): https only, `allowed_domains`
+  (wellpeps.com), no query/fragment, no sign-up/checkout paths. A claim may
+  name one link (`link_id`). The filter: link outside the registry -> red;
+  registry link not backed by a cited claim's `link_id` -> red; `live: false`
+  -> yellow "link not live yet"; `max_links: 1` stays.
+- **Link-not-live approval blocker**: approval is refused while the draft
+  carries a registry link with `live: false`; the review desk shows a
+  "Tracked link" chip with a live/not-live badge and the utm_content.
+  `pulse links check` (HEAD, GET fallback, 10 s, redirects followed) records
+  the result in `settings.links_check` and prints which `live:` flags to
+  flip; it never edits links.yaml.
+- **UTM scheme** (`harvey/links.py`, applied at draft time and shown in the
+  draft so humans copy the full URL): `utm_source=<platform>`,
+  `utm_medium=social_reply`, `utm_campaign=pulse`, `utm_content=m<mention id>`,
+  `utm_term=<subreddit>` when known. Other query params are kept, utm keys
+  never duplicated. Words inside our own registry URLs are masked before the
+  pattern scan (a drug-named subreddit in utm_term is not an R38 hit).
+  Stored per draft in `drafts.link_json` (migration v7,
+  `db/postgres/0003_draft_links.sql`).
+- **Measurement**: `GET /api/analytics/replies` (+ `format=csv`) and the
+  Analytics "Replies & links" card: approved/posted replies by platform and
+  by link, and the utm_content list. To match conversions in Google
+  Analytics 4: Explore -> dimension "Session manual ad content"
+  (utm_content), filter session campaign = `pulse`, export, and join on the
+  CSV's `utm_content` (Shopify: the same UTM values on the order's landing
+  session / customer journey). No external calls from Pulse.
+
 ## 5. Open questions
+- Compliance sign-off for the new claims (`CLM-PRICE-FOLLOWUP`,
+  `CLM-PRICE-ALLIN`, `CLM-EDU-*`) and the reply examples (all PENDING).
+  `CLM-PRICE-ALLIN` says standard shipping is included (site PRICE_NOTE) but
+  products.yaml `membership.shipping_note` says shipping is shown at
+  checkout, and the membership price text predates the one-monthly-price
+  model: confirm which is current before approving.
+- Flip the guide links to `live: true` in config/links.yaml once the site's
+  guide pages are deployed (they 404 as of 2026-10-06) and `pulse links check`
+  is green. Until then approval of any reply with a guide link is blocked.
+- R38 decision: medication names are still forbidden in replies (toggle on),
+  which also keeps the NAD+ guide claim out of drafts.
 - Approved claims library content + physician/compliance sign-off.
 - Named clinical owner + backup for the 15-min adverse-event SLA (incl. nights/weekends).
 - Legal sign-off on Apify scraping; mention-text retention period (default 180 days).
