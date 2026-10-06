@@ -21,6 +21,7 @@ from harvey import explain, knowledge, links
 from harvey.compliance import compliance_filter
 from harvey.config import ESCALATION_KINDS
 from harvey.escalation import SEVERE_KINDS, escalate
+from harvey.sandbox import urls as sandbox_urls
 from harvey.models import (
     AuditEvent,
     AuditEventType,
@@ -419,17 +420,23 @@ async def copied(state, mention_id: int, actor: str) -> None:
     ))
 
 
-def _http_url(url: str) -> str:
+def _http_url(url: str, allow_sandbox: bool = False) -> str:
     url = (url or "").strip()
     if not url:
         return ""
     if not url.lower().startswith(("http://", "https://")) or len(url) > 2000:
         raise ReviewError(400, "posted_url must be an http(s) link")
+    if not allow_sandbox and sandbox_urls.is_sandbox_url(url):
+        raise ReviewError(400, "a demo sandbox link is accepted only while the local demo sandbox is on")
     return url
 
 
-async def mark_posted(state, mention_id: int, actor: str, posted_url: str = "") -> None:
-    posted_url = _http_url(posted_url)
+async def mark_posted(state, mention_id: int, actor: str, posted_url: str = "",
+                      allow_sandbox: bool = False) -> None:
+    """``allow_sandbox``: the local DEMO sandbox is on for this request, so a
+    sandbox comment link (http://127.0.0.1:.../sandbox/...) is a valid
+    posted_url; otherwise such a link is refused."""
+    posted_url = _http_url(posted_url, allow_sandbox)
     mention = await _mention_or_404(state, mention_id)
     if mention.status is not MentionStatus.APPROVED:
         raise ReviewError(409, f"only an approved reply can be marked posted (status is {mention.status.value})")

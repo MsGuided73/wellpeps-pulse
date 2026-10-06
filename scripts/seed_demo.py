@@ -16,14 +16,29 @@ network, no Slack (escalations show as "not paged"). SQLite only.
 DEMO DATA: every classification and draft here is fabricated by keyword
 rules, not by a model. Never point this at the real data/pulse.db; the
 script refuses to run unless PULSE_DB_PATH is set to a file other than it.
+
+Demo sandbox (``--sandbox``, the default when PULSE_DEMO_SANDBOX is on):
+
+    PULSE_DB_PATH=data/demo.db .venv/Scripts/python scripts/seed_demo.py --sandbox
+
+also rebuilds the local DEMO sandbox (harvey/sandbox; its own SQLite file,
+PULSE_SANDBOX_DB_PATH or data/sandbox.db) so every demo mention is a post or
+comment in a fictional thread, and its permalink is that sandbox page
+(``--base-url``, default http://127.0.0.1:5555; the dashboard rebases it to
+whatever host/port it is opened on). It also writes a DEMO config copy
+(``--config-dir``, default data/demo-config/) whose claims are marked
+approved for demonstration only; run the dashboard with PULSE_CONFIG_DIR
+pointing at it to demo the full approve -> post loop. See README "Demo sandbox".
 """
 
+import argparse
 import asyncio
 import json
 import os
 import random
 import re
 import sys
+import tempfile
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -206,8 +221,28 @@ def _brief_answer(payload: dict) -> dict:
     }
 
 
+_GUIDE_CLAIM_RE = re.compile(r"^- \[(CLM-[A-Z0-9-]+)\] (.+)\n  Link for this claim: (\S+)$", re.M)
+
+
+def _guide_reply(prompt: str) -> dict | None:
+    """DEMO sandbox only: the canned reply plus the first offered guide claim
+    and its tracked link (the conversion playbook), when one is offered."""
+    found = _GUIDE_CLAIM_RE.search(prompt)
+    if not found:
+        return None
+    claim_id, text, url = found.groups()
+    return {"reply": f"{DEMO_REPLY} {text} {url}", "claim_ids": [*DEMO_CLAIMS, claim_id], "rationale": BANNER,
+            "needs_human_reason": None}
+
+
 class DemoBrain:
-    """Deterministic stand-in for harvey.brain.Brain (think_json only)."""
+    """Deterministic stand-in for harvey.brain.Brain (think_json only).
+
+    ``guide_links``: questions get the guide claim + link too (sandbox demos,
+    where the DEMO config marks every link live)."""
+
+    def __init__(self, guide_links: bool = False):
+        self.guide_links = guide_links
 
     def model_for(self, agent: str, task: str) -> str:
         return "demo-fake"
@@ -220,6 +255,9 @@ class DemoBrain:
             return {"adverse_event": False, "self_harm": False, "minor": bool(re.search(r"\bim 1[0-7]\b", text)),
                     "evidence": ""}
         if agent == "drafter":
+            guided = _guide_reply(prompt) if self.guide_links and "?" in text else None
+            if guided:
+                return guided
             return {"reply": DEMO_REPLY, "claim_ids": DEMO_CLAIMS, "rationale": BANNER,
                     "needs_human_reason": None}
         if agent == "reviewer":
@@ -227,6 +265,27 @@ class DemoBrain:
         if agent == "pulse":
             return _brief_answer(_payload(prompt))
         raise ValueError(f"demo brain has no rule for agent {agent!r}")
+
+
+DEFAULT_BASE_URL = "http://127.0.0.1:5555"
+
+
+def _wants_sandbox(argv: list[str]) -> bool:
+    """--sandbox, or PULSE_DEMO_SANDBOX on in the environment / .env."""
+    from harvey.config import env_setting, parse_bool
+
+    if "--sandbox" in argv:
+        return True
+    raw = env_setting("PULSE_DEMO_SANDBOX")
+    return bool(raw) and parse_bool(raw, "PULSE_DEMO_SANDBOX")
+
+
+def _check_sandbox_target(sandbox_db, pulse_db: str) -> Path:
+    """The sandbox file must not be the real database or the demo Pulse DB."""
+    target = Path(sandbox_db).resolve()
+    if target in ((ROOT / "data" / "pulse.db").resolve(), Path(pulse_db).resolve()):
+        sys.exit("Refusing to seed the sandbox into a Pulse database; use its own file (data/sandbox.db).")
+    return target
 
 
 def _check_target() -> str:
@@ -318,7 +377,91 @@ async def _backdate_escalations(state) -> int:
     return len(rows)
 
 
-async def seed(db_path: str) -> None:
+def _sandbox_fixture_dir(seeder, workdir: Path) -> Path:
+    """The fixture JSONL rewritten so each permalink is its sandbox page."""
+    from harvey.collectors.fixture import DEFAULT_FIXTURE_DIR
+
+    rows, raw_lines = [], []
+    for path in sorted(DEFAULT_FIXTURE_DIR.glob("*.jsonl")):
+        for line in path.read_text(encoding="utf-8").splitlines():
+            if not line.strip():
+                continue
+            try:
+                rows.append(json.loads(line))
+            except json.JSONDecodeError:
+                raw_lines.append(line)  # the collector skips it, as before
+    placed = seeder.place_fixture(rows)
+    target = workdir / "sandbox-fixture.jsonl"
+    target.write_text("\n".join([json.dumps(r) for r in placed] + raw_lines) + "\n", encoding="utf-8")
+    return workdir
+
+
+def _require_fresh_db(db_path: str) -> None:
+    """Existing mentions keep their old permalinks (dedupe), so the sandbox
+    seed needs a database without mentions."""
+    import sqlite3
+
+    if not Path(db_path).is_file():
+        return
+    db = sqlite3.connect(db_path)
+    try:
+        count = db.execute("SELECT COUNT(*) FROM mentions").fetchone()[0]
+    except sqlite3.OperationalError:
+        count = 0
+    finally:
+        db.close()
+    if count:
+        sys.exit(f"Refusing to seed the sandbox into {db_path}: it already has {count} mention(s), which would "
+                 "keep their old permalinks. Move it aside (or pick a new PULSE_DB_PATH) and run again.")
+
+
+class _DemoConfigEnv:
+    """Point PULSE_CONFIG_DIR at the DEMO config while the pipeline runs."""
+
+    def __init__(self, directory: Path | None):
+        self.directory, self.previous = directory, None
+
+    def __enter__(self):
+        from harvey import knowledge
+
+        if self.directory is not None:
+            self.previous = os.environ.get("PULSE_CONFIG_DIR")
+            os.environ["PULSE_CONFIG_DIR"] = str(self.directory)
+            knowledge.reload()
+        return self
+
+    def __exit__(self, *exc):
+        from harvey import knowledge
+
+        if self.directory is not None:
+            if self.previous is None:
+                os.environ.pop("PULSE_CONFIG_DIR", None)
+            else:
+                os.environ["PULSE_CONFIG_DIR"] = self.previous
+            knowledge.reload()
+
+
+async def seed(db_path: str, *, sandbox_db: str | Path | None = None, config_dir: str | Path | None = None,
+               base_url: str = DEFAULT_BASE_URL) -> None:
+    """Seed ``db_path``; with ``sandbox_db`` also build the DEMO sandbox and DEMO config."""
+    if sandbox_db is None:
+        await _seed(db_path)
+        return
+    from harvey.sandbox.demo_config import DEFAULT_DIR, write_demo_config
+    from harvey.sandbox.seeding import SandboxSeeder
+    from harvey.sandbox.store import SandboxStore
+
+    _require_fresh_db(db_path)
+    directory = write_demo_config(config_dir or DEFAULT_DIR)
+    store = SandboxStore(sandbox_db)
+    store.reset()
+    seeder = SandboxSeeder(store, base_url)
+    with _DemoConfigEnv(directory), tempfile.TemporaryDirectory() as workdir:
+        await _seed(db_path, seeder=seeder, fixture_dir=_sandbox_fixture_dir(seeder, Path(workdir)))
+    print(f"  sandbox: {Path(sandbox_db)} ({store.count_threads()} threads); demo config: {directory}")
+
+
+async def _seed(db_path: str, seeder=None, fixture_dir: Path | None = None) -> None:
     from harvey.agents.drafter import Drafter
     from harvey.agents.reviewer import Reviewer
     from harvey.agents.safety_screen import SafetyScreen
@@ -337,13 +480,18 @@ async def seed(db_path: str) -> None:
     await state.init_db()
     config = PulseConfig()
     notifier = SlackNotifier(None)  # no webhook: escalations stay "not paged"
-    brain = DemoBrain()
+    brain = DemoBrain(guide_links=seeder is not None)
     now = datetime.now(timezone.utc).replace(tzinfo=None)
     tz = config.usage.quiet_hours.timezone
 
-    ingest = await run_collectors(state, [get_collector("fixture")])
+    ingest = await run_collectors(state, [get_collector("fixture", directory=fixture_dir) if fixture_dir
+                                          else get_collector("fixture")])
     synthetic = 0
-    for mention in _synthetic_posts(now, window_for("daily", now, tz), window_for("weekly", now, tz)):
+    posts = _synthetic_posts(now, window_for("daily", now, tz), window_for("weekly", now, tz))
+    if seeder is not None:  # DEMO sandbox: each post's permalink is its sandbox comment/post
+        placed = seeder.place_synthetic(posts)
+        posts = [m.model_copy(update={"url": placed[m.external_id]}) for m in posts]
+    for mention in posts:
         synthetic += (await state.upsert_mention(mention))[1]
     triage = await triage_batch(
         state, Triager(brain), limit=1000, screen=SafetyScreen(brain),
@@ -363,8 +511,24 @@ async def seed(db_path: str) -> None:
         print(f"  {brief['period']} brief #{brief['id']}: {brief['headline']}")
 
 
-def main() -> None:
-    asyncio.run(seed(_check_target()))
+def main(argv: list[str] | None = None) -> None:
+    from harvey.sandbox import db_path as sandbox_db_path
+
+    argv = sys.argv[1:] if argv is None else argv
+    parser = argparse.ArgumentParser(description="Seed DEMO DATA into a throwaway database.")
+    parser.add_argument("--sandbox", action="store_true",
+                        help="also build the local DEMO sandbox and DEMO config (default with PULSE_DEMO_SANDBOX)")
+    parser.add_argument("--sandbox-db", help="sandbox SQLite file (default PULSE_SANDBOX_DB_PATH or data/sandbox.db)")
+    parser.add_argument("--config-dir", help="DEMO config copy (default data/demo-config)")
+    parser.add_argument("--base-url", default=os.environ.get("PULSE_DEMO_BASE_URL", "").strip() or DEFAULT_BASE_URL,
+                        help=f"dashboard base URL for sandbox permalinks (default {DEFAULT_BASE_URL})")
+    args = parser.parse_args(argv)
+    target = _check_target()
+    if not _wants_sandbox(argv):
+        asyncio.run(seed(target))
+        return
+    sandbox_db = _check_sandbox_target(args.sandbox_db or sandbox_db_path(), target)
+    asyncio.run(seed(target, sandbox_db=sandbox_db, config_dir=args.config_dir, base_url=args.base_url))
 
 
 if __name__ == "__main__":

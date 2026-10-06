@@ -298,6 +298,14 @@ def links_by_id() -> dict[str, PublicLink]:
     return {link.id: link for link in links()}
 
 
+def is_demo_config() -> bool:
+    """The active config dir is a DEMO copy (scripts/seed_demo.py --sandbox):
+    claims there are marked approved for demonstration only."""
+    from harvey.sandbox.demo_config import is_demo_config as _marker
+
+    return _marker(config_dir())
+
+
 def allowed_link_domains() -> list[str]:
     return [d.strip().lower() for d in _links(config_dir()).allowed_domains if d.strip()]
 

@@ -219,6 +219,14 @@ main { padding: 32px var(--gut) 96px; max-width: 1400px; margin: 0 auto; }
 .btn-ghost { background: none; color: var(--blue); border-color: transparent; }
 .btn-ghost:hover { background: var(--wellness); color: var(--blue-hover); }
 .btn-danger { background: var(--white); border-color: var(--error); color: var(--s-bad); }
+/* Local demo mode only (PULSE_DEMO_SANDBOX / DEMO config). */
+.btn-demo { background: var(--s-wait-bg); border-color: var(--s-wait-line); color: var(--s-wait); }
+.btn-demo:hover:not(:disabled) { background: #FFEAB8; }
+.demo-config-banner, .demo-sandbox-banner { display: flex; flex-wrap: wrap; gap: 4px 12px; justify-content: center;
+  padding: 8px 16px; font-size: 13px; text-align: center; }
+.demo-config-banner { background: var(--s-wait-bg); color: var(--s-wait); border-bottom: 2px solid var(--s-wait-line); }
+.demo-sandbox-banner { background: var(--s-note-bg); color: var(--s-note); border-bottom: 1px solid var(--s-note-line); }
+.demo-sandbox-banner a { color: var(--s-note); font-weight: 600; }
 .btn-danger:hover:not(:disabled) { background: var(--s-bad-bg); }
 .btn-sm { padding: 6px 12px; font-size: 12.5px; }
 .btn-group { display: flex; gap: 9px; margin-top: 16px; flex-wrap: wrap; }

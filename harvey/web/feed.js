@@ -127,7 +127,7 @@ async function loadFeed() {
       '<td><div class="tag-row tight">' + labelTag('', 'category', m.category) + labelTag('', 'urgency', m.urgency === 'urgent' || m.urgency === 'high' ? m.urgency : '') +
         tag('Drug', m.drug) + tag('', m.competitor) + '</div></td>' +
       '<td>' + badge(m.status) + '</td>' +
-      '<td class="nowrap">' + extLink(m.url, 'Open ↗') + '</td></tr>';
+      '<td class="nowrap">' + extLink(m.url, isDemoPost(m.url) ? 'Open demo post ↗' : 'Open ↗') + '</td></tr>';
   }
   el.innerHTML = html + '</tbody></table></div>';
   const end = Math.min(data.offset + data.items.length, data.total);
@@ -146,7 +146,7 @@ async function openDrawer(id) {
   let html = '<div class="drawer-head"><span class="drawer-id">Mention #' + escHtml(String(m.id)) + '</span>' +
     '<button class="btn btn-secondary btn-sm" data-action="close-drawer">Close</button></div>' + mentionHead(m) +
     '<h2 class="subject">' + escHtml(m.title || truncate(m.text, 90)) + '</h2>' + detailWhy(d) +
-    '<div class="body">' + escHtml(m.text) + '</div><p class="post-link">' + extLink(m.url, 'Open original ↗') + '</p>' +
+    '<div class="body">' + escHtml(m.text) + '</div><p class="post-link">' + extLink(m.url, isDemoPost(m.url) ? 'Open demo post ↗' : 'Open original ↗') + '</p>' +
     triageTags(m, d.triage) +
     (d.triage && d.triage.urgency_reason ? '<p class="reasoning"><span class="k">Triage reasoning</span> ' +
       '<span title="' + escHtml(d.triage.urgency_reason) + '">' + escHtml(reasonText(d.triage.urgency_reason)) + '</span></p>' : '');

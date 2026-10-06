@@ -17,6 +17,7 @@ let reviewItems = [];         // mentions shown in the review desk list
 let reviewIndex = 0;
 let reviewDetail = null;      // detail of the selected review item
 let editClaims = [];          // claim ids in the editor
+let DEMO = {sandbox: false, demo_config: false, brand_handle: ''};  // GET /api/demo
 
 // ── Utilities ──
 
@@ -25,8 +26,29 @@ function safeHref(url) {
   return /^https?:\/\//i.test(String(url || '')) ? escHtml(url) : '';
 }
 
+// Local DEMO sandbox permalink (http://127.0.0.1:<port>/sandbox/...).
+function isSandboxUrl(url) {
+  try {
+    const u = new URL(String(url || ''));
+    return /^https?:$/.test(u.protocol) && ['127.0.0.1', 'localhost', '[::1]'].includes(u.hostname) &&
+      u.pathname.startsWith('/sandbox/');
+  } catch { return false; }
+}
+
+// In demo mode a sandbox permalink opens on this dashboard's own host/port
+// (the demo data may have been seeded for another port).
+function postUrl(url) {
+  if (!DEMO.sandbox || !isSandboxUrl(url)) return url;
+  const u = new URL(url);
+  return window.location.origin + u.pathname + u.search + u.hash;
+}
+
+function isDemoPost(url) {
+  return DEMO.sandbox && isSandboxUrl(url);
+}
+
 function extLink(url, text, cls) {
-  const href = safeHref(url);
+  const href = safeHref(postUrl(url));
   return href ? '<a' + (cls ? ' class="' + escHtml(cls) + '"' : '') + ' href="' + href +
     '" target="_blank" rel="noopener noreferrer">' + escHtml(text) + '</a>' : '';
 }
@@ -482,7 +504,8 @@ function renderReviewPane() {
   let html = mentionHead(m) +
     '<div class="subject">' + escHtml(m.title || truncate(m.text, 90)) + '</div>' + detailWhy(d) +
     '<div class="body">' + escHtml(m.text) + '</div>' +
-    '<p class="post-link">' + extLink(m.url, 'Open original ↗') + '</p>' + triageTags(m, d.triage);
+    '<p class="post-link">' + extLink(m.url, isDemoPost(m.url) ? 'Open demo post ↗' : 'Open original ↗') + '</p>' +
+    triageTags(m, d.triage);
 
   html += '<div class="desk-block"><div class="subhead">Draft reply' + (draft ? ' · v' + escHtml(String(draft.version)) +
       ' · ' + escHtml(draftAuthor(draft)) : '') + '</div>' +
@@ -510,8 +533,12 @@ function renderReviewPane() {
         '<button class="btn btn-danger" data-action="reject">Reject…</button>';
     }
     if (approved) {
-      html += '<button class="btn btn-primary" data-action="copy-open">Copy reply &amp; open post</button>' +
+      const demo = isDemoPost(m.url);
+      html += '<button class="btn btn-primary" data-action="copy-open">' +
+          (demo ? 'Copy reply &amp; open demo post' : 'Copy reply &amp; open post') + '</button>' +
         '<button class="btn btn-secondary" data-action="mark-posted">Mark posted…</button>' +
+        (demo ? '<button class="btn btn-demo" data-action="demo-post" title="DEMO only: posts into the local demo sandbox, never a real platform">' +
+          'DEMO: Post to demo sandbox</button>' : '') +
         '<button class="btn btn-secondary" data-action="save-edit">Save edit (voids approval)</button>';
     }
     html += '<select class="form-input" id="escalate-kind">' + ESC_KINDS.map(k => '<option value="' + escHtml(k) + '" title="' + escHtml(k) + '">' + escHtml(label('kind', k)) + '</option>').join('') +
@@ -571,17 +598,38 @@ async function copyAndOpen() {
   const url = reviewDetail.mention.url;
   if (!draft || !safeHref(url)) return;
   const copying = navigator.clipboard ? navigator.clipboard.writeText(draft.text) : Promise.reject(new Error('no clipboard'));
-  window.open(url, '_blank', 'noopener,noreferrer');
+  window.open(postUrl(url), '_blank', 'noopener,noreferrer');
   try { await copying; } catch { showToast('Could not copy automatically; select the text and copy it.', 'error'); return; }
   const r = await send('/api/mentions/' + currentMentionId() + '/copied');
-  if (r.ok) { showToast('Reply copied. Paste it on the post, then mark it posted.', 'success'); loadReview(true); }
+  if (r.ok) {
+    showToast(isDemoPost(url) ? 'Reply copied. Paste it in the demo post, then mark it posted with the comment link.'
+      : 'Reply copied. Paste it on the post, then mark it posted.', 'success');
+    loadReview(true);
+  }
 }
 
 async function markPosted() {
-  const url = window.prompt('Link to the reply you posted (optional):', '');
+  const ask = isDemoPost(reviewDetail.mention.url)
+    ? 'Link to the reply you posted (in the demo sandbox: "Copy this comment link"):'
+    : 'Link to the reply you posted (optional):';
+  const url = window.prompt(ask, '');
   if (url === null) return;
   const r = await send('/api/mentions/' + currentMentionId() + '/mark-posted', {posted_url: url.trim()});
   if (r.ok) { showToast('Marked posted.', 'success'); loadReview(); }
+}
+
+// DEMO only: post the approved reply into the local sandbox as the brand
+// account and mark it posted with the new comment's link (one human click).
+async function demoPostCurrent() {
+  if (!isDemoPost(reviewDetail.mention.url)) return;
+  if (!window.confirm('DEMO: post this approved reply into the local demo sandbox as ' +
+      (DEMO.brand_handle || 'the brand account') + ' and mark it posted?')) return;
+  const r = await send('/api/mentions/' + currentMentionId() + '/demo-post');
+  if (r.ok) {
+    showToast('DEMO: posted to the demo sandbox and marked posted.', 'success');
+    window.open(postUrl(r.data.posted_url), '_blank', 'noopener,noreferrer');
+    loadReview();
+  }
 }
 
 async function escalateCurrent() {
@@ -783,6 +831,7 @@ const ACTIONS = {
   'reject': () => rejectCurrent(),
   'copy-open': () => copyAndOpen(),
   'mark-posted': () => markPosted(),
+  'demo-post': () => demoPostCurrent(),
   'escalate': () => escalateCurrent(),
   'disable-user': el => disableUser(el.dataset.email),
   'start': () => controlHarvey('start'),
@@ -826,6 +875,7 @@ async function init() {
     '<span class="caret" aria-hidden="true">&#9662;</span>';
   if (ME.must_change_password) { enterForcedChange(); return; }  // nothing else loads until it's done
   document.getElementById('nav-users').classList.toggle('hidden', !can('admin'));
+  await loadDemoFlags();
   route();
   if (currentTab !== 'urgent') pollUrgent();  // the nav badge and the Feed banner
   loadHarveyStatus();
@@ -839,6 +889,14 @@ async function init() {
     else if (currentTab === 'usage') loadUsage();
     else if (currentTab === 'controls') loadLogs();
   }, 15000);
+}
+
+// Local demo mode (never in production): the DEMO config banner, the sandbox
+// banner, and the Review desk's demo labels.
+async function loadDemoFlags() {
+  DEMO = (await api('/api/demo')) || DEMO;
+  document.getElementById('demo-config-banner').classList.toggle('hidden', !DEMO.demo_config);
+  document.getElementById('demo-sandbox-banner').classList.toggle('hidden', !DEMO.sandbox);
 }
 
 async function loadReviewCount() {

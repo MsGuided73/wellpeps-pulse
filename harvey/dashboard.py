@@ -35,12 +35,14 @@ from fastapi import Depends, FastAPI, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse, RedirectResponse, Response
 from pydantic import BaseModel, Field
 
-from harvey import analytics, auth, briefs, health, pulse_store, reply_analytics, review, trends
+from harvey import analytics, auth, briefs, health, knowledge, pulse_store, reply_analytics, review, sandbox, trends
 from harvey.config import ConfigFileNotFoundError, PulseConfig, load_config, load_env
 from harvey.escalation import ack as ack_escalation
 from harvey.models import MentionStatus
 from harvey.netutil import client_ip, networks_from_config
 from harvey.paths import DB_PATH, PROJECT_ROOT
+from harvey.sandbox import routes as sandbox_routes
+from harvey.sandbox import urls as sandbox_urls
 from harvey.state import StateManager, usage_windows
 
 logger = logging.getLogger("harvey.dashboard")
@@ -70,6 +72,9 @@ SECURITY_HEADERS = {
 }
 
 app = FastAPI(title="WellPeps Pulse", docs_url=None, redoc_url=None, openapi_url=None)
+# Local DEMO sandbox (harvey/sandbox): every /sandbox route 404s unless
+# PULSE_DEMO_SANDBOX is on, outside containers, for a loopback peer.
+app.include_router(sandbox_routes.router)
 LOGIN_LIMITER = auth.LoginRateLimiter()
 
 # Heartbeat process tracking
@@ -491,10 +496,55 @@ async def copied_mention(mention_id: int, user: dict = REVIEW):
 
 
 @app.post("/api/mentions/{mention_id}/mark-posted")
-async def mark_posted(mention_id: int, body: PostedBody | None = None, user: dict = REVIEW):
+async def mark_posted(mention_id: int, request: Request, body: PostedBody | None = None, user: dict = REVIEW):
     await review.mark_posted(await get_state(), mention_id, user["email"],
-                             body.posted_url if body else "")
+                             body.posted_url if body else "",
+                             allow_sandbox=sandbox.request_allowed(request))
     return {"success": True}
+
+
+# ── Local DEMO sandbox and DEMO config (never in containers) ──
+
+
+@app.get("/api/demo")
+async def get_demo(request: Request, user: dict = VIEW):
+    """Demo flags for the UI: the sandbox is on for this request, and/or the
+    active config dir is a DEMO copy (claims marked approved for demos only)."""
+    on = sandbox.request_allowed(request)
+    return {"sandbox": on, "demo_config": knowledge.is_demo_config(),
+            "brand_handle": sandbox.brand_handle() if on else ""}
+
+
+@app.post("/api/mentions/{mention_id}/demo-post")
+async def demo_post(mention_id: int, request: Request, user: dict = REVIEW):
+    """DEMO only: post the approved reply into the local sandbox thread as the
+    brand account, then record copied + mark posted with the comment link.
+
+    A human clicks this; it never touches a real platform. 404 unless the
+    sandbox is on for this (loopback) request.
+    """
+    if not sandbox.request_allowed(request):
+        raise HTTPException(status_code=404, detail="Not Found")
+    state = await get_state()
+    mention = await state.get_mention(mention_id)
+    if mention is None:
+        raise HTTPException(status_code=404, detail="mention not found")
+    if mention.status is not MentionStatus.APPROVED:
+        raise HTTPException(status_code=409, detail="only an approved reply can be posted to the demo sandbox")
+    ref = sandbox_urls.parse(mention.url)
+    if ref is None:
+        raise HTTPException(status_code=400, detail="this mention's permalink is not a demo sandbox post")
+    draft = await state.get_latest_draft(mention_id)
+    if draft is None or not draft.text.strip():
+        raise HTTPException(status_code=409, detail="there is no approved reply text")
+    store = sandbox_routes.get_store()
+    thread, comment_id = await asyncio.to_thread(sandbox_routes.post_brand_comment, store, ref.thread_id,
+                                                 ref.comment_id, draft.text)
+    posted_url = sandbox_routes.absolute_permalink(request, thread, comment_id)
+    await review.copied(state, mention_id, user["email"])
+    await review.mark_posted(state, mention_id, user["email"], posted_url, allow_sandbox=True)
+    logger.info("DEMO: mention %s posted to the sandbox by %s", mention_id, user["email"])
+    return {"success": True, "posted_url": posted_url}
 
 
 @app.post("/api/mentions/{mention_id}/escalate")
@@ -873,7 +923,8 @@ async def static_file(path: str):
     """Serve the dashboard's own assets from disk (public: no data inside)."""
     target = (WEB_DIR / path).resolve()
     root = WEB_DIR.resolve()
-    if not target.is_file() or not target.is_relative_to(root):
+    # Sandbox assets are served only by the guarded /sandbox/assets route.
+    if not target.is_file() or not target.is_relative_to(root) or target.is_relative_to(root / "sandbox"):
         return PlainTextResponse("not found", status_code=404)
     if target.suffix in BINARY_TYPES:
         return Response(target.read_bytes(), media_type=BINARY_TYPES[target.suffix],
@@ -928,6 +979,9 @@ def start_dashboard(port: int = 5555, host: str = LOOPBACK_HOST):
     if dev_no_auth() and not auth.is_loopback(host):
         error = (f"Refusing to bind to {host} with {DEV_NO_AUTH_ENV} on: sign-in would be "
                  f"skipped for anyone who can reach it. Remove {DEV_NO_AUTH_ENV} from .env.")
+    if sandbox.sandbox_enabled() and not auth.is_loopback(host):
+        error = (f"Refusing to bind to {host} with {sandbox.SANDBOX_ENV} on: the demo sandbox is "
+                 f"for local demos only. Remove {sandbox.SANDBOX_ENV}.")
     if error:
         print(f"\n  {error}\n")
         raise SystemExit(2)
@@ -935,6 +989,11 @@ def start_dashboard(port: int = 5555, host: str = LOOPBACK_HOST):
         print("\n  No admin user yet: create one with `pulse user add EMAIL --role admin --name NAME`.")
     if dev_no_auth():
         print(f"\n  !! {DEV_NO_AUTH_ENV} is on: sign-in is skipped for this machine (local dev only).")
+    if sandbox.sandbox_enabled():
+        print(f"\n  !! {sandbox.SANDBOX_ENV} is on: DEMO sandbox at http://{host}:{port}/sandbox "
+              f"(content: {sandbox.db_path()}).")
+    if knowledge.is_demo_config():
+        print("\n  !! DEMO CONFIG: claims are marked approved for demonstration only.")
     print(f"\n  WellPeps Pulse dashboard running at http://{host}:{port}")
     print("  Press Ctrl+C to stop.\n")
     _serve(host, port)

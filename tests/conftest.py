@@ -24,6 +24,11 @@ _PINNED_BLANK = (
     "PULSE_DASHBOARD_URL",
     "PULSE_TRUSTED_PROXIES",
     "PULSE_DEV_NO_AUTH",
+    # Demo sandbox and demo config: off unless a test turns them on.
+    "PULSE_DEMO_SANDBOX",
+    "PULSE_SANDBOX_DB_PATH",
+    "PULSE_SANDBOX_BRAND_HANDLE",
+    "PULSE_CONFIG_DIR",
     # Slack: never pick up a developer's real webhooks or tokens.
     "SLACK_WEBHOOK_URL",
     "SLACK_BRIEFS_WEBHOOK_URL",

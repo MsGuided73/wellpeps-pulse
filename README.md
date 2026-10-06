@@ -71,6 +71,50 @@ export PULSE_DB_PATH=data/demo.db                 # PowerShell: $env:PULSE_DB_PA
 .venv/Scripts/python -m harvey dashboard          # http://127.0.0.1:5555
 ```
 
+### Demo sandbox (local client demos only)
+
+For client demos the seed script can also build a **DEMO sandbox**: fictional
+community pages served by the dashboard at `/sandbox` ("Demo Forum" threads,
+"Demo Photos" posts, "Demo Reviews" listings; generic names, fictional handles,
+and a "DEMO SANDBOX" banner on every page). Every demo mention is a post or
+comment in one of those threads, so the whole loop runs on this machine:
+Review desk -> Approve -> "Copy reply & open demo post" -> paste the reply in the
+sandbox thread (it appears as the brand account `WellPeps_Team`, flair
+"Brand · WellPeps") -> "Copy this comment link" -> "Mark posted..." with that link.
+The Review desk also offers a "DEMO: Post to demo sandbox" shortcut that does
+the posting and marking in one click.
+
+```powershell
+# Stop any dashboard using data/demo.db first. -Seed moves the old data/demo.db aside,
+# then writes data/demo.db, data/sandbox.db and data/demo-config/.
+.\scripts
+.\scripts\run_demo.ps1 -Seed          # later runs: .\scripts\run_demo.ps1
+un_demo.ps1
+```
+
+which is the same as:
+
+```bash
+export PULSE_DB_PATH=data/demo.db PULSE_DEMO_SANDBOX=true PULSE_DEV_NO_AUTH=true
+export PULSE_SANDBOX_DB_PATH=data/sandbox.db PULSE_CONFIG_DIR=data/demo-config
+.venv/Scripts/python scripts/seed_demo.py --sandbox   # needs a PULSE_DB_PATH without mentions
+.venv/Scripts/python -m harvey dashboard              # http://127.0.0.1:5555 (and /sandbox)
+```
+
+- `PULSE_DEMO_SANDBOX=true` is honored only for 127.0.0.1 peers, never in
+  containers (`PULSE_REQUIRE_POSTGRES`), and the dashboard refuses a network
+  bind while it is on; otherwise every `/sandbox` route is a 404. Sandbox content
+  lives in its own SQLite file (`PULSE_SANDBOX_DB_PATH`, default `data/sandbox.db`),
+  never in the Pulse database, so production needs no migration.
+- `data/demo-config/` is a copy of `config/` whose claims are marked
+  `approved_by: "DEMO (not signed off)"` and whose links are `live: true`, so
+  approval works in demos; the dashboard shows a "DEMO CONFIG" banner while it is
+  active. Guide links in demo replies open placeholder pages at `/sandbox/guides/...`
+  instead of wellpeps.com. The real `config/` is never changed.
+- Sandbox permalinks are seeded for `--base-url` (default http://127.0.0.1:5555);
+  the dashboard opens them on whatever host/port it is served from.
+- Mark posted accepts a sandbox link only while the sandbox is on.
+
 Roles: viewer (read), reviewer (edit, approve, reject, copy, mark posted,
 escalate, ack non-clinical escalations), clinical (read, ack any escalation
 including adverse events), admin (everything, users, heartbeat start/stop).

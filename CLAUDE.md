@@ -193,3 +193,23 @@ Also:
 requests as a synthetic `dev@localhost` admin. It is ignored when
 `PULSE_REQUIRE_POSTGRES` is on, and `pulse dashboard` refuses a non-loopback
 `--host` while it is set. Never add it to docker-compose or Coolify.
+
+## Local DEMO sandbox (client demos only)
+
+`PULSE_DEMO_SANDBOX=true` serves fictional community pages at `/sandbox`
+(`harvey/sandbox/`: guard in `__init__`, permalinks in `urls`, own SQLite file
+`PULSE_SANDBOX_DB_PATH` / data/sandbox.db in `store` -- deliberately NOT the Pulse
+schema, so no migration; routes in `routes`; content in `demo_content` /
+`seeding`; UI in `harvey/web/sandbox/`, served only via the guarded
+`/sandbox/assets/`). Same guard as dev_no_auth: loopback peers only, ignored with
+`PULSE_REQUIRE_POSTGRES`, non-loopback bind refused; otherwise every /sandbox route
+404s. Never add it to docker-compose or Coolify. No real platform names, logos or
+trade dress in the sandbox (a test greps `harvey/web/sandbox/*`); fictional handles
+only. `scripts/seed_demo.py --sandbox` puts every demo mention in a sandbox thread
+(comment ids live in the path: url_norm drops fragments) and writes
+`data/demo-config/` (claims "DEMO (not signed off)", links live, marker `demo.yaml`
+-> `knowledge.is_demo_config()` -> DEMO CONFIG banner). `GET /api/demo` gives the UI
+its flags; `POST /api/mentions/{id}/demo-post` (approved only, sandbox on) posts the
+approved text as the brand account and marks it posted. `review.mark_posted` refuses
+a sandbox link unless the sandbox is on for the request. Launcher: `scripts/run_demo.ps1`.
+
