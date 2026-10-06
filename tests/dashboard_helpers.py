@@ -72,6 +72,7 @@ def setup_app(tmp_path, monkeypatch, *, config: PulseConfig | None = None, users
     cfg = config or PulseConfig()
     dashboard.app.dependency_overrides[dashboard.get_config] = lambda: cfg
     dashboard.app.dependency_overrides[dashboard.get_notifier] = lambda: notifier
+    dashboard.app.dependency_overrides[dashboard.get_briefs_notifier] = lambda: notifier
     if reviewer is not None:
         dashboard.app.dependency_overrides[dashboard.get_reviewer] = lambda: reviewer
     return state, notifier

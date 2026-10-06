@@ -223,7 +223,8 @@ async def heartbeat(stop_event: asyncio.Event | None = None):
     screen = build_safety_screen(brain, config)
     drafter = Drafter(brain)
     reviewer = Reviewer(brain)
-    notifier = SlackNotifier.from_config(config)
+    notifier = SlackNotifier.from_config(config)          # #pulse-alerts: escalation pages
+    briefs_notifier = SlackNotifier.for_briefs(config)    # #pulse-briefs (falls back to alerts)
 
     await state.init_db()
     logger.info(f"Database ready at {state.location}.")
@@ -241,7 +242,8 @@ async def heartbeat(stop_event: asyncio.Event | None = None):
         )
 
     async def brief_runner():
-        built = await run_due_briefs(state, brain, config, notifier=notifier, budget_ok=budget_ok)
+        built = await run_due_briefs(state, brain, config, notifier=briefs_notifier,
+                                     budget_ok=budget_ok)
         # Log ids and status only; the brief itself lives in the DB.
         return [f"{b['period']} brief #{b['id']} ({b['status']})" for b in built]
 

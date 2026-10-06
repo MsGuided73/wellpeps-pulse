@@ -1,9 +1,12 @@
 # WellPeps Pulse on Coolify (Docker Compose build pack, Traefik + HTTPS).
 #
-# Two services from one image:
+# Three services from one image:
 #   worker     the heartbeat loop (`pulse run`); no domain.
 #   dashboard  the web UI on container port 5555; in Coolify give it the
 #              domain as https://pulse.example.com:5555 (Traefik routes to it).
+#   slackbot   the read-only #pulse-query bot (`pulse slackbot`, Slack Socket
+#              Mode: outbound WebSocket only, no domain, no inbound port).
+#              Without SLACK_BOT_TOKEN/SLACK_APP_TOKEN it idles, healthy.
 #
 # Configuration comes only from environment variables (Coolify injects the
 # ones set in its UI); see .env.example and docs/DEPLOY-SUPABASE-COOLIFY.md.
@@ -20,6 +23,7 @@ services:
       - PULSE_REQUIRE_POSTGRES=true
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
       - SLACK_WEBHOOK_URL=${SLACK_WEBHOOK_URL:-}
+      - SLACK_BRIEFS_WEBHOOK_URL=${SLACK_BRIEFS_WEBHOOK_URL:-}
       - APIFY_TOKEN=${APIFY_TOKEN:-}
       - META_ACCESS_TOKEN=${META_ACCESS_TOKEN:-}
       - PULSE_DASHBOARD_URL=${PULSE_DASHBOARD_URL:-}
@@ -51,6 +55,7 @@ services:
       - PULSE_REQUIRE_POSTGRES=true
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
       - SLACK_WEBHOOK_URL=${SLACK_WEBHOOK_URL:-}
+      - SLACK_BRIEFS_WEBHOOK_URL=${SLACK_BRIEFS_WEBHOOK_URL:-}
       - APIFY_TOKEN=${APIFY_TOKEN:-}
       - META_ACCESS_TOKEN=${META_ACCESS_TOKEN:-}
       - PULSE_DASHBOARD_URL=${PULSE_DASHBOARD_URL:-}
@@ -69,6 +74,36 @@ services:
       timeout: 10s
       retries: 3
       start_period: 30s
+    restart: unless-stopped
+    init: true
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  slackbot:
+    build: .
+    command: ["python", "-m", "harvey", "slackbot"]
+    environment:
+      - PULSE_DATABASE_URL=${PULSE_DATABASE_URL}
+      - PULSE_REQUIRE_POSTGRES=true
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - PULSE_DASHBOARD_URL=${PULSE_DASHBOARD_URL:-}
+      # Socket Mode bot. Leave both tokens unset to run without Slack (the
+      # service logs "Slack query bot disabled (no tokens)" and idles).
+      - SLACK_BOT_TOKEN=${SLACK_BOT_TOKEN:-}
+      - SLACK_APP_TOKEN=${SLACK_APP_TOKEN:-}
+      - SLACK_QUERY_CHANNEL_ID=${SLACK_QUERY_CHANNEL_ID:-}
+    healthcheck:
+      # Unhealthy when the database is unreachable or the bot's heartbeat
+      # (settings.slackbot_heartbeat_at, stamped every minute, with or
+      # without tokens) is older than 5 minutes.
+      test: ["CMD", "python", "-m", "harvey", "health", "--slackbot"]
+      interval: 2m
+      timeout: 30s
+      retries: 3
+      start_period: 1m
     restart: unless-stopped
     init: true
     logging:

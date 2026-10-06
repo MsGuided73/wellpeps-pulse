@@ -1,6 +1,7 @@
 """Structure of docker-compose.yml (Coolify), the local override, Dockerfile
 and .dockerignore. Docker itself isn't needed: the files are parsed as YAML/text."""
 
+import json
 import re
 
 import pytest
@@ -36,10 +37,10 @@ def _env(service: dict) -> dict[str, str]:
     return out
 
 
-def test_two_services_from_the_same_build(base):
+def test_three_services_from_the_same_build(base):
     services = base["services"]
-    assert set(services) == {"worker", "dashboard"}
-    for name in ("worker", "dashboard"):
+    assert set(services) == {"worker", "dashboard", "slackbot"}
+    for name in ("worker", "dashboard", "slackbot"):
         assert services[name]["build"] == services["worker"]["build"]
         assert services[name]["restart"] == "unless-stopped"
         assert services[name]["init"] is True
@@ -52,6 +53,7 @@ def test_commands(base):
     assert s["worker"]["command"] == ["python", "-m", "harvey", "run"]
     assert s["dashboard"]["command"] == [
         "python", "-m", "harvey", "dashboard", "--host", "0.0.0.0", "--port", "5555"]
+    assert s["slackbot"]["command"] == ["python", "-m", "harvey", "slackbot"]
 
 
 def test_dashboard_is_exposed_not_published(base):
@@ -84,6 +86,37 @@ def test_environment_variables(base):
         assert env["PULSE_DATABASE_URL"] == "${PULSE_DATABASE_URL}"
     assert dash["PULSE_SECURE_COOKIES"] == "${PULSE_SECURE_COOKIES:-true}"
     assert dash["PULSE_TRUSTED_PROXIES"] == "${PULSE_TRUSTED_PROXIES:-" + DOCKER_NETS + "}"
+    # Briefs channel: whoever builds briefs (worker heartbeat, dashboard button).
+    assert worker["SLACK_BRIEFS_WEBHOOK_URL"] == dash["SLACK_BRIEFS_WEBHOOK_URL"] == \
+        "${SLACK_BRIEFS_WEBHOOK_URL:-}"
+
+
+def test_slackbot_service(base):
+    bot = base["services"]["slackbot"]
+    env = _env(bot)
+    assert env["PULSE_REQUIRE_POSTGRES"] == "true"
+    assert env["PULSE_DATABASE_URL"] == "${PULSE_DATABASE_URL}"
+    for name in ("SLACK_BOT_TOKEN", "SLACK_APP_TOKEN", "SLACK_QUERY_CHANNEL_ID"):
+        assert env[name] == "${" + name + ":-}", name  # optional: unset = idle, not crash
+    assert {"ANTHROPIC_API_KEY", "PULSE_DASHBOARD_URL"} <= set(env)
+    # Read-only and outbound only: no admin bootstrap, no webhooks, no ports.
+    for name in ("PULSE_ADMIN_EMAIL", "PULSE_ADMIN_PASSWORD", "SLACK_WEBHOOK_URL", "SLACK_BRIEFS_WEBHOOK_URL"):
+        assert name not in env, name
+    assert "expose" not in bot and "ports" not in bot
+    for name in ("worker", "dashboard"):
+        svc_env = _env(base["services"][name])
+        assert "SLACK_BOT_TOKEN" not in svc_env and "SLACK_APP_TOKEN" not in svc_env
+
+
+def test_slackbot_healthcheck_fits_its_heartbeat(base):
+    from harvey.health import SLACKBOT_MAX_AGE_MINUTES
+    from harvey.slackbot.app import HEARTBEAT_SECONDS
+
+    check = base["services"]["slackbot"]["healthcheck"]
+    assert check["test"] == ["CMD", "python", "-m", "harvey", "health", "--slackbot"]
+    assert HEARTBEAT_SECONDS / 60 < SLACKBOT_MAX_AGE_MINUTES
+    assert _minutes(check["interval"]) <= SLACKBOT_MAX_AGE_MINUTES
+    assert _minutes(check["timeout"]) < _minutes(check["interval"])
 
 
 def test_every_referenced_variable_is_documented():
@@ -126,8 +159,10 @@ def test_worker_healthcheck_fits_the_default_max_age(base):
 def test_local_override(local):
     dash = local["services"]["dashboard"]
     worker = local["services"]["worker"]
+    bot = local["services"]["slackbot"]
     assert dash["ports"] == ["127.0.0.1:5555:5555"]
-    for svc in (dash, worker):
+    assert "ports" not in bot
+    for svc in (dash, worker, bot):
         assert _env(svc)["PULSE_REQUIRE_POSTGRES"] == "false"
         mounts = " ".join(svc["volumes"])
         assert "./data:/app/data" in mounts
@@ -151,3 +186,46 @@ def test_dockerignore():
         assert entry in lines or f"{entry}/" in lines or f"**/{entry}" in lines, entry
     for keep in ("config", "prompts", "skills", "db", "harvey.yaml", "harvey"):
         assert keep not in lines and f"{keep}/" not in lines
+
+
+def test_slack_variables_are_documented():
+    documented = ENV_EXAMPLE.read_text(encoding="utf-8")
+    for name in ("SLACK_WEBHOOK_URL", "SLACK_BRIEFS_WEBHOOK_URL", "SLACK_BOT_TOKEN", "SLACK_APP_TOKEN",
+                 "SLACK_QUERY_CHANNEL_ID"):
+        assert re.search(rf"^{name}=$", documented, re.M), f"{name} missing or not blank in .env.example"
+    deploy = (PROJECT_ROOT / "docs" / "DEPLOY-SUPABASE-COOLIFY.md").read_text(encoding="utf-8")
+    for name in ("SLACK_BRIEFS_WEBHOOK_URL", "SLACK_BOT_TOKEN", "SLACK_APP_TOKEN", "SLACK_QUERY_CHANNEL_ID",
+                 "pulse slack-test", "slack-app-manifest.yaml"):
+        assert name in deploy, name
+
+
+def test_requirements_and_pyproject_list_the_slack_deps():
+    req = (PROJECT_ROOT / "requirements.txt").read_text(encoding="utf-8")
+    pyproject = (PROJECT_ROOT / "pyproject.toml").read_text(encoding="utf-8")
+    for dep in ("slack-bolt>=1.21,<2", "slack-sdk>=3.33,<4", "aiohttp>=3.10,<4"):
+        assert dep in req and f'"{dep}"' in pyproject, dep
+
+
+def test_slack_app_manifest_is_socket_mode_and_minimal():
+    manifest = yaml.safe_load((PROJECT_ROOT / "docs" / "slack-app-manifest.yaml").read_text(encoding="utf-8"))
+    assert manifest["display_information"]["name"] == "WellPeps Pulse"
+    assert manifest["features"]["bot_user"]["display_name"] == "Pulse"
+    assert manifest["features"]["app_home"]["messages_tab_enabled"] is False
+    settings = manifest["settings"]
+    assert settings["socket_mode_enabled"] is True
+    assert settings["interactivity"]["is_enabled"] is False
+    assert settings["event_subscriptions"]["bot_events"] == ["app_mention"]
+    assert "request_url" not in json.dumps(manifest)
+    assert sorted(manifest["oauth_config"]["scopes"]["bot"]) == sorted(
+        ["app_mentions:read", "chat:write", "reactions:write", "incoming-webhook"])
+    assert "user" not in manifest["oauth_config"]["scopes"]
+    # No channel IDs or secrets in the manifest.
+    text = (PROJECT_ROOT / "docs" / "slack-app-manifest.yaml").read_text(encoding="utf-8")
+    assert not re.search(r"\bC0[A-Z0-9]{8,}\b|xox[bp]-|xapp-\d|hooks\.slack\.com", text)
+
+
+def test_no_slack_channel_ids_hardcoded_in_code():
+    for path in (PROJECT_ROOT / "harvey").rglob("*.py"):
+        text = path.read_text(encoding="utf-8")
+        for channel_id in ("C0C72G5JWJ1", "C0C6SDT56LF", "C0C6SDTCRJB"):
+            assert channel_id not in text, f"{channel_id} hardcoded in {path.name}"

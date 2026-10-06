@@ -6,6 +6,9 @@
   ``settings.heartbeat_at`` (naive UTC ISO) every cycle, idle and quiet-hour
   cycles included; ``pulse health --worker`` fails when the stamp is older
   than the allowed age.
+- ``record_heartbeat(state, key=SLACKBOT_HEARTBEAT_KEY)`` / ``slackbot_health``:
+  the #pulse-query bot (`pulse slackbot`) stamps ``settings.slackbot_heartbeat_at``
+  every minute, enabled or idling without tokens; `pulse health --slackbot`.
 """
 
 from datetime import datetime, timezone
@@ -14,6 +17,9 @@ from harvey.config import PulseConfig
 from harvey.db import postgres
 
 HEARTBEAT_KEY = "heartbeat_at"
+SLACKBOT_HEARTBEAT_KEY = "slackbot_heartbeat_at"
+# The bot stamps every minute; allow a few missed beats.
+SLACKBOT_MAX_AGE_MINUTES = 5
 # Slack on top of two sleep intervals, for a long triage/draft cycle.
 MAX_AGE_SLACK_MINUTES = 10
 
@@ -41,17 +47,29 @@ async def check_database(state) -> None:
         raise RuntimeError("database round-trip returned no row")
 
 
-async def record_heartbeat(state, now: datetime | None = None) -> None:
-    await state.set_setting(HEARTBEAT_KEY, (now or utcnow()).replace(microsecond=0).isoformat())
+async def record_heartbeat(state, now: datetime | None = None, key: str = HEARTBEAT_KEY) -> None:
+    await state.set_setting(key, (now or utcnow()).replace(microsecond=0).isoformat())
 
 
 async def worker_health(state, config: PulseConfig, max_age_minutes: int | None = None,
                         now: datetime | None = None) -> tuple[bool, str]:
     """(healthy, one-line reason) from the last heartbeat stamp."""
     limit = max_age_minutes if max_age_minutes is not None else default_max_age_minutes(config)
-    raw = await state.get_setting(HEARTBEAT_KEY, "")
+    return await _stamp_health(state, HEARTBEAT_KEY, limit, now, "worker", "pulse run")
+
+
+async def slackbot_health(state, max_age_minutes: int | None = None,
+                          now: datetime | None = None) -> tuple[bool, str]:
+    """(healthy, one-line reason) from the #pulse-query bot's heartbeat stamp."""
+    limit = max_age_minutes if max_age_minutes is not None else SLACKBOT_MAX_AGE_MINUTES
+    return await _stamp_health(state, SLACKBOT_HEARTBEAT_KEY, limit, now, "slackbot", "pulse slackbot")
+
+
+async def _stamp_health(state, key: str, limit: int, now: datetime | None, label: str,
+                        command: str) -> tuple[bool, str]:
+    raw = await state.get_setting(key, "")
     if not raw:
-        return False, "no heartbeat recorded yet (is `pulse run` running?)"
+        return False, f"no heartbeat recorded yet (is `{command}` running?)"
     try:
         stamp = datetime.fromisoformat(raw)
     except ValueError:
@@ -62,4 +80,4 @@ async def worker_health(state, config: PulseConfig, max_age_minutes: int | None 
     if age_minutes > limit:
         return False, (f"heartbeat is stale: last beat {age_minutes:.0f} min ago "
                        f"(limit {limit} min)")
-    return True, f"worker heartbeat {max(age_minutes, 0):.0f} min ago (limit {limit} min)"
+    return True, f"{label} heartbeat {max(age_minutes, 0):.0f} min ago (limit {limit} min)"

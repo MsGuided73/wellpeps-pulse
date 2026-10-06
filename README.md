@@ -30,6 +30,8 @@ Pulse never posts on its own, and nothing clinical is ever auto-published.
 
 - **Pulse** market intelligence (`harvey/trends.py`, `harvey/briefs.py`, `harvey/pulse_store.py`), from triaged relevant mentions only and as aggregates only: emerging terms (unigrams to trigrams, velocity against a 28-day baseline, NEW flags), share of voice for WellPeps and competitors, sentiment shift per brand and drug, category and drug mix, complaint themes per competitor, and a **language bank** of verbatim consumer phrases with counts. A daily brief (previous local day, after 07:00) and a weekly brief (previous Mon–Sun, from Monday) are written by the `pulse` agent (sonnet) from the tables alone: never post text, handles or links. Action cards that cite a number not in the tables are stripped; a bad answer gets one retry, then a "tables only" fallback. Slack gets the headline, the top three card titles and a dashboard link. The dashboard's **Pulse** tab shows the brief, its action cards and tables, live trends, and the searchable language bank with Copy buttons. `pulse brief --period daily|weekly [--force]`, `pulse trends --days 7`
 
+- **Slack**: escalation pages go to `#pulse-alerts` (`SLACK_WEBHOOK_URL`), briefs to `#pulse-briefs` (`SLACK_BRIEFS_WEBHOOK_URL`, falling back to the alerts webhook). A read-only **#pulse-query bot** (`pulse slackbot`, `harvey/slackbot/`, Slack Socket Mode so no public URL) answers `@Pulse` questions in that channel only, in thread: haiku turns the question into a strict query spec, the existing deterministic analytics run it, sonnet words <= 120 words from the aggregate result only, and guards strip invented numbers, handles, links, e-mails and long quotes before a dashboard link is added. Aggregates only (counts < 2 hidden, sentiment needs 3), no actions from Slack, 100 questions/day and 20 per person per hour, every question audited in `actions`. `pulse slack-test` sends a labelled TEST message to each webhook. App manifest: `docs/slack-app-manifest.yaml`
+
 Real collectors arrive in a later phase. The full roadmap is in [docs/PLAN.md](docs/PLAN.md).
 
 ## Quick start
@@ -82,9 +84,11 @@ stored in `data/pulse.db`, or wherever `PULSE_DB_PATH` points. Set `PULSE_DATABA
 ## Deploy (Coolify)
 
 Pulse deploys on Coolify with the **Docker Compose** build pack.
-`docker-compose.yml` builds one image and runs two services: `worker`
-(`pulse run`, the heartbeat) and `dashboard` (port 5555, exposed to
-Coolify's Traefik proxy, which terminates HTTPS). Everything is configured
+`docker-compose.yml` builds one image and runs three services: `worker`
+(`pulse run`, the heartbeat), `dashboard` (port 5555, exposed to
+Coolify's Traefik proxy, which terminates HTTPS), and `slackbot` (`pulse
+slackbot`, the read-only #pulse-query bot over an outbound Socket Mode
+connection; it idles healthily when the Slack tokens are unset). Everything is configured
 through environment variables; data lives in Supabase (`PULSE_DATABASE_URL`),
 and `PULSE_REQUIRE_POSTGRES=true` makes every command refuse to fall back to
 SQLite inside a container. The Claude CLI in the image uses
@@ -92,13 +96,15 @@ SQLite inside a container. The Claude CLI in the image uses
 
 - Health: the dashboard serves `GET /healthz` (public, `{"ok": true}` or 503);
   the worker's check is `pulse health --worker` (database reachable and a
-  heartbeat within 2 x max(heartbeat, urgent tick) + 10 minutes).
+  heartbeat within 2 x max(heartbeat, urgent tick) + 10 minutes); the bot's
+  is `pulse health --slackbot` (its own heartbeat within 5 minutes).
 - Behind the proxy the login throttle uses the real client IP from
   `X-Forwarded-For`, believed only from `PULSE_TRUSTED_PROXIES`.
 - `PULSE_SECURE_COOKIES`, `PULSE_DASHBOARD_URL` and `PULSE_TRUSTED_PROXIES`
   override `harvey.yaml` (see `.env.example`).
 
-Step-by-step: [docs/DEPLOY-SUPABASE-COOLIFY.md](docs/DEPLOY-SUPABASE-COOLIFY.md).
+Step-by-step: [docs/DEPLOY-SUPABASE-COOLIFY.md](docs/DEPLOY-SUPABASE-COOLIFY.md)
+(section 9 covers the Slack app, webhooks, tokens and `pulse slack-test`).
 On a laptop, `docker compose -f docker-compose.yml -f docker-compose.local.yml up`
 adds `./data` (SQLite allowed), your `~/.claude` login, and publishes
 `127.0.0.1:5555`.

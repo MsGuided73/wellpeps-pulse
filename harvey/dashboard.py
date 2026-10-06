@@ -112,6 +112,13 @@ def get_notifier(config: PulseConfig = Depends(get_config)):
     return SlackNotifier.from_config(config)
 
 
+def get_briefs_notifier(config: PulseConfig = Depends(get_config)):
+    """Briefs go to their own channel (#pulse-briefs), else the alerts webhook."""
+    from harvey.notify import SlackNotifier
+
+    return SlackNotifier.for_briefs(config)
+
+
 def get_reviewer(config: PulseConfig = Depends(get_config), state: StateManager = Depends(get_state)):
     """The adversarial reviewer, only when edits should be re-reviewed."""
     if not config.review.rerun_reviewer_on_edit:
@@ -566,7 +573,7 @@ async def get_language_bank(q: str | None = Query(None, max_length=200),
 @app.post("/api/briefs/generate")
 async def generate_brief(body: GenerateBriefBody, user: dict = ADMIN,
                          config: PulseConfig = Depends(get_config),
-                         brain=Depends(get_brief_brain), notifier=Depends(get_notifier)):
+                         brain=Depends(get_brief_brain), notifier=Depends(get_briefs_notifier)):
     """Build the brief for the latest window now (one Claude call unless it exists)."""
     brief = await briefs.build_brief(await get_state(), brain, body.period, config=config,
                                      force=body.force, notifier=notifier)

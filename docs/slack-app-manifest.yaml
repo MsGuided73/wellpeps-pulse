@@ -1,0 +1,59 @@
+# Slack app manifest for WellPeps Pulse (workspace: DCB Consulting).
+#
+# Create the app from this file: https://api.slack.com/apps -> Create New App
+# -> From a manifest -> pick the workspace -> paste this YAML. Setup steps:
+# docs/DEPLOY-SUPABASE-COOLIFY.md, section "Slack".
+#
+# Socket Mode is on, so the app has NO request URLs: the `slackbot` service
+# opens an outbound WebSocket with the app-level token (xapp-, scope
+# connections:write, created by hand under Basic Information -> App-Level
+# Tokens; app-level scopes can't be set in a manifest). Interactivity is off:
+# the bot has no buttons and never changes anything.
+display_information:
+  name: WellPeps Pulse
+  description: Pulse escalation pages, market briefs, and read-only market questions.
+  long_description: >-
+    WellPeps Pulse posts escalation pages (link and category only) to
+    #pulse-alerts and daily/weekly market briefs to #pulse-briefs through
+    incoming webhooks. In #pulse-query, mention @Pulse with a market question
+    ("what's trending this week?") and it answers in the thread from
+    aggregate counts only. It is read-only: approvals, acknowledgements and
+    replies happen in the Pulse dashboard.
+  background_color: "#1f3a5f"
+features:
+  app_home:
+    # No DMs: the bot answers only in #pulse-query.
+    home_tab_enabled: false
+    messages_tab_enabled: false
+    messages_tab_read_only_enabled: false
+  bot_user:
+    display_name: Pulse
+    always_online: false
+oauth_config:
+  scopes:
+    bot:
+      # app_mentions:read - receive the app_mention event when someone writes
+      #   @Pulse (including thread replies) in a channel the bot was invited to.
+      - app_mentions:read
+      # chat:write - post the answer in the question's thread (only in
+      #   channels the bot is a member of).
+      - chat:write
+      # reactions:write - add/remove the :hourglass_flowing_sand: "looking..."
+      #   reaction on the question while it works.
+      - reactions:write
+      # incoming-webhook - lets the install flow create the two incoming
+      #   webhooks (#pulse-alerts for escalation pages, #pulse-briefs for briefs).
+      - incoming-webhook
+      # Deliberately NOT requested: groups:read / channels:read (the bot never
+      #   lists or looks up channels; it is configured with the channel ID),
+      #   any *:history scope (it never reads channel messages), im:* (no
+      #   DMs), users:read, and anything that writes beyond its own replies.
+settings:
+  event_subscriptions:
+    bot_events:
+      - app_mention
+  interactivity:
+    is_enabled: false
+  org_deploy_enabled: false
+  socket_mode_enabled: true
+  token_rotation_enabled: false

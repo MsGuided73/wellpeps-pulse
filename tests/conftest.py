@@ -24,6 +24,12 @@ _PINNED_BLANK = (
     "PULSE_DASHBOARD_URL",
     "PULSE_TRUSTED_PROXIES",
     "PULSE_DEV_NO_AUTH",
+    # Slack: never pick up a developer's real webhooks or tokens.
+    "SLACK_WEBHOOK_URL",
+    "SLACK_BRIEFS_WEBHOOK_URL",
+    "SLACK_BOT_TOKEN",
+    "SLACK_APP_TOKEN",
+    "SLACK_QUERY_CHANNEL_ID",
 )
 
 

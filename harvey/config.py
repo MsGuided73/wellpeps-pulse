@@ -69,6 +69,10 @@ DEFAULT_MODELS = {
     "drafter": "sonnet",
     "reviewer": "sonnet",
     "pulse": "sonnet",   # daily/weekly market brief from aggregates
+    # #pulse-query bot: haiku turns a question into a strict QuerySpec,
+    # sonnet words the answer from the aggregate result only.
+    "slackbot.plan": "haiku",
+    "slackbot.answer": "sonnet",
 }
 
 
@@ -195,7 +199,11 @@ def check_dashboard_url(url: str) -> str:
 
 class NotifyConfig(BaseModel):
     # Name of the env var holding the Slack webhook (never the URL itself).
+    # Escalation pages (#pulse-alerts) use this one.
     slack_webhook_env: str = "SLACK_WEBHOOK_URL"
+    # Env var holding the briefs webhook (#pulse-briefs). When that variable
+    # is unset, briefs fall back to slack_webhook_env.
+    slack_briefs_webhook_env: str = "SLACK_BRIEFS_WEBHOOK_URL"
     # Optional base URL of the dashboard, linked from Slack pages.
     # Env PULSE_DASHBOARD_URL overrides it.
     dashboard_url: str = ""
@@ -262,6 +270,16 @@ class PulseBriefConfig(BaseModel):
         return day
 
 
+class SlackQueryConfig(BaseModel):
+    """Limits for the read-only #pulse-query bot (harvey/slackbot/). Only
+    answered questions count; refusals don't."""
+
+    # Answered questions per local day (usage.quiet_hours.timezone), all users.
+    daily_limit: int = Field(default=100, ge=1, le=10000)
+    # Answered questions per Slack user in any rolling hour.
+    per_user_per_hour: int = Field(default=20, ge=1, le=1000)
+
+
 class PulseConfig(BaseModel):
     # Unknown keys fail loudly, so a leftover sales-era harvey.yaml is caught.
     model_config = ConfigDict(extra="forbid")
@@ -274,6 +292,7 @@ class PulseConfig(BaseModel):
     dashboard: DashboardConfig = Field(default_factory=DashboardConfig)
     review: ReviewConfig = Field(default_factory=ReviewConfig)
     pulse: PulseBriefConfig = Field(default_factory=PulseBriefConfig)
+    slack_query: SlackQueryConfig = Field(default_factory=SlackQueryConfig)
     retention_days: int = Field(default=180, ge=1)
 
 
@@ -289,6 +308,10 @@ class EnvConfig(BaseModel):
 
     anthropic_api_key: str = Field(default="", repr=False)
     slack_webhook_url: str = Field(default="", repr=False)
+    slack_briefs_webhook_url: str = Field(default="", repr=False)
+    slack_bot_token: str = Field(default="", repr=False)
+    slack_app_token: str = Field(default="", repr=False)
+    slack_query_channel_id: str = ""
     apify_token: str = Field(default="", repr=False)
     meta_access_token: str = Field(default="", repr=False)
     pulse_admin_email: str = ""
@@ -299,6 +322,10 @@ class EnvConfig(BaseModel):
 _ENV_KEYS = {
     "anthropic_api_key": "ANTHROPIC_API_KEY",
     "slack_webhook_url": "SLACK_WEBHOOK_URL",
+    "slack_briefs_webhook_url": "SLACK_BRIEFS_WEBHOOK_URL",
+    "slack_bot_token": "SLACK_BOT_TOKEN",
+    "slack_app_token": "SLACK_APP_TOKEN",
+    "slack_query_channel_id": "SLACK_QUERY_CHANNEL_ID",
     "apify_token": "APIFY_TOKEN",
     "meta_access_token": "META_ACCESS_TOKEN",
     "pulse_admin_email": "PULSE_ADMIN_EMAIL",

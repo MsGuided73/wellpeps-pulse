@@ -37,3 +37,14 @@ services:
     volumes:
       - ./data:/app/data
       - ~/.claude:/home/harvey/.claude
+
+  slackbot:
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      - PULSE_REQUIRE_POSTGRES=false
+      - PULSE_DASHBOARD_URL=${PULSE_DASHBOARD_URL:-http://localhost:5555}
+    volumes:
+      - ./data:/app/data
+      - ~/.claude:/home/harvey/.claude

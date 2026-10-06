@@ -69,6 +69,30 @@ deterministic compliance filter (`harvey/compliance.py`) exist.
   privacy floor, sentiment points need 3. Charts are hand-rolled SVG
   (`harvey/web/charts.js`, no vendored library); tab UI in `harvey/web/analytics.js`.
 
+- Slack routing + #pulse-query bot: escalation pages use `notify.slack_webhook_env`
+  (`SLACK_WEBHOOK_URL`, #pulse-alerts); briefs use `SlackNotifier.for_briefs`
+  (`notify.slack_briefs_webhook_env` = `SLACK_BRIEFS_WEBHOOK_URL`, #pulse-briefs, falling
+  back to the alerts webhook) from the heartbeat, `pulse brief` and the dashboard
+  (`get_briefs_notifier`). `harvey/notify/slack.py` redacts webhook URLs, registered
+  secrets and any `xox?-`/`xapp-` token shape (`REDACTOR`, `install_redaction`).
+  `harvey/slackbot/` is the read-only bot (`pulse slackbot`, Bolt AsyncApp +
+  AsyncSocketModeHandler, compose service `slackbot`): `planner` (haiku,
+  `slackbot.plan`, question nonce-delimited -> pydantic `QuerySpec`, invalid -> help;
+  action verbs -> "use the dashboard" without a model call), `executor` (existing
+  `analytics`/`pulse_store` code only, no model SQL; counts < 2 -> null, sentiment
+  needs 3; unknown competitors/drugs dropped), `answer` (sonnet, `slackbot.answer`,
+  sees `QueryResult.payload()` only, never the question), `guards` (strip sentences with
+  numbers not in the payload -> templated fallback; scrub handles/URLs except the
+  dashboard/e-mails/quotes >= 8 words; 120 words, 1500 chars), `audit` (`actions`
+  rows `slack_query` / `slack_query_refused`, agent `slackbot:<user>`, limits from
+  `slack_query:` in harvey.yaml), `app` (`QueryBot.handle_mention` holds the logic;
+  `build_bolt_app` is thin). Only `app_mention` in `SLACK_QUERY_CHANNEL_ID`; elsewhere
+  one "I only answer in #pulse-query" reply; DMs ignored. No tokens -> logs "Slack
+  query bot disabled (no tokens)" and idles; heartbeat `settings.slackbot_heartbeat_at`
+  every minute (`pulse health --slackbot`). `pulse slack-test` sends a [TEST]
+  message per webhook and never prints URLs. Channel IDs live in env only.
+  Manifest: `docs/slack-app-manifest.yaml`; setup: DEPLOY doc section 9.
+
 Later phases add everything else. Don't build ahead of the phase you've
 been asked to do.
 
@@ -98,6 +122,7 @@ been asked to do.
 Also:
 
 - No PHI. Slack alerts carry a link and a category only, never post text.
+  The #pulse-query bot answers from aggregates only and never takes actions.
 - Collectors read public data only, keep only minimal author info, and
   store a permalink on every mention.
 - Escalation handling ignores quiet hours.
@@ -108,8 +133,8 @@ Also:
 - Imports smoke check: `.venv/Scripts/python -c "import harvey.main, harvey.dashboard, harvey.cli, harvey.state"`
 - CLI: `pulse run | dashboard [--host H] | status | health [--worker] |
   ingest | usage | escalations | ack | user add|list|disable|reset-password | brief |
-  trends` (`harvey` is an alias).
-- Deploy: `docker-compose.yml` (Coolify: `worker` + `dashboard`, env only,
+  trends | slackbot | slack-test` (`harvey` is an alias); `health --slackbot`.
+- Deploy: `docker-compose.yml` (Coolify: `worker` + `dashboard` + `slackbot`, env only,
   no bind mounts; `docker-compose.local.yml` is the laptop override). Env
   `PULSE_SECURE_COOKIES` / `PULSE_DASHBOARD_URL` / `PULSE_TRUSTED_PROXIES`
   override harvey.yaml in `load_config`; `PULSE_REQUIRE_POSTGRES=true` makes

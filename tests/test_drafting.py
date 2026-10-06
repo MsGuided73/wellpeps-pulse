@@ -320,7 +320,8 @@ def test_no_draft_categories_match_triager_severe_set():
     assert set(NO_DRAFT_CATEGORIES) == {c.value for c in SEVERE_CATEGORIES}
 
 
-@pytest.mark.parametrize("name", ["triage.md", "draft.md", "review.md", "reply_rules.md", "safety_screen.md"])
+@pytest.mark.parametrize("name", ["triage.md", "draft.md", "review.md", "reply_rules.md", "safety_screen.md",
+                                  "slack_plan.md", "slack_answer.md"])
 def test_prompt_files_have_no_cost_or_supplier_data(name):
     import re
 

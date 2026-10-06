@@ -130,12 +130,47 @@ Steps 4–6 respect quiet hours and budget; 1–3 do not (triage has budget prio
   `language_bank` tables (never written before Phase 8) and adds
   `language_bank_mentions` so banking is idempotent per mention.
 
+## Slack decisions (2026-10-06)
+- Three private channels in the DCB Consulting workspace: escalation pages
+  -> #pulse-alerts (`SLACK_WEBHOOK_URL`), briefs -> #pulse-briefs
+  (`SLACK_BRIEFS_WEBHOOK_URL`, falling back to the alerts webhook), questions
+  -> #pulse-query. Channel IDs are env/config only, never code.
+- The #pulse-query bot is **read-only**: it never approves, acks, posts,
+  escalates or edits; action requests get a pointer to the dashboard, where
+  the audit log records them. No interactivity, no slash commands.
+- **Socket Mode** (outbound WebSocket, app-level token with
+  connections:write): no public URL, no request signing surface, no inbound
+  port on the server. Its own compose service (`slackbot`) so a Slack outage
+  or crash never touches the heartbeat or dashboard; without tokens it idles
+  healthily.
+- **Aggregates only**: the plan model (haiku) only picks one of ten fixed
+  intents plus validated filters (pydantic `QuerySpec`); the deterministic
+  analytics code runs it (no model-written SQL); the answer model (sonnet)
+  sees the aggregate result only, never the question or any mention text.
+  Privacy floor as in Phase 8 (counts < 2 hidden, sentiment needs 3).
+  Answers are numerically verified (invented numbers stripped, templated
+  fallback) and scrubbed of handles, links (except the dashboard), e-mails
+  and quotes of 8+ words.
+- Scopes: app_mentions:read, chat:write, reactions:write, incoming-webhook.
+  groups:read was considered and left out: the bot never looks channels up.
+- Only `app_mention` events. Elsewhere one short "I only answer in
+  #pulse-query" reply; DMs are ignored (no Messages tab, no im scopes).
+- Limits: 100 answered questions per local day, 20 per user per rolling
+  hour (`slack_query:`); refusals don't count. Counted in the existing
+  `actions` table (no schema change): `slack_query` / `slack_query_refused`
+  rows, `agent = slackbot:<user id>`. The question is stored truncated to 200
+  characters with links/handles/e-mails stripped, for audit.
+- Quiet hours don't apply to the bot (on-demand, staff-initiated).
+
 ## 5. Open questions
 - Approved claims library content + physician/compliance sign-off.
 - Named clinical owner + backup for the 15-min adverse-event SLA (incl. nights/weekends).
 - Legal sign-off on Apify scraping; mention-text retention period (default 180 days).
 - R38 medication-name rule and LegitScript status (R12) → config toggles.
 - API mode: dollar budget instead of subscription quota throttle.
+- Slack query bot: confirm with compliance that storing the first 200
+  characters of staff questions in `actions` is acceptable, and remind staff
+  not to type patient details into Slack.
 - Minors: the safety screen flags a likely under-18 seeking prescription
   weight-loss or sexual-wellness drugs, which blocks any reply and raises
   urgency to at least high, but there is no `minor` escalation kind, owner,

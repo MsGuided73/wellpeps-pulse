@@ -23,6 +23,8 @@ usage:
     drafter: sonnet       # reply drafting from approved claims
     reviewer: sonnet      # adversarial compliance review; never haiku (config rejects it)
     pulse: sonnet         # daily/weekly market brief (aggregates only, never post text)
+    slackbot.plan: haiku  # #pulse-query bot: question -> strict query spec (JSON)
+    slackbot.answer: sonnet  # #pulse-query bot: short answer from the aggregate result only
   # Drafting and briefs pause in quiet hours. Escalations never do.
   quiet_hours:
     start: "22:00"
@@ -51,8 +53,10 @@ escalation:
 
 notify:
   # Name of the env var that holds the Slack webhook URL (never the URL).
-  # Alerts carry a link + category only, never post text.
+  # Escalation pages (#pulse-alerts) carry a link + category only, never post text.
   slack_webhook_env: SLACK_WEBHOOK_URL
+  # Env var for the briefs webhook (#pulse-briefs); unset = use the one above.
+  slack_briefs_webhook_env: SLACK_BRIEFS_WEBHOOK_URL
   # Optional dashboard base URL, linked from Slack pages.
   dashboard_url: ""
 
@@ -78,6 +82,12 @@ pulse:
   top_terms: 25           # emerging terms per brief
   baseline_days: 28       # term velocity is measured against this many prior days
   min_count: 3            # a term needs this many mentions in the window
+
+slack_query:
+  # Read-only #pulse-query bot (`pulse slackbot`, Socket Mode). Aggregates
+  # only; it never approves, acks or posts. Refused questions don't count.
+  daily_limit: 100        # answered questions per local day, all users
+  per_user_per_hour: 20   # answered questions per Slack user per rolling hour
 
 # Days to keep mention text before purging (pending legal sign-off).
 retention_days: 180

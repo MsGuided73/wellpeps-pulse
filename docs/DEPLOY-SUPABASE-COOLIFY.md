@@ -35,6 +35,7 @@ running it locally against that database, and deploying it on Coolify.
 - [x] Supabase security advisor: **0 warnings**.
 - [x] App code can run on Postgres (`PULSE_DATABASE_URL`) or SQLite (default).
 - [x] Docker/Coolify setup: worker + dashboard services, health checks, proxy-aware login throttle (step 6).
+- [x] Slack: escalation pages and briefs go to separate channels; a read-only `slackbot` service answers questions in #pulse-query (step 9).
 
 ---
 
@@ -166,13 +167,13 @@ open http://localhost:5555.
 2. Inside it: **+ New Resource**, then **Private Repository (with GitHub App)**,
    then pick `wellpeps-pulse`, branch `main`.
 3. Build pack: **Docker Compose** (it reads `docker-compose.yml`).
-4. Coolify lists the two services. On the **dashboard** service, set
+4. Coolify lists the three services (worker, dashboard, slackbot). On the **dashboard** service, set
    **Domains** to your domain **with the container port appended**, e.g.
    `https://pulse.wellpeps.com:5555`. The `:5555` tells Traefik which
    container port to route to; visitors still use plain
    `https://pulse.wellpeps.com`. Coolify issues the HTTPS certificate
    automatically. Point that DNS record at your Coolify server first.
-5. The **worker** service gets **no** domain.
+5. The **worker** and **slackbot** services get **no** domain.
 
 ### 7b. Environment variables
 Open the resource, then the **Environment Variables** tab. Add these as
@@ -186,7 +187,9 @@ as locked/secret:
 | `PULSE_DASHBOARD_URL` | Your dashboard's https address, e.g. `https://pulse.wellpeps.com` (no `:5555`) | **Recommended.** Used for the links in Slack pages and briefs. Must start with `https://`. |
 | `PULSE_ADMIN_EMAIL` | Your email | **First deploy only**, then delete |
 | `PULSE_ADMIN_PASSWORD` | A 12+ character password | **First deploy only**, then delete. Secret. |
-| `SLACK_WEBHOOK_URL` | PepRite Slack incoming-webhook URL | When Slack is ready. Secret. |
+| `SLACK_WEBHOOK_URL` | #pulse-alerts incoming-webhook URL (step 9) | When Slack is ready. Secret. |
+| `SLACK_BRIEFS_WEBHOOK_URL` | #pulse-briefs incoming-webhook URL (step 9) | Optional; briefs use `SLACK_WEBHOOK_URL` without it. Secret. |
+| `SLACK_BOT_TOKEN` / `SLACK_APP_TOKEN` / `SLACK_QUERY_CHANNEL_ID` | The #pulse-query bot (step 9) | Optional; without the tokens the `slackbot` service idles. Tokens are secret. |
 | `APIFY_TOKEN` | Apify API token | Phase 9, after legal sign-off. Secret. |
 | `META_ACCESS_TOKEN` | Meta Graph token for WellPeps' own IG/FB | Phase 9. Secret. |
 | `PULSE_SECURE_COOKIES` | Leave unset (the compose file defaults it to `true`) | No. Never set it to `false` on the server. |
@@ -222,6 +225,106 @@ doesn't use them.
 - [ ] Check with compliance whether to add Supabase's HIPAA BAA (paid add-on).
 - [ ] Phase 9: real collectors (F5Bot/Syften, Apify, Meta).
 
+## 9. Slack (alerts, briefs, and the #pulse-query bot)
+
+Workspace: **DCB Consulting**. Three private channels already exist:
+
+| Channel | Current ID | What arrives there | How |
+|---|---|---|---|
+| `#pulse-alerts` | `C0C72G5JWJ1` | Escalation pages: kind, platform, reason code, owner, SLA, post link, dashboard link. Never post text. | Incoming webhook `SLACK_WEBHOOK_URL` |
+| `#pulse-briefs` | `C0C6SDT56LF` | Daily/weekly brief: headline, top 3 action titles, dashboard link | Incoming webhook `SLACK_BRIEFS_WEBHOOK_URL` (falls back to `SLACK_WEBHOOK_URL` when unset) |
+| `#pulse-query` | `C0C6SDTCRJB` | Answers to `@Pulse` questions, in thread | The `slackbot` service (Socket Mode) |
+
+The IDs live only in env vars and this table, never in code. If a channel
+is recreated, its ID changes: update `SLACK_QUERY_CHANNEL_ID`.
+
+### 9a. Create the app from the manifest
+1. Go to https://api.slack.com/apps, **Create New App**, then **From a manifest**.
+2. Pick the **DCB Consulting** workspace.
+3. Paste the contents of [`docs/slack-app-manifest.yaml`](slack-app-manifest.yaml)
+   (YAML tab), review, **Create**. This makes the app "WellPeps Pulse" with
+   a bot user "Pulse", Socket Mode on, interactivity off, the `app_mention`
+   event, and four bot scopes:
+
+| Scope | Why |
+|---|---|
+| `app_mentions:read` | Receive `@Pulse` mentions (also in threads) in channels it's in |
+| `chat:write` | Reply in the question's thread |
+| `reactions:write` | Show the :hourglass_flowing_sand: "looking..." reaction while it works |
+| `incoming-webhook` | Create the two incoming webhooks below |
+
+   Not requested on purpose: no `*:history` (it never reads messages), no
+   `channels:read`/`groups:read` (it is told the channel ID), no DM scopes.
+
+### 9b. Install it and create the two webhooks
+1. In the app: **Incoming Webhooks** (left menu). It's already on.
+2. **Add New Webhook to Workspace**, choose **#pulse-alerts**, **Allow**.
+   Copy the webhook URL: that is `SLACK_WEBHOOK_URL`.
+3. **Add New Webhook to Workspace** again, choose **#pulse-briefs**,
+   **Allow**. That URL is `SLACK_BRIEFS_WEBHOOK_URL`.
+   (The first "Allow" also installs the app and its bot to the workspace.)
+
+### 9c. Get the two tokens
+1. **Basic Information** -> **App-Level Tokens** -> **Generate Token and
+   Scopes**. Name it `pulse-socket`, add the scope **`connections:write`**,
+   **Generate**. Copy the `xapp-...` token: that is `SLACK_APP_TOKEN`.
+2. **OAuth & Permissions** -> **Bot User OAuth Token** (`xoxb-...`): that
+   is `SLACK_BOT_TOKEN`. (Reinstall the app here if Slack asks you to after
+   any scope change.)
+
+### 9d. Invite the bot
+In Slack, in each of the three channels, type `/invite @Pulse` and send it.
+The bot must be a member of `#pulse-query` to see mentions and reply; being
+in the other two channels does no harm and keeps everything in one app.
+
+### 9e. Environment variables
+Add these as **runtime** secrets in Coolify (resource -> Environment
+Variables; lock the secret ones) and, for local runs, in your `.env`:
+
+| Variable | Value | Used by |
+|---|---|---|
+| `SLACK_WEBHOOK_URL` | The #pulse-alerts webhook URL | worker, dashboard |
+| `SLACK_BRIEFS_WEBHOOK_URL` | The #pulse-briefs webhook URL | worker, dashboard |
+| `SLACK_BOT_TOKEN` | `xoxb-...` | slackbot |
+| `SLACK_APP_TOKEN` | `xapp-...` (connections:write) | slackbot |
+| `SLACK_QUERY_CHANNEL_ID` | `C0C6SDTCRJB` (#pulse-query) | slackbot |
+
+Redeploy. The **slackbot** service gets no domain and no port (Socket Mode
+is an outbound connection). Without the two tokens it logs
+`Slack query bot disabled (no tokens)` and stays healthy; with one token
+but not the other, or a wrong prefix, it stops with a clear error that never
+prints the token. Tokens and webhook URLs are scrubbed from every log line.
+
+### 9f. Test
+1. From a terminal on the worker in Coolify (or your laptop with `.env`):
+   `python -m harvey slack-test`. It sends one message starting `[TEST]` to
+   each webhook (no mention data) and prints `ok` / `failed` /
+   `not configured` per channel, never the URLs. Exit code 0 means every
+   configured channel worked.
+2. In `#pulse-query`: `@Pulse what's trending this week?` You should see
+   the hourglass reaction, then an answer in the thread with an
+   "Open in Pulse dashboard" link (when `PULSE_DASHBOARD_URL` is set).
+3. `@Pulse help` lists example questions.
+
+### 9g. What the bot will and won't do
+- Answers only `@Pulse` mentions in `#pulse-query`. Mentioned in another
+  channel it replies once, "I only answer in #pulse-query", with no data.
+  It has no DM tab and ignores DMs.
+- Read-only. "Approve", "ack", "post the reply", etc. get a pointer to the
+  dashboard. Nothing in Slack changes Pulse.
+- Aggregates only: counts, shares, sentiment averages, terms seen in at
+  least 2 mentions, brief headlines. Never post text, handles, links to
+  posts, or anything from fewer than 2 mentions (sentiment needs 3).
+- Limits (`slack_query:` in `harvey.yaml`): 100 answered questions per day
+  for the team, 20 per person per hour. Then it says so politely.
+- Every question is logged in the `actions` table (`slack_query`): Slack
+  user ID, channel, what was asked for (intent, days, filters), answer
+  length, models, time taken, and the first 200 characters of the question
+  with links, handles and e-mails removed. Ask staff not to put patient
+  details in questions.
+- Quiet hours don't apply: it answers whenever asked.
+- Health: `python -m harvey health --slackbot` (heartbeat within 5 minutes).
+
 ---
 
 ## Troubleshooting
@@ -240,3 +343,8 @@ doesn't use them.
 | `PULSE_DASHBOARD_URL: ... must start with https://` | Use the full `https://` address of the dashboard, without `:5555`. |
 | `PULSE_SECURE_COOKIES must be true/false` or `PULSE_TRUSTED_PROXIES: ... is not an IP address` | Fix or delete the variable in Coolify. |
 | `PULSE_DATABASE_URL must be a postgres URL` | The value must start with `postgresql://` or `postgres://`. |
+| `pulse slack-test` says `failed` | The webhook was revoked or the channel deleted: create a new webhook (9b) and update the variable. `not configured` means the variable is empty in this container. |
+| slackbot logs `Slack query bot disabled (no tokens)` | `SLACK_BOT_TOKEN` and `SLACK_APP_TOKEN` are unset in Coolify (9e). |
+| slackbot stops with `... must be a bot token starting with xoxb-` / `... starting with xapp-` | The two tokens are swapped or one is a webhook URL. The app-level token needs `connections:write`. |
+| `@Pulse` gets no reaction or answer | The bot isn't in the channel (`/invite @Pulse`), `SLACK_QUERY_CHANNEL_ID` is another channel's ID, or the slackbot service is down (`python -m harvey health --slackbot`). |
+| The bot answers "I only answer in #pulse-query" in #pulse-query itself | `SLACK_QUERY_CHANNEL_ID` doesn't match the channel: copy the ID from the channel's details. |

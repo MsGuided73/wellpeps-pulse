@@ -276,3 +276,33 @@ def test_uvicorn_is_started_without_its_own_proxy_header_rewriting(monkeypatch):
 
     assert seen["proxy_headers"] is False
     assert seen["host"] == "0.0.0.0" and seen["port"] == 5555
+
+
+# --- `pulse health --slackbot` (the #pulse-query bot's heartbeat) -------------------------
+
+
+def test_slackbot_health_fresh_stale_missing(tmp_path):
+    state = StateManager(str(tmp_path / "s.db"))
+    run(state.init_db())
+
+    ok, reason = run(health.slackbot_health(state, now=NOW))
+    assert not ok and "pulse slackbot" in reason
+
+    run(health.record_heartbeat(state, now=NOW - timedelta(minutes=2), key=health.SLACKBOT_HEARTBEAT_KEY))
+    ok, reason = run(health.slackbot_health(state, now=NOW))
+    assert ok and "slackbot" in reason
+
+    run(health.record_heartbeat(state, now=NOW - timedelta(minutes=9), key=health.SLACKBOT_HEARTBEAT_KEY))
+    ok, reason = run(health.slackbot_health(state, now=NOW))
+    assert not ok and "stale" in reason
+    # The worker's stamp is separate.
+    assert run(state.get_setting(health.HEARTBEAT_KEY)) == ""
+
+
+def test_health_slackbot_cli(cli_db, monkeypatch, capsys):
+    run(cli_db.init_db())
+    monkeypatch.setattr(health, "utcnow", lambda: NOW)
+    assert _health(["--slackbot"]) == 1
+    run(health.record_heartbeat(cli_db, now=NOW - timedelta(minutes=1), key=health.SLACKBOT_HEARTBEAT_KEY))
+    assert _health(["--slackbot"]) == 0
+    assert "slackbot heartbeat" in capsys.readouterr().out

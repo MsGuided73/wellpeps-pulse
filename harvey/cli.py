@@ -1,5 +1,5 @@
 """WellPeps Pulse CLI: run, dashboard, status, health, ingest, usage, escalations,
-ack, user, brief, trends.
+ack, user, brief, trends, slackbot, slack-test.
 
 Installed as both `pulse` and `harvey` (same entry point).
 """
@@ -324,6 +324,8 @@ def cmd_health(args):
         try:
             await state.init_db()
             await health.check_database(state)
+            if args.slackbot:
+                return await health.slackbot_health(state, args.max_age_minutes)
             if not args.worker:
                 return True, f"database reachable ({state.backend})"
             return await health.worker_health(state, config, args.max_age_minutes)
@@ -383,7 +385,7 @@ def cmd_brief(args):
         await state.init_db()
         brief = await build_brief(state, Brain(state, models=config.usage.models), args.period,
                                   config=config, force=args.force,
-                                  notifier=SlackNotifier.from_config(config))
+                                  notifier=SlackNotifier.for_briefs(config))
         print()
         for line in brief_lines(brief):
             print(f"  {line}")
@@ -422,6 +424,32 @@ def cmd_trends(args):
         print()
 
     run_async(_trends())
+
+
+def cmd_slackbot(args):
+    """Run the read-only #pulse-query bot (Slack Socket Mode)."""
+    from harvey.slackbot.app import main
+
+    main()
+
+
+def cmd_slack_test(args):
+    """Send one TEST message to each configured webhook; print ok/fail per channel."""
+    from harvey.config import ConfigFileNotFoundError, PulseConfig, load_config
+    from harvey.notify.slack import send_test_messages
+
+    try:
+        config = load_config()
+    except ConfigFileNotFoundError:
+        config = PulseConfig()
+    results = run_async(send_test_messages(config))
+    print("\n  Slack webhook test")
+    print("  " + "=" * 52)
+    for label, outcome in results:
+        print(f"  {label:<34} {outcome}")
+    print()
+    sent = [outcome for _, outcome in results if outcome in ("ok", "failed")]
+    sys.exit(0 if sent and all(outcome == "ok" for outcome in sent) else 1)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -467,8 +495,11 @@ def build_parser() -> argparse.ArgumentParser:
     sub = subparsers.add_parser("health", help="Healthcheck: database (and worker heartbeat)")
     sub.add_argument("--worker", action="store_true",
                      help="Also require a recent heartbeat from `pulse run`")
+    sub.add_argument("--slackbot", action="store_true",
+                     help="Require a recent heartbeat from `pulse slackbot` instead")
     sub.add_argument("--max-age-minutes", type=int, default=None, metavar="N",
-                     help="Heartbeat age limit (default: 2 x max(heartbeat, urgent tick) + 10)")
+                     help="Heartbeat age limit (default: 2 x max(heartbeat, urgent tick) + 10; "
+                          "5 with --slackbot)")
     sub.set_defaults(func=cmd_health)
 
     sub = subparsers.add_parser("status", help="Show mention counts by status")
@@ -498,6 +529,13 @@ def build_parser() -> argparse.ArgumentParser:
     sub = subparsers.add_parser("trends", help="Print live Pulse trends (no Claude call)")
     sub.add_argument("--days", type=int, default=7, help="Window length in days (default: 7)")
     sub.set_defaults(func=cmd_trends)
+
+    sub = subparsers.add_parser("slackbot", help="Run the read-only #pulse-query Slack bot (Socket Mode)")
+    sub.set_defaults(func=cmd_slackbot)
+
+    sub = subparsers.add_parser("slack-test",
+                                help="Send a TEST message to the alerts and briefs webhooks")
+    sub.set_defaults(func=cmd_slack_test)
 
     sub = subparsers.add_parser("usage", help="Show Claude usage and quota")
     sub.add_argument("--days", type=int, default=30, help="Breakdown window (default: 30)")
