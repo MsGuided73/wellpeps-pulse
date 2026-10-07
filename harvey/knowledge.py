@@ -20,11 +20,22 @@ from urllib.parse import urlsplit
 import yaml
 from pydantic import BaseModel, ValidationError
 
-from harvey.models.mention import MAX_MENTION_TEXT_CHARS
+from harvey.models.mention import (
+    MAX_MENTION_TEXT_CHARS,
+    PROTOCOL_DECISIONS,
+    PROTOCOL_INTENTS,
+    PROTOCOL_NEEDS,
+    TRIAGE_SUBTYPES,
+    Category,
+)
 from harvey.models.knowledge import (
     Claim,
     ClaimsFile,
+    ClaimsPolicy,
+    CommunitiesFile,
+    CommunityEntry,
     CompetitorsFile,
+    EngagementGuideFile,
     ComplianceRulesFile,
     KeywordsFile,
     LinksFile,
@@ -84,8 +95,13 @@ def _compliance_rules(directory: Path) -> ComplianceRulesFile:
 
 
 @lru_cache(maxsize=None)
+def _claims_file(directory: Path) -> ClaimsFile:
+    return _load(directory, "claims.yaml", ClaimsFile)
+
+
+@lru_cache(maxsize=None)
 def _claims(directory: Path) -> tuple[Claim, ...]:
-    claims = tuple(_load(directory, "claims.yaml", ClaimsFile).claims)
+    claims = tuple(_claims_file(directory).claims)
     ids = [c.id for c in claims]
     dupes = sorted({i for i in ids if ids.count(i) > 1})
     if dupes:
@@ -238,8 +254,83 @@ def _reply_examples(directory: Path) -> ReplyExamplesFile:
     return data
 
 
+def _check_situations(data: EngagementGuideFile, directory: Path) -> None:
+    claims = {c.id: c for c in _claims(directory)}
+    categories = {c.value for c in Category} | {"*"}
+    subtypes = set(TRIAGE_SUBTYPES) | {"*", ""}
+    programs = {c.name for c in _products(directory).categories} | {"*"}
+    for sit in data.situations:
+        bad = sorted(set(sit.match.categories) - categories) + sorted(set(sit.match.subtypes) - subtypes)
+        if bad:
+            raise KnowledgeError(f"engagement_guide.yaml {sit.id}: unknown category/subtype {bad}")
+        unknown_programs = sorted(set(sit.approved_response_by_program) - programs)
+        if unknown_programs:
+            raise KnowledgeError(f"engagement_guide.yaml {sit.id}: unknown programs {unknown_programs}")
+        responses = [sit.approved_response, *sit.approved_response_by_program.values()]
+        refs = [r for r in (*responses, sit.disclosure_claim, *sit.preferred_claims) if r]
+        missing = [r for r in refs if r not in claims]
+        if missing:
+            raise KnowledgeError(f"engagement_guide.yaml {sit.id}: unknown claim ids {missing}")
+        for cid in (r for r in responses if r):
+            if claims[cid].influencer_only or claims[cid].has_placeholder:
+                raise KnowledgeError(f"engagement_guide.yaml {sit.id}: {cid} cannot be an approved response "
+                                     "(influencer-only or has a [slot])")
+    decisions = set(PROTOCOL_DECISIONS) | {"*", ""}
+    routes = {"*", "", "adverse_event", "privacy", "legal", "billing_fraud", "support"}
+    for sit in data.situations:
+        bad = sorted(set(sit.match.decisions) - decisions) + sorted(set(sit.match.routes) - routes)
+        if bad:
+            raise KnowledgeError(f"engagement_guide.yaml {sit.id}: unknown protocol decision/route {bad}")
+    sub_ok = set(TRIAGE_SUBTYPES)
+    stray = sorted(set(data.stop_rules.individual_advice_subtypes) - sub_ok)
+    if stray:
+        raise KnowledgeError(f"engagement_guide.yaml stop_rules: unknown subtypes {stray}")
+    proto = data.switching_protocol
+    stray = sorted((set(proto.scope_subtypes) | set(proto.clinical_subtypes)) - sub_ok)
+    if stray:
+        raise KnowledgeError(f"engagement_guide.yaml switching_protocol: unknown subtypes {stray}")
+    stray = sorted(set(proto.scope_intents) - set(PROTOCOL_INTENTS)) + sorted(set(proto.scope_needs)
+                                                                           - set(PROTOCOL_NEEDS))
+    if stray:
+        raise KnowledgeError(f"engagement_guide.yaml switching_protocol: unknown scope intents/needs {stray}")
+    if set(proto.needs) != set(PROTOCOL_NEEDS):
+        raise KnowledgeError("engagement_guide.yaml switching_protocol.needs must list exactly "
+                             f"{sorted(PROTOCOL_NEEDS)}")
+    missing = sorted({cid for need in proto.needs.values() for cid in (*need.direct, *need.partial)
+                      if cid not in claims})
+    if missing:
+        raise KnowledgeError(f"engagement_guide.yaml switching_protocol: unknown claim ids {missing}")
+    keys = {f.key for f in data.finalize}
+    dangling = sorted({c.finalize_key for c in claims.values() if c.finalize_key and c.finalize_key not in keys})
+    if dangling:
+        raise KnowledgeError(f"claims.yaml finalize_key not in engagement_guide.yaml finalize: {dangling}")
+
+
+@lru_cache(maxsize=None)
+def _engagement_guide(directory: Path) -> EngagementGuideFile:
+    data = _load(directory, "engagement_guide.yaml", EngagementGuideFile)
+    _check_situations(data, directory)
+    return data
+
+
+@lru_cache(maxsize=None)
+def _communities(directory: Path) -> tuple[CommunityEntry, ...]:
+    data = _load(directory, "communities.yaml", CommunitiesFile)
+    ids = [c.id for c in data.communities]
+    dupes = sorted({i for i in ids if ids.count(i) > 1})
+    if dupes:
+        raise KnowledgeError(f"duplicate community ids in communities.yaml: {dupes}")
+    if any(c.demo for c in data.communities):
+        from harvey.sandbox.demo_config import is_demo_config as _marker
+
+        if not _marker(directory):
+            raise KnowledgeError("communities.yaml: demo communities are allowed only in a DEMO config copy")
+    return tuple(data.communities)
+
+
 _CACHED = (
-    _competitors, _products, _keywords, _compliance_rules, _claims, _links, _reply_examples,
+    _competitors, _products, _keywords, _compliance_rules, _claims_file, _claims, _links, _reply_examples,
+    _engagement_guide, _communities,
     _competitor_lookup, _product_lookup, _urgent_patterns, _drug_lookup,
     _wellpeps_rx,
 )
@@ -278,10 +369,46 @@ def claims_by_id() -> dict[str, Claim]:
     return {c.id: c for c in claims()}
 
 
+def claims_policy() -> ClaimsPolicy:
+    return _claims_file(config_dir()).claims_policy
+
+
+def engagement_guide() -> EngagementGuideFile:
+    """WellPeps' rules of engagement, machine part (config/engagement_guide.yaml)."""
+    return _engagement_guide(config_dir())
+
+
+def communities() -> tuple[CommunityEntry, ...]:
+    """The community rules registry (config/communities.yaml)."""
+    return _communities(config_dir())
+
+
+def finalized_keys() -> frozenset[str]:
+    """FINALIZE items WellPeps has provided a value for."""
+    return engagement_guide().finalized_keys()
+
+
 def publishable_claim_ids(today: date | None = None) -> set[str]:
-    """Claims signed off by a named approver and not expired."""
+    """Claims that may be published: signed off by a named approver (or
+    verbatim from the Approved Messaging & Response Guide while
+    ``claims_policy.trust_approved_messaging_guide`` is on), not expired, and
+    with no unresolved FINALIZE item."""
     day = today or date.today()
-    return {c.id for c in claims() if c.is_publishable(day)}
+    trust = claims_policy().trust_approved_messaging_guide
+    done = finalized_keys()
+    return {c.id for c in claims() if c.is_publishable(day, trust_guide=trust, finalized=done)}
+
+
+def unresolved_finalize(claim_ids) -> list[tuple[str, str]]:
+    """(claim id, what is missing) for cited claims with an open FINALIZE item."""
+    by_id = claims_by_id()
+    done = finalized_keys()
+    out = []
+    for cid in claim_ids:
+        claim = by_id.get(cid)
+        if claim and claim.finalize and not (claim.finalize_key and claim.finalize_key in done):
+            out.append((cid, claim.finalize_missing))
+    return out
 
 
 def links() -> tuple[PublicLink, ...]:

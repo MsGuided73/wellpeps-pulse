@@ -189,8 +189,8 @@ function navCount(id, n, alert) {
 
 function can(permission) {
   const perms = {
-    viewer: ['view'], reviewer: ['view', 'review', 'ack'], clinical: ['view', 'ack_adverse'],
-    admin: ['view', 'review', 'ack', 'ack_adverse', 'admin'],
+    viewer: ['view'], reviewer: ['view', 'review', 'ack'], clinical: ['view', 'ack_adverse', 'approve_clinical'],
+    admin: ['view', 'review', 'ack', 'ack_adverse', 'approve_clinical', 'admin'],
   };
   return !!ME && (perms[ME.role] || []).includes(permission);
 }
@@ -366,7 +366,10 @@ async function loadReview(keepSelection) {
   ]);
   if (!waiting || !approved) { listEl.innerHTML = offlineState(); return; }
   const selectedId = keepSelection && reviewItems[reviewIndex] ? reviewItems[reviewIndex].id : null;
-  reviewItems = waiting.items.slice().reverse().concat(approved.items.slice().reverse());  // oldest first
+  // Waiting items: safety and incidents first, then unresolved gates, then the
+  // rest (Competitor/Switching Protocol §9), oldest first within each.
+  reviewItems = waiting.items.slice().reverse().sort((a, b) => queueRank(a) - queueRank(b))
+    .concat(approved.items.slice().reverse());
   navCount('nav-review', waiting.total, false);
   if (!reviewItems.length) {
     listEl.innerHTML = '';
@@ -385,11 +388,21 @@ async function loadReview(keepSelection) {
       '<div class="to">' + platformIcon(m.platform) + '<span>' + escHtml(label('platform', m.platform)) +
         (m.category ? ' · ' + escHtml(label('category', m.category)) : '') + '</span>' +
         (m.urgency === 'urgent' || m.urgency === 'high' ? toneBadge(label('urgency', m.urgency), m.urgency === 'urgent' ? 'bad' : 'waiting') : '') +
+        (m.opportunity_score !== null && m.opportunity_score !== undefined
+          ? toneBadge('Opportunity ' + m.opportunity_score + '/8', 'active') : '') +
       '</div>' +
       '<div class="sub">' + escHtml(truncate(m.title || m.text, 80)) + '</div></div>';
   });
   listEl.innerHTML = html;
   await selectReview(reviewIndex);
+}
+
+const SEVERE_CATEGORIES = ['adverse_event', 'legal_regulatory', 'privacy', 'billing_fraud'];
+
+function queueRank(m) {
+  if (m.protocol_route || SEVERE_CATEGORIES.includes(m.category)) return 0;
+  if (m.protocol_decision === 'clinical_caution' || m.protocol_decision === 'hold') return 1;
+  return 2;
 }
 
 async function selectReview(index) {
@@ -505,7 +518,7 @@ function renderReviewPane() {
     '<div class="subject">' + escHtml(m.title || truncate(m.text, 90)) + '</div>' + detailWhy(d) +
     '<div class="body">' + escHtml(m.text) + '</div>' +
     '<p class="post-link">' + extLink(m.url, isDemoPost(m.url) ? 'Open demo post ↗' : 'Open original ↗') + '</p>' +
-    triageTags(m, d.triage);
+    triageTags(m, d.triage) + engagementHtml(d);
 
   html += '<div class="desk-block"><div class="subhead">Draft reply' + (draft ? ' · v' + escHtml(String(draft.version)) +
       ' · ' + escHtml(draftAuthor(draft)) : '') + '</div>' +
@@ -525,7 +538,14 @@ function renderReviewPane() {
       '</div>';
   }
 
-  if (reviewer) {
+  const clinicalOnly = !reviewer && can('approve_clinical') && d.approval && d.approval.clinical_required;
+  if (clinicalOnly && inReview) {
+    html += '<div class="desk-actions"><button class="btn btn-primary" id="approve-btn" data-action="approve"' +
+      (blockers.length ? ' disabled' : '') + '>Approve (clinical)</button></div>';
+    if (blockers.length) {
+      html += '<ul class="blockers">' + blockers.map(b => '<li>Approve is blocked: ' + escHtml(b) + '</li>').join('') + '</ul>';
+    }
+  } else if (reviewer) {
     html += '<div class="desk-actions">';
     if (inReview) {
       html += '<button class="btn btn-secondary" data-action="save-edit">Save edit (re-check)</button>' +
@@ -552,6 +572,81 @@ function renderReviewPane() {
   html += '<div class="desk-block"><div class="subhead">Audit trail</div>' + timeline(d.audit) + '</div>';
   document.getElementById('review-pane').innerHTML = html;
   renderClaims();
+}
+
+// Rules of engagement (docs/RULES-OF-ENGAGEMENT.md): situation and template,
+// persona, community rules, the 80/20 share (a planning metric, never a gate),
+// clinical approval, FINALIZE items, the competitor / switching protocol's
+// decision, score and reasons, and whether an escalation really reached its owner.
+const PARTICIPATION = {
+  allowed: ['Brand replies allowed', 'good'], with_permission: ['Needs admin permission', 'waiting'],
+  prohibited: ['Brand replies prohibited', 'bad'], unknown: ['Community rules unverified', 'waiting'],
+  none: ['No community rules (platform rules apply)', 'idle'],
+};
+
+function engagementHtml(d) {
+  const e = d.engagement;
+  if (!e) return '';
+  const sit = e.situation || {};
+  const chips = [];
+  chips.push(tag('Situation', sit.label));
+  if (sit.template) chips.push(tag('Template', sit.template + (sit.template_name ? ' — ' + sit.template_name : '')));
+  if (e.persona) chips.push(tag('Speaking as', e.persona.persona === 'identified_employee'
+    ? 'identified employee (' + e.persona.display_name + ')' : 'official account'));
+  const c = e.community || {};
+  const part = PARTICIPATION[c.participation] || [c.participation || 'unknown', 'idle'];
+  chips.push(toneBadge(part[0] + (c.id ? ' · ' + c.name : ''), part[1]));
+  if (c.links_allowed === false) chips.push(toneBadge('No links here', 'bad'));
+  if (e.mix && e.mix.replies) {
+    const pct = Math.round(e.mix.share * 100);
+    chips.push('<span class="tag" title="Planning metric over the last ' + escHtml(String(e.mix.window)) +
+      ' WellPeps replies here; never a per-reply quota (Protocol §1)"><span class="k">80/20</span>' +
+      escHtml(String(e.mix.promotional)) + ' of ' + escHtml(String(e.mix.replies)) + ' promotional (' + escHtml(String(pct)) +
+      '%)' + (e.mix.over ? ' · over 20%' : '') + '</span>');
+  }
+  if (e.draft_kind) chips.push(tag('This draft', e.draft_kind === 'promotion'
+    ? 'promotion (' + (e.promotional_elements || []).join(', ') + ')' : 'education'));
+  if (e.clinical_approval_required) chips.push(toneBadge('Clinical approval required', 'bad'));
+  let html = '<div class="desk-block"><div class="subhead">Rules of engagement</div><div class="tag-row">' +
+    chips.join('') + '</div>';
+  if ((e.finalize || []).length) {
+    html += '<ul class="hit-list">' + e.finalize.map(f => '<li>FINALIZE (' + escHtml(f.claim_id) + '): ' +
+      escHtml(f.missing) + '</li>').join('') + '</ul>';
+  }
+  if (e.handoff) {
+    html += '<p class="' + (e.handoff.paged || e.handoff.acked ? 'muted' : 'blockers') + '">Escalation handoff: ' +
+      escHtml(e.handoff.status) + '</p>';
+  }
+  html += protocolHtml(e.protocol);
+  return html + '</div>';
+}
+
+function protocolHtml(p) {
+  if (!p) return '';
+  const tone = {appropriate_alternative: 'good', educational_only: 'active', clinical_caution: 'waiting',
+    escalate: 'bad', monitor_only: 'idle', hold: 'waiting', do_not_engage: 'bad'}[p.decision] || 'idle';
+  const opp = p.opportunity;
+  let html = '<div class="protocol"><div class="tag-row">' + toneBadge('Protocol: ' + (p.label || p.decision), tone);
+  if (opp) {
+    html += '<span class="tag" title="alternative intent ' + escHtml(String(opp.alternative_intent)) + ', need clarity ' +
+      escHtml(String(opp.need_clarity)) + ', approved capability fit ' + escHtml(String(opp.capability_fit)) +
+      ', useful contribution ' + escHtml(String(opp.useful_contribution)) + ' (each 0-2)"><span class="k">Opportunity</span>' +
+      escHtml(String(opp.total)) + '/8 · ' + escHtml(String(opp.band || '')) + '</span>';
+  } else {
+    html += tag('Opportunity', 'not scored (gated)');
+  }
+  if (p.need_label) html += tag('Need', p.need_label);
+  if (p.brand_mode) html += tag('WellPeps presence', String(p.brand_mode).replace(/_/g, ' '));
+  if (p.required_review) html += tag('Review', p.required_review);
+  const risks = p.risks || {};
+  if (risks.competitor_claim_risk) html += tag('Competitor-claim risk', risks.competitor_claim_risk);
+  if (risks.clinical_flag) html += toneBadge('Clinical flag', 'waiting');
+  if (risks.privacy_flag) html += toneBadge('Privacy flag', 'waiting');
+  html += '</div>';
+  const reasons = (p.rationale || []).concat((p.blockers || []).map(b => 'Blocker: ' + b));
+  if (reasons.length) html += '<ul class="hit-list">' + reasons.map(r => '<li>' + escHtml(r) + '</li>').join('') + '</ul>';
+  if (p.brand_limits) html += '<p class="muted">' + escHtml(p.brand_limits) + '</p>';
+  return html + '</div>';
 }
 
 // The registry link the draft carries: label, live / not-live badge, UTM tag.

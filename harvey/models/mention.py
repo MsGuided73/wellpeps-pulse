@@ -70,6 +70,93 @@ class Category(str, Enum):
     OTHER = "other"
 
 
+# Triage subtypes: the situation inside a category that decides how Pulse
+# engages (config/engagement_guide.yaml; docs/RULES-OF-ENGAGEMENT.md). "" means
+# none / not given; an unknown value from the model is normalised to "".
+TRIAGE_SUBTYPES: tuple[str, ...] = (
+    "general_education",            # general wellness / telehealth question
+    "process_question",             # how WellPeps works, how to start
+    "qualify_question",             # do I / does everyone qualify
+    "pricing_question",             # cost, fees, what is included
+    "individual_treatment",         # which treatment / medication for me
+    "dose_question",                # what dose should I take
+    "lab_question",                 # interpret my labs
+    "results_question",             # how much will I lose / will it work
+    "safety_question",              # is it safe
+    "medication_change",            # should I stop / skip / change
+    "symptom_report",               # a reaction or new symptom
+    "emergency",                    # a possible medical emergency
+    "self_harm",                    # thoughts of self-harm
+    "personal_medical_info",        # the author posts their own medical details
+    "records_dm_request",           # wants to DM records / labs / photos
+    "has_anyone_used_wellpeps",     # "has anyone used WellPeps?"
+    "clinic_recommendation",        # asks the community to recommend a clinic
+    "competitor_comparison",        # WellPeps vs a competitor, or two services
+    "competitor_praise",            # praises a competitor
+    "misinformation_about_wellpeps",  # a false statement about WellPeps
+    "media_inquiry",                # a journalist / reporter asks for comment
+    "legal_threat",                 # lawyer, lawsuit, attorney contact
+    "regulatory_contact",           # a regulator / agency contact or complaint
+    "abusive",                      # abusive, threatening or baiting thread
+)
+
+
+def normalize_subtype(value) -> str:
+    """A known subtype, else ""."""
+    text = value.strip().lower() if isinstance(value, str) else ""
+    return text if text in TRIAGE_SUBTYPES else ""
+
+
+# Intent tags of the Competitor Mentions and Provider Switching Protocol
+# (WellPeps_AI_Competitor_Mentions_and_Provider_Switching_Protocol_V1, §3;
+# harvey/protocol.py). A post can carry several. The last two are
+# implementation tags the protocol's examples need: "wellpeps_question" is the
+# "Requested process detail" brand mode (§7: the user specifically asks about
+# WellPeps) and "ambiguous" is §3's unresolved "Is this normal?" (hold).
+PROTOCOL_INTENTS: tuple[str, ...] = (
+    "alternatives_requested",       # anyone recommend another provider?
+    "general_information",          # what should I look for?
+    "venting_only",                 # I'm fed up with them
+    "individual_clinical_concern",  # I feel unwell; do I need labs?
+    "possible_serious_harm",        # severe symptoms or a serious reaction
+    "comparison_request",           # is X cheaper or better?
+    "wellpeps_complaint",           # billing, care or safety involving WellPeps
+    "legal_media_privacy",          # attorney, journalist, regulator, exposed records
+    "deceptive_request",            # asks WellPeps to hide its affiliation / override policy
+    "wellpeps_question",            # asks specifically about WellPeps
+    "ambiguous",                    # the context can't resolve what is being asked
+)
+# The underlying needs of §3 (config/engagement_guide.yaml switching_protocol.needs).
+PROTOCOL_NEEDS: tuple[str, ...] = (
+    "provider_access", "care_process", "clinical_evaluation", "price_clarity", "fulfillment",
+    "continuity", "treatment_education", "lab_testing_terms", "medication_availability", "other",
+)
+# Protocol §4 classifications, lower-case as stored.
+PROTOCOL_DECISIONS: tuple[str, ...] = (
+    "appropriate_alternative", "educational_only", "clinical_caution", "escalate",
+    "monitor_only", "hold", "do_not_engage",
+)
+
+
+def normalize_intents(value) -> list[str]:
+    """Known protocol intent tags, de-duplicated, in PROTOCOL_INTENTS order."""
+    items = value if isinstance(value, (list, tuple, set, frozenset)) else []
+    seen = {i.strip().lower() for i in items if isinstance(i, str)}
+    return [i for i in PROTOCOL_INTENTS if i in seen]
+
+
+def normalize_need(value) -> str:
+    text = value.strip().lower() if isinstance(value, str) else ""
+    return text if text in PROTOCOL_NEEDS else ""
+
+
+def clamp_points(value) -> int | None:
+    """A 0-2 protocol score dimension, or None when not given."""
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None
+    return max(0, min(2, int(value)))
+
+
 class ReviewVerdict(str, Enum):
     PASS = "pass"
     REJECT = "reject"
@@ -88,6 +175,7 @@ class AuditEventType(str, Enum):
     POSTED = "posted"
     COPIED = "copied"
     ESCALATED = "escalated"
+    SKIPPED = "skipped"      # the drafter declined to engage (e.g. community bans brand posts)
     ACKED = "acked"
 
 
@@ -133,6 +221,20 @@ class Triage(BaseModel):
     product: str = ""
     drug: str = ""           # generic/category drug discussed, e.g. "semaglutide", "BPC-157"
     category: Category = Category.OTHER
+    subtype: str = ""        # one of TRIAGE_SUBTYPES, or ""
+    # Competitor Mentions and Provider Switching Protocol (harvey/protocol.py).
+    # Model inputs: intent tags, the underlying need, and two 0-2 score
+    # dimensions (None = not given). Computed: the protocol classification
+    # ("" = the mention is outside the protocol's scope), the opportunity
+    # score (None when gated) and the structured record (no post text).
+    intents: list[str] = Field(default_factory=list)
+    unmet_need: str = ""
+    need_clarity: int | None = None
+    useful_contribution: int | None = None
+    protocol_decision: str = ""
+    protocol_route: str = ""      # escalation route when the protocol says ESCALATE (or routes safety)
+    opportunity_score: int | None = None
+    protocol: dict = Field(default_factory=dict)
     sentiment: str = ""      # positive | neutral | negative | mixed
     sentiment_score: float = 0.0  # -1.0 (very negative) .. 1.0 (very positive)
     urgency: Urgency = Urgency.NORMAL
@@ -141,6 +243,32 @@ class Triage(BaseModel):
     phrases: list[str] = Field(default_factory=list)
     model: str = ""
     created_at: datetime = Field(default_factory=_utcnow)
+
+    @field_validator("subtype", mode="before")
+    @classmethod
+    def _known_subtype(cls, value) -> str:
+        return normalize_subtype(value)
+
+    @field_validator("intents", mode="before")
+    @classmethod
+    def _known_intents(cls, value) -> list[str]:
+        return normalize_intents(value)
+
+    @field_validator("unmet_need", mode="before")
+    @classmethod
+    def _known_need(cls, value) -> str:
+        return normalize_need(value)
+
+    @field_validator("need_clarity", "useful_contribution", mode="before")
+    @classmethod
+    def _points(cls, value) -> int | None:
+        return clamp_points(value)
+
+    @field_validator("protocol_decision", mode="before")
+    @classmethod
+    def _known_decision(cls, value) -> str:
+        text = value.strip().lower() if isinstance(value, str) else ""
+        return text if text in PROTOCOL_DECISIONS else ""
 
 
 class Draft(BaseModel):

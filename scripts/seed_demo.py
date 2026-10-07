@@ -146,6 +146,34 @@ def _phrases(text: str) -> list[str]:
 
 _JITTER = random.Random(21)  # deterministic spread around each rule's score
 
+# DEMO triage inputs for the competitor / switching protocol (harvey/protocol.py):
+# keyword guesses standing in for the model's intent tags and need.
+_INTENTS = (
+    (r"\b(?:anyone (?:recommend|have a provider)|alternatives?|switch(?:ing)? (?:from|providers?)|"
+     r"looking for (?:somewhere|a (?:new |different )?provider)|suggestions\?)", "alternatives_requested"),
+    (r"\b(?:cheaper|better than|vs\.?|compared? to)\b", "comparison_request"),
+    (r"\b(?:just (?:needed|wanted) to vent|so frustrating|fed up|sick of)\b", "venting_only"),
+    (r"\b(?:severe|emergency|hospital|ER\b|can.t keep (?:water|food) down|chest pain)", "possible_serious_harm"),
+    (r"\bwellpeps\b", "wellpeps_question"),
+)
+_NEEDS = (
+    (r"\b(?:respond|responding|answer|messages?|follow[- ]?up|ghost)", "provider_access"),
+    (r"\b(?:price|cost|charged|billing|cancel)", "price_clarity"),
+    (r"\b(?:shipping|shipment|late|delivery)", "fulfillment"),
+)
+
+
+def _protocol_inputs(text: str) -> dict:
+    intents = [tag for pattern, tag in _INTENTS if re.search(pattern, text, re.I)]
+    if "wellpeps_question" in intents and "?" not in text:
+        intents.remove("wellpeps_question")
+    need = next((n for pattern, n in _NEEDS if re.search(pattern, text, re.I)), None)
+    if need is None and "alternatives_requested" in intents:
+        need = "continuity"
+    venting = intents == ["venting_only"]
+    return {"intents": intents, "unmet_need": need or "other", "need_clarity": 2 if need else 1,
+            "useful_contribution": 0 if venting else (2 if "alternatives_requested" in intents else 1)}
+
 
 def _triage_answer(text: str) -> dict:
     category, urgency, subject_type, reply = "other", "normal", "", False
@@ -172,6 +200,7 @@ def _triage_answer(text: str) -> dict:
         "competitor": competitor, "product": None, "drug": _drug(text), "category": category,
         "sentiment": score, "sentiment_label": label,
         "urgency": urgency, "urgency_reason": BANNER, "reply_appropriate": reply, "phrases": _phrases(text),
+        **_protocol_inputs(text),
     }
 
 

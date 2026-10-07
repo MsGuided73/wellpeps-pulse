@@ -62,7 +62,10 @@ def test_safety_net_forces_urgent_and_no_reply_for_severe_categories(category, u
     assert out.reply_appropriate is False
     assert out.urgency_reason.startswith("severe_category")
     assert "model says so" in out.urgency_reason
-    assert route_status(out) is MentionStatus.ESCALATED
+    # An adverse event keeps ``triaged`` for the guide's approved boundary reply
+    # (drafted for a clinical approver) and is paged all the same.
+    expected = MentionStatus.TRIAGED if category == "adverse_event" else MentionStatus.ESCALATED
+    assert route_status(out) is expected
 
 
 @pytest.mark.parametrize("category", sorted(c.value for c in SEVERE_CATEGORIES))
@@ -70,7 +73,8 @@ def test_route_status_escalates_any_severe_kind_even_if_not_urgent(category):
     triage = Triage(mention_id=1, category=Category(category), urgency=Urgency.NORMAL)
 
     assert escalation_kind(triage) in SEVERE_KINDS
-    assert route_status(triage) is MentionStatus.ESCALATED
+    expected = MentionStatus.TRIAGED if category == "adverse_event" else MentionStatus.ESCALATED
+    assert route_status(triage) is expected
 
 
 def test_viral_negative_stays_triaged():
@@ -107,7 +111,12 @@ async def test_batch_severe_category_without_keyword_is_escalated_with_row(state
     report = await triage_batch(state, Triager(brain), escalate=escalate)
 
     assert report.escalated == 1
-    assert (await state.get_mention(mid)).status is MentionStatus.ESCALATED
+    # Rules of engagement: an adverse event or billing complaint about
+    # WellPeps (subject wellpeps here) is paged AND stays triaged so the
+    # guide's approved boundary reply is drafted; legal and privacy leave the
+    # reply queue.
+    expected = MentionStatus.TRIAGED if kind in ("adverse_event", "billing_fraud") else MentionStatus.ESCALATED
+    assert (await state.get_mention(mid)).status is expected
     esc = await state.get_open_escalation(mid)
     assert esc is not None and esc.kind == kind
     saved = await state.get_triage(mid)

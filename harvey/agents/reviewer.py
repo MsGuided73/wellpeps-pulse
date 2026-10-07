@@ -58,8 +58,26 @@ def _claims_block(claims: list[Claim]) -> str:
     return "\n".join(f"- [{c.id}] {c.text}" for c in claims) or "(none: the draft cites no claims)"
 
 
-def build_prompt(reply: str, platform: str, mention: Mention, claims: list[Claim]) -> str:
+def situation_line(guidance=None) -> str:
+    """The rules-of-engagement situation for the reviewer (from config only)."""
+    if guidance is None:
+        return "not classified (apply every check)"
+    template = f"; Template {guidance.template} ({guidance.template_structure})" if guidance.template else ""
+    limits = []
+    if not guidance.allow_link:
+        limits.append(f"no link allowed ({guidance.link_note})")
+    if guidance.education_only:
+        limits.append(f"education only ({guidance.promotion_note})")
+    if getattr(guidance, "protocol_label", ""):
+        limits.append(f"competitor/switching protocol {guidance.protocol_label}; WellPeps presence "
+                      f"{guidance.brand_mode.replace('_', ' ')} ({guidance.brand_limits})")
+    extra = f"; limits: {'; '.join(limits)}" if limits else ""
+    return f"{guidance.label}{template}; required opening: \"{guidance.disclosure}\"{extra}"
+
+
+def build_prompt(reply: str, platform: str, mention: Mention, claims: list[Claim], guidance=None) -> str:
     return prompting.render(PROMPT_PATH, {
+        "situation": situation_line(guidance),
         "rules": RULES_PATH.read_text(encoding="utf-8").strip(),
         "claims": _claims_block(claims),
         "platform": platform,
@@ -95,9 +113,10 @@ class Reviewer:
         except ValidationError as exc:
             return None, f"schema error: {exc.error_count()} invalid field(s)"
 
-    async def review(self, reply: str, platform: str, mention: Mention, claims: list[Claim]) -> ReviewResult:
+    async def review(self, reply: str, platform: str, mention: Mention, claims: list[Claim],
+                     guidance=None) -> ReviewResult:
         model = _model_name(self.brain, AGENT, TASK)
-        prompt = build_prompt(reply, platform, mention, claims)
+        prompt = build_prompt(reply, platform, mention, claims, guidance)
         for attempt in range(1, self.max_attempts + 1):
             answer, problem = await self._ask(prompt)
             if answer is not None:

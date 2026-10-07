@@ -45,7 +45,7 @@ class FakeReviewer:
         self.verdict = verdict
         self.calls = []
 
-    async def review(self, reply, platform, mention, claims):
+    async def review(self, reply, platform, mention, claims, guidance=None):
         self.calls.append(reply)
         return ReviewResult(verdict=self.verdict,
                             reasons=[{"rule_id": "R1", "explanation": "fake"}], model="fake")

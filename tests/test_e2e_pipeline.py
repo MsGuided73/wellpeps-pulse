@@ -32,10 +32,15 @@ FRAUD = "Two unauthorized charges"
 VIRAL = "Do NOT sign up for WellPeps"
 CLEAN_Q = "Is WellPeps legit?"            # drafted cleanly, reviewer passes
 HYPE_Q = "anyone tried compounded tirzepatide"  # draft says "clinically proven"
-NOCLAIM_Q = "Switching from Henry Meds"   # draft cites no claim ids
+SWITCH_Q = "Switching from Henry Meds"    # competitor switching in r/Mounjaro (rules unknown): HOLD
 REJECT_Q = "daily tadalafil through an online service"  # reviewer rejects
 SEVERE = {ADVERSE: "adverse_event", LEGAL: "legal", PRIVACY: "privacy", FRAUD: "billing_fraud"}
-DRAFTED = {CLEAN_Q, HYPE_Q, NOCLAIM_Q, REJECT_Q}
+# Rules of engagement: an adverse event and a WellPeps billing complaint keep
+# the guide's approved boundary reply (drafted for a human, no model call) next
+# to their escalation; legal and privacy get no public reply.
+BOUNDARY = {ADVERSE: "CLM-AMG-10-REACTION", FRAUD: "CLM-AMG-09-BILLING", VIRAL: "CLM-AMG-APPX-COMPLAINT"}
+ESCALATED_ONLY = {LEGAL, PRIVACY}
+DRAFTED = {CLEAN_Q, HYPE_Q, REJECT_Q, *BOUNDARY}
 
 CLEAN_REPLY = (
     "Disclosure: I work with WellPeps, so I am not neutral. A few things worth checking with any "
@@ -59,8 +64,10 @@ def _triage_brain() -> FakeBrain:
         CLEAN_Q: [_answer(category="question", urgency="normal", sentiment=0.0, sentiment_label="neutral")],
         HYPE_Q: [_answer(category="purchase_intent", subject_type="category", urgency="normal",
                          product="compounded tirzepatide", sentiment=0.0, sentiment_label="neutral")],
-        NOCLAIM_Q: [_answer(category="purchase_intent", subject_type="competitor", competitor="Henry Meds",
-                            urgency="normal", sentiment=-0.2, sentiment_label="negative")],
+        SWITCH_Q: [_answer(category="purchase_intent", subject_type="competitor", competitor="Henry Meds",
+                           urgency="normal", sentiment=-0.2, sentiment_label="negative",
+                           intents=["alternatives_requested"], unmet_need="provider_access",
+                           need_clarity=2, useful_contribution=2)],
         REJECT_Q: [_answer(category="question", urgency="normal", sentiment=0.0, sentiment_label="neutral")],
         # Everything else: relevant chatter the team files but doesn't reply to.
         "": [_answer(category="other", urgency="normal", subject_type="competitor", **no)],
@@ -74,8 +81,6 @@ def _drafter_brain() -> FakeBrain:
         HYPE_Q: [{"reply": "Compounded options through licensed providers are clinically proven.",
                   "claim_ids": ["CLM-R15-COMPOUNDED-DISCLOSURE"], "rationale": "x",
                   "needs_human_reason": None}],
-        NOCLAIM_Q: [{"reply": "Happy to share what to look for in a provider.", "claim_ids": [],
-                     "rationale": "x", "needs_human_reason": None}],
         REJECT_Q: [{"reply": CLEAN_REPLY, "claim_ids": CLEAN_IDS, "rationale": "education",
                     "needs_human_reason": None}],
     }, model="sonnet")
@@ -147,9 +152,8 @@ async def test_full_pipeline_on_the_sample_fixture(state):
     mentions = await _by_marker(state)
 
     # Statuses
-    for marker in SEVERE:
+    for marker in ESCALATED_ONLY:
         assert _find(mentions, marker).status is MentionStatus.ESCALATED, marker
-    assert _find(mentions, VIRAL).status is MentionStatus.TRIAGED
     for marker in DRAFTED:
         assert _find(mentions, marker).status is MentionStatus.IN_REVIEW, marker
     assert _find(mentions, "U10 squad").status is MentionStatus.DROPPED
@@ -181,22 +185,32 @@ async def test_full_pipeline_on_the_sample_fixture(state):
 
     # Drafts: tiers and verdicts
     clean = await state.get_latest_draft(_find(mentions, CLEAN_Q).id)
-    assert (clean.tier, clean.review_verdict, clean.claim_ids) == ("green", ReviewVerdict.PASS, CLEAN_IDS)
+    # r/Semaglutide's rules are not verified yet (config/communities.yaml), so
+    # the only finding is the yellow "community rules unverified" (R44).
+    assert (clean.tier, clean.review_verdict, clean.claim_ids) == ("yellow", ReviewVerdict.PASS, CLEAN_IDS)
+    assert all(h.startswith("R44") for h in clean.filter_hits), clean.filter_hits
     hype = await state.get_latest_draft(_find(mentions, HYPE_Q).id)
     assert (hype.tier, hype.review_verdict) == ("red", ReviewVerdict.REJECT)
     assert any("R14" in h for h in hype.filter_hits)
-    noclaim = await state.get_latest_draft(_find(mentions, NOCLAIM_Q).id)
-    assert (noclaim.tier, noclaim.review_verdict) == ("red", ReviewVerdict.REJECT)
-    assert any("CLAIMS" in h for h in noclaim.filter_hits)
+    for marker, claim in BOUNDARY.items():
+        boundary = await state.get_latest_draft(_find(mentions, marker).id)
+        assert boundary.model == "approved-response" and claim in boundary.claim_ids, marker
+        assert boundary.review_verdict is ReviewVerdict.NEEDS_HUMAN and boundary.tier != "red", marker
+    # Competitor switching in a community whose rules are unknown: the
+    # protocol HOLDs it (no draft), it is not paged, and nothing is lost.
+    switch = _find(mentions, SWITCH_Q)
+    assert switch.status is MentionStatus.TRIAGED
+    assert (await state.get_triage(switch.id)).protocol_decision == "hold"
+    assert await state.get_latest_draft(switch.id) is None
     rejected = await state.get_latest_draft(_find(mentions, REJECT_Q).id)
-    assert (rejected.tier, rejected.review_verdict) == ("green", ReviewVerdict.REJECT)
+    assert (rejected.tier in ("green", "yellow")) and rejected.review_verdict is ReviewVerdict.REJECT
     assert rejected.review_reasons == ["R5: reply adds nothing to a medication-specific thread"]
 
     # Reviewer only saw the drafts that passed the filter
     reviewed_texts = " ".join(c["prompt"] for c in reviewer_brain.calls)
     assert len(reviewer_brain.calls) == 2
     assert "licensed providers are clinically proven" not in reviewed_texts
-    assert "Happy to share what to look for" not in reviewed_texts
+    assert "I can't assess symptoms" not in reviewed_texts      # approved responses skip the model reviewer
 
     # No drafts for anything else
     for text, mention in mentions.items():
@@ -208,9 +222,13 @@ async def test_full_pipeline_on_the_sample_fixture(state):
     for text, mention in mentions.items():
         events = [e.event for e in await state.list_audit(mention.id)]
         assert events[:2] == [E.COLLECTED, E.TRIAGED], text
-        if mention.id in by_mention:
+        if mention.id in by_mention and any(marker in text for marker in BOUNDARY):
+            # Paged, then the approved boundary reply (filtered, never model-reviewed).
+            assert events[:3] == [E.COLLECTED, E.TRIAGED, E.ESCALATED], text
+            assert E.DRAFTED in events[3:] and E.FILTERED in events[3:], text
+        elif mention.id in by_mention:
             assert events == [E.COLLECTED, E.TRIAGED, E.ESCALATED], text
-        elif any(marker in text for marker in (HYPE_Q, NOCLAIM_Q)):
+        elif any(marker in text for marker in (HYPE_Q,)):
             # Red first draft -> one redraft (the fake repeats itself) -> still red.
             assert events == [E.COLLECTED, E.TRIAGED, E.DRAFTED, E.FILTERED,
                               E.DRAFTED, E.FILTERED, E.REVIEWED], text

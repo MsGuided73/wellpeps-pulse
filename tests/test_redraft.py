@@ -110,7 +110,7 @@ class SeqDrafter:
         self.feedback: list = []
         self.max_calls: list = []
 
-    async def draft(self, mention, triage, feedback=None, max_calls=None):
+    async def draft(self, mention, triage, feedback=None, max_calls=None, guidance=None):
         self.feedback.append(feedback)
         self.max_calls.append(max_calls)
         return self.proposals.pop(0)

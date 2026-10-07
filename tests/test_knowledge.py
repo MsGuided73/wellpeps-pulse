@@ -12,7 +12,7 @@ from harvey.paths import PROJECT_ROOT
 
 CONFIG_DIR = PROJECT_ROOT / "config"
 YAML_FILES = ["competitors.yaml", "products.yaml", "keywords.yaml", "compliance_rules.yaml", "claims.yaml",
-              "links.yaml", "reply_examples.yaml"]
+              "links.yaml", "reply_examples.yaml", "engagement_guide.yaml", "communities.yaml"]
 
 # --- Leak guard ------------------------------------------------------------
 # products.md in the registry holds internal cost data from the pricing
@@ -335,7 +335,9 @@ def test_compliance_rules_shape():
     assert len(rules.prohibited) >= 30
     assert all(re.fullmatch(r"R\d{1,2}", r.id) for r in rules.prohibited)
     assert rules.patient_confirmation and rules.yellow
-    assert rules.toggles.forbid_medication_names_in_replies is True
+    # R38's blanket ban is superseded by the guidelines' general-education rule
+    # (docs/RULES-OF-ENGAGEMENT.md "Superseded earlier rules"): names are yellow.
+    assert rules.toggles.forbid_medication_names_in_replies is False
     assert rules.toggles.allow_certification_claims is False
     assert rules.limits.max_links == 1
     assert rules.limits.max_hashtags_for("reddit") == 0
@@ -345,30 +347,86 @@ def test_compliance_rules_shape():
     assert rules.limits.max_chars_for("tiktok") == 1000
 
 
-def test_claims_seeded_all_pending():
+def test_claims_seeded_pending_except_verbatim_guide_wording():
+    from harvey.models.knowledge import GUIDE_APPROVER, LIVE_REFERENCE_APPROVER
+
     claims = knowledge.claims()
-    assert 5 <= len(claims) <= 40
-    assert all(c.approved_by == "PENDING" and c.approved_at is None for c in claims)
-    # Each claim cites its source: the rules registry, or the website source files.
+    assert 5 <= len(claims) <= 120
+    guide = [c for c in claims if c.guide]
+    others = [c for c in claims if not c.guide]
+    assert guide and others
+    # Our own wording stays PENDING until compliance signs it off.
+    assert all(c.approved_by == "PENDING" and c.approved_at is None for c in others)
     assert all(c.source.startswith("reply-compliance-rules.md R") or "wellpeps-site/src/" in c.source
-               for c in claims)
+               for c in others)
+    # Guide wording is WellPeps' approved messaging, cited by section.
+    amg = [c for c in guide if c.id.startswith("CLM-AMG-")]
+    live = [c for c in guide if c.id.startswith("CLM-LR-")]
+    assert amg and live and len(amg) + len(live) == len(guide)
+    assert all(c.approved_by == GUIDE_APPROVER for c in amg)
+    assert all(re.match(r"Approved Messaging & Response Guide v1\.0 (§\d+|Appendix A)", c.source) for c in amg)
+    # Live Reference items marked APPROVED only, cited by section.
+    assert all(c.approved_by == LIVE_REFERENCE_APPROVER for c in live)
+    assert all(re.match(r"Approved Messaging Live Reference v1\.0 §\d+", c.source) for c in live)
     assert set(knowledge.claims_by_id()) == {c.id for c in claims}
 
 
-def test_publishable_claim_ids_empty_while_pending():
-    assert knowledge.publishable_claim_ids() == set()
+def _guide_publishable() -> set[str]:
+    return {c.id for c in knowledge.claims() if c.guide and not c.finalize}
 
 
-def test_publishable_claim_ids_respects_approval_and_expiry(tmp_path, monkeypatch):
+def test_publishable_claim_ids_are_the_finalized_guide_claims_while_trusted():
+    assert knowledge.claims_policy().trust_approved_messaging_guide is True
+    assert knowledge.publishable_claim_ids() == _guide_publishable()
+    assert "CLM-AMG-04-WORK-WITH" in knowledge.publishable_claim_ids()
+    # FINALIZE items (support channel, care routing, slots) are never publishable.
+    assert "CLM-AMG-09-COMPLAINT" not in knowledge.publishable_claim_ids()
+    assert "CLM-AMG-13-MISINFO" not in knowledge.publishable_claim_ids()
+
+
+def _copy_config(tmp_path, monkeypatch, edit) -> None:
     for name in YAML_FILES:
         shutil.copy(CONFIG_DIR / name, tmp_path / name)
     data = yaml.safe_load((tmp_path / "claims.yaml").read_text(encoding="utf-8"))
-    a, b, c = data["claims"][:3]
-    a.update(approved_by="Dr. Compliance", approved_at="2026-09-01")
-    b.update(approved_by="Dr. Compliance", approved_at="2026-01-01", expires="2026-02-01")
-    c.update(approved_by="Dr. Compliance", approved_at="2026-09-01", expires="2099-01-01")
-    (tmp_path / "claims.yaml").write_text(yaml.safe_dump(data), encoding="utf-8")
+    edit(data)
+    (tmp_path / "claims.yaml").write_text(yaml.safe_dump(data, allow_unicode=True), encoding="utf-8")
     monkeypatch.setenv("PULSE_CONFIG_DIR", str(tmp_path))
     knowledge.reload()
 
-    assert knowledge.publishable_claim_ids() == {a["id"], c["id"]}
+
+def test_trust_toggle_off_makes_every_guide_claim_pending(tmp_path, monkeypatch):
+    _copy_config(tmp_path, monkeypatch,
+                 lambda d: d["claims_policy"].update(trust_approved_messaging_guide=False))
+    assert knowledge.publishable_claim_ids() == set()
+
+
+def test_a_finalize_value_makes_its_guide_claims_publishable(tmp_path, monkeypatch):
+    for name in YAML_FILES:
+        shutil.copy(CONFIG_DIR / name, tmp_path / name)
+    guide = yaml.safe_load((tmp_path / "engagement_guide.yaml").read_text(encoding="utf-8"))
+    for item in guide["finalize"]:
+        if item["key"] == "support_channel":
+            item["value"] = "Support form on the WellPeps website (contact page)"
+    (tmp_path / "engagement_guide.yaml").write_text(yaml.safe_dump(guide, allow_unicode=True), encoding="utf-8")
+    monkeypatch.setenv("PULSE_CONFIG_DIR", str(tmp_path))
+    knowledge.reload()
+    publishable = knowledge.publishable_claim_ids()
+    assert {"CLM-AMG-09-COMPLAINT", "CLM-AMG-09-BILLING", "CLM-AMG-APPX-COMPLAINT"} <= publishable
+    assert "CLM-AMG-08-POSTED-DETAILS" not in publishable          # care_routing still open
+    assert knowledge.unresolved_finalize(["CLM-AMG-09-BILLING", "CLM-AMG-08-DM-RECORDS"]) == [
+        ("CLM-AMG-08-DM-RECORDS", knowledge.claims_by_id()["CLM-AMG-08-DM-RECORDS"].finalize_missing)]
+
+
+def test_publishable_claim_ids_respects_approval_and_expiry(tmp_path, monkeypatch):
+    holder = {}
+
+    def edit(data):
+        a, b, c = data["claims"][:3]
+        a.update(approved_by="Dr. Compliance", approved_at="2026-09-01")
+        b.update(approved_by="Dr. Compliance", approved_at="2026-01-01", expires="2026-02-01")
+        c.update(approved_by="Dr. Compliance", approved_at="2026-09-01", expires="2099-01-01")
+        holder.update(a=a, c=c)
+
+    _copy_config(tmp_path, monkeypatch, edit)
+    a, c = holder["a"], holder["c"]
+    assert knowledge.publishable_claim_ids() == {a["id"], c["id"]} | _guide_publishable()

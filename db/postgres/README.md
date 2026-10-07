@@ -17,6 +17,7 @@ and stops with a pointer to this file if it hasn't.
 | `0001_pulse_schema.sql` | Schema `pulse`, equivalent to SQLite migrations v1-v5. Records `schema_version` 5. Idempotent: re-running it changes nothing. |
 | `0002_password_management.sql` | SQLite migration v6: `users.must_change_password` (boolean, default false) and `users.password_changed_at`. Records `schema_version` 6. Idempotent (`add column if not exists`). |
 | `0003_draft_links.sql` | SQLite migration v7: `drafts.link_json` (text, JSON of the tracked registry link a draft carries). Records `schema_version` 7. Idempotent. **Apply before deploying the conversion playbook build**: the app refuses to start on Postgres below version 7. |
+| `0004_engagement_protocol.sql` | SQLite migration v8: `triage.subtype` (text, default `''`; the rules-of-engagement situation such as `dose_question` or `media_inquiry`) and the competitor / switching protocol columns `triage.protocol_decision` and `triage.protocol_route` (text, default `''`), `triage.opportunity_score` (integer, nullable) and `triage.protocol_json` (text, default `'{}'`). Records `schema_version` 8. Idempotent. **Apply before deploying the rules-of-engagement build**: the app refuses to start on Postgres below version 8. |
 
 ## How the schema maps to SQLite
 
@@ -84,12 +85,12 @@ Apply every numbered file in order (already-applied ones are safe to re-run):
 
 - **Supabase SQL editor:** paste each file and run it.
 - **psql:** `psql "$PULSE_DATABASE_URL" -v ON_ERROR_STOP=1 -1 -f db/postgres/0001_pulse_schema.sql`,
-  then the same with `0002_password_management.sql` and `0003_draft_links.sql`.
+  then the same with `0002_password_management.sql`, `0003_draft_links.sql` and `0004_engagement_protocol.sql`.
 - **Supabase MCP / management API:** `apply_migration` with each file's
-  contents, named after the file (`0001_pulse_schema`, `0002_password_management`, `0003_draft_links`).
+  contents, named after the file (`0001_pulse_schema`, `0002_password_management`, `0003_draft_links`, `0004_engagement_protocol`).
 
 To check it worked, run `select * from pulse.schema_version;`. The highest
-version should equal `len(MIGRATIONS)` (7).
+version should equal `len(MIGRATIONS)` (8).
 
 ## Connection string
 

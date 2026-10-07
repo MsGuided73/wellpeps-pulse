@@ -1,0 +1,65 @@
+# Source: config/keywords.yaml communities (subreddits; registry-inferred, none
+#         verified) and the community-rules requirement in WellPeps' guidelines:
+#         [PL] Pre-LegitScript Marketing Community Strategy, Channel 3 ("maintain a
+#         database of each community's rules ... a 'Community Rules' layer ... before
+#         an employee can publish"); [CT] Module 9 ("WellPeps approval does not
+#         override a platform, group, subreddit, or community rule"); [OM] §5.2,
+#         §12; [AMG] §14, §17. Originals: C:\dev\W\docs\community-engagement-agent#         Community Engagement-20261007T043724Z-1-001.zip -> "Community Engagement/<file>".
+# Generated: 2026-10-06 for the rules of engagement.
+# Do not add internal costs, prices, real people's details or private contacts here.
+#
+# Community rules registry. No WellPeps document states the rules of any named
+# community, so every entry starts unknown / unverified. A human reads the
+# community's rules (and asks the moderators or admins where promotion needs
+# permission), then sets:
+#   brand_participation: allowed | with_permission | prohibited | unknown
+#   links_allowed:       true | false | unknown
+#   permission_obtained: true once an admin/moderator said yes (with_permission only)
+#   moderator_contact:   a role or public modmail address, never a private person's details
+#   rules_checked_at:    YYYY-MM-DD (required for allowed / with_permission)
+# What Pulse does (docs/RULES-OF-ENGAGEMENT.md, "Platform and community rules"):
+#   prohibited       -> no reply is drafted (the mention stays triaged; audit "skipped")
+#   unknown          -> drafted, yellow "community rules unverified", no link (red if one is added)
+#   with_permission  -> until permission_obtained: yellow, no link, no promotion (red)
+#   links_allowed: false -> a link is red
+# A mention whose permalink names no community (owned channels, review sites,
+# Instagram/TikTok comments) is not checked here.
+# id: "<platform>:<name>" in lowercase; Reddit names are "r/<subreddit>",
+# Facebook groups "groups/<group id or slug>". Demo (sandbox) communities are
+# added only to the DEMO config copy by scripts/seed_demo.py --sandbox.
+
+communities:
+  - {id: "reddit:r/semaglutide", platform: reddit, name: "r/Semaglutide", brand_participation: unknown, links_allowed: unknown, permission_obtained: false, moderator_contact: "", rules_checked_at: null, notes: "topic weight; from keywords.yaml (role listen)"}
+  - {id: "reddit:r/tirzepatide", platform: reddit, name: "r/tirzepatide", brand_participation: unknown, links_allowed: unknown, permission_obtained: false, moderator_contact: "", rules_checked_at: null, notes: "topic weight; from keywords.yaml (role listen)"}
+  - {id: "reddit:r/zepbound", platform: reddit, name: "r/Zepbound", brand_participation: unknown, links_allowed: unknown, permission_obtained: false, moderator_contact: "", rules_checked_at: null, notes: "topic weight; from keywords.yaml (role listen)"}
+  - {id: "reddit:r/mounjaro", platform: reddit, name: "r/Mounjaro", brand_participation: unknown, links_allowed: unknown, permission_obtained: false, moderator_contact: "", rules_checked_at: null, notes: "topic weight; from keywords.yaml (role listen)"}
+  - {id: "reddit:r/ozempic", platform: reddit, name: "r/Ozempic", brand_participation: unknown, links_allowed: unknown, permission_obtained: false, moderator_contact: "", rules_checked_at: null, notes: "topic weight; from keywords.yaml (role listen)"}
+  - {id: "reddit:r/wegovy", platform: reddit, name: "r/Wegovy", brand_participation: unknown, links_allowed: unknown, permission_obtained: false, moderator_contact: "", rules_checked_at: null, notes: "topic weight; from keywords.yaml (role listen)"}
+  - {id: "reddit:r/wegovyweightloss", platform: reddit, name: "r/WegovyWeightLoss", brand_participation: unknown, links_allowed: unknown, permission_obtained: false, moderator_contact: "", rules_checked_at: null, notes: "topic weight; from keywords.yaml (role listen)"}
+  - {id: "reddit:r/compoundedtirzepatide", platform: reddit, name: "r/compoundedtirzepatide", brand_participation: unknown, links_allowed: unknown, permission_obtained: false, moderator_contact: "", rules_checked_at: null, notes: "topic weight; from keywords.yaml (role listen)"}
+  - {id: "reddit:r/compoundedsemaglutide", platform: reddit, name: "r/CompoundedSemaglutide", brand_participation: unknown, links_allowed: unknown, permission_obtained: false, moderator_contact: "", rules_checked_at: null, notes: "topic weight; from keywords.yaml (role listen)"}
+  - {id: "reddit:r/loseit", platform: reddit, name: "r/loseit", brand_participation: unknown, links_allowed: unknown, permission_obtained: false, moderator_contact: "", rules_checked_at: null, notes: "topic weight; from keywords.yaml (role listen)"}
+  - {id: "reddit:r/pcos", platform: reddit, name: "r/PCOS", brand_participation: unknown, links_allowed: unknown, permission_obtained: false, moderator_contact: "", rules_checked_at: null, notes: "topic weight; from keywords.yaml (role listen)"}
+  - {id: "reddit:r/menopause", platform: reddit, name: "r/Menopause", brand_participation: unknown, links_allowed: unknown, permission_obtained: false, moderator_contact: "", rules_checked_at: null, notes: "topic hormones; from keywords.yaml (role listen)"}
+  - {id: "reddit:r/intermittentfasting", platform: reddit, name: "r/intermittentfasting", brand_participation: unknown, links_allowed: unknown, permission_obtained: false, moderator_contact: "", rules_checked_at: null, notes: "topic weight; from keywords.yaml (role listen)"}
+  - {id: "reddit:r/erectiledysfunction", platform: reddit, name: "r/erectiledysfunction", brand_participation: unknown, links_allowed: unknown, permission_obtained: false, moderator_contact: "", rules_checked_at: null, notes: "topic sexual; from keywords.yaml (role listen)"}
+  - {id: "reddit:r/askmenover30", platform: reddit, name: "r/AskMenOver30", brand_participation: unknown, links_allowed: unknown, permission_obtained: false, moderator_contact: "", rules_checked_at: null, notes: "topic sexual; from keywords.yaml (role listen)"}
+  - {id: "reddit:r/sex", platform: reddit, name: "r/sex", brand_participation: unknown, links_allowed: unknown, permission_obtained: false, moderator_contact: "", rules_checked_at: null, notes: "topic sexual; from keywords.yaml (role listen)"}
+  - {id: "reddit:r/tressless", platform: reddit, name: "r/tressless", brand_participation: unknown, links_allowed: unknown, permission_obtained: false, moderator_contact: "", rules_checked_at: null, notes: "topic hair; from keywords.yaml (role listen)"}
+  - {id: "reddit:r/hairloss", platform: reddit, name: "r/HairLoss", brand_participation: unknown, links_allowed: unknown, permission_obtained: false, moderator_contact: "", rules_checked_at: null, notes: "topic hair; from keywords.yaml (role listen)"}
+  - {id: "reddit:r/femalehairloss", platform: reddit, name: "r/FemaleHairLoss", brand_participation: unknown, links_allowed: unknown, permission_obtained: false, moderator_contact: "", rules_checked_at: null, notes: "topic hair; from keywords.yaml (role listen)"}
+  - {id: "reddit:r/minoxidil", platform: reddit, name: "r/minoxidil", brand_participation: unknown, links_allowed: unknown, permission_obtained: false, moderator_contact: "", rules_checked_at: null, notes: "topic hair; from keywords.yaml (role listen)"}
+  - {id: "reddit:r/finasteride", platform: reddit, name: "r/finasteride", brand_participation: unknown, links_allowed: unknown, permission_obtained: false, moderator_contact: "", rules_checked_at: null, notes: "topic hair; from keywords.yaml (role listen)"}
+  - {id: "reddit:r/peptides", platform: reddit, name: "r/Peptides", brand_participation: unknown, links_allowed: unknown, permission_obtained: false, moderator_contact: "", rules_checked_at: null, notes: "topic peptides; from keywords.yaml (role listen)"}
+  - {id: "reddit:r/biohackers", platform: reddit, name: "r/Biohackers", brand_participation: unknown, links_allowed: unknown, permission_obtained: false, moderator_contact: "", rules_checked_at: null, notes: "topic peptides; from keywords.yaml (role listen)"}
+  - {id: "reddit:r/longevity", platform: reddit, name: "r/longevity", brand_participation: unknown, links_allowed: unknown, permission_obtained: false, moderator_contact: "", rules_checked_at: null, notes: "topic peptides; from keywords.yaml (role listen)"}
+  - {id: "reddit:r/nad", platform: reddit, name: "r/NAD", brand_participation: unknown, links_allowed: unknown, permission_obtained: false, moderator_contact: "", rules_checked_at: null, notes: "topic peptides; from keywords.yaml (role listen)"}
+  - {id: "reddit:r/nootropics", platform: reddit, name: "r/Nootropics", brand_participation: unknown, links_allowed: unknown, permission_obtained: false, moderator_contact: "", rules_checked_at: null, notes: "topic peptides; from keywords.yaml (role listen)"}
+  - {id: "reddit:r/testosterone", platform: reddit, name: "r/Testosterone", brand_participation: unknown, links_allowed: unknown, permission_obtained: false, moderator_contact: "", rules_checked_at: null, notes: "topic hormones; from keywords.yaml (role listen)"}
+  - {id: "reddit:r/trt", platform: reddit, name: "r/trt", brand_participation: unknown, links_allowed: unknown, permission_obtained: false, moderator_contact: "", rules_checked_at: null, notes: "topic hormones; from keywords.yaml (role listen)"}
+  - {id: "reddit:r/telehealth", platform: reddit, name: "r/telehealth", brand_participation: unknown, links_allowed: unknown, permission_obtained: false, moderator_contact: "", rules_checked_at: null, notes: "topic telehealth; from keywords.yaml (role listen)"}
+  - {id: "reddit:r/healthinsurance", platform: reddit, name: "r/HealthInsurance", brand_participation: unknown, links_allowed: unknown, permission_obtained: false, moderator_contact: "", rules_checked_at: null, notes: "topic telehealth; from keywords.yaml (role listen)"}
+  - {id: "reddit:r/costco", platform: reddit, name: "r/Costco", brand_participation: unknown, links_allowed: unknown, permission_obtained: false, moderator_contact: "", rules_checked_at: null, notes: "topic weight; from keywords.yaml (role listen)"}
+  - {id: "reddit:r/himsandhers", platform: reddit, name: "r/HimsAndHers", brand_participation: unknown, links_allowed: unknown, permission_obtained: false, moderator_contact: "", rules_checked_at: null, notes: "topic competitor; from keywords.yaml (role listen)"}
+  - {id: "reddit:r/hims", platform: reddit, name: "r/hims", brand_participation: unknown, links_allowed: unknown, permission_obtained: false, moderator_contact: "", rules_checked_at: null, notes: "topic competitor; from keywords.yaml (role listen)"}
+  - {id: "reddit:r/rohealth", platform: reddit, name: "r/RoHealth", brand_participation: unknown, links_allowed: unknown, permission_obtained: false, moderator_contact: "", rules_checked_at: null, notes: "topic competitor; from keywords.yaml (role listen)"}

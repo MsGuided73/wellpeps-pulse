@@ -210,7 +210,46 @@ Steps 4–6 respect quiet hours and budget; 1–3 do not (triage has budget prio
   CSV's `utm_content` (Shopify: the same UTM values on the order's landing
   session / customer journey). No external calls from Pulse.
 
+## Rules of engagement decisions (2026-10-07)
+- **Source of truth**: `docs/RULES-OF-ENGAGEMENT.md`. Priority (binding user
+  instruction 2026-10-07): the Competitor Mentions and Provider Switching
+  Protocol V1 for its domain, then the other WellPeps Community Engagement
+  documents, then earlier rules only where those are silent (retained
+  safeguards listed for WellPeps to confirm; superseded rules listed with the
+  overriding source).
+- **Situations** (`config/engagement_guide.yaml`): first match on category,
+  subtype, subject, protocol decision and route decides draft / approved
+  boundary reply (verbatim guide wording, no model call) / stop / no reply.
+  The draftable query is the same list compiled to a SQL CASE. Adverse events
+  in any thread get the guide's boundary reply for a clinical approver plus
+  the page; complaints about WellPeps get Template C.
+- **Protocol** (`harvey/protocol.py`): triage supplies intent tags, the need
+  and two 0-2 judgement scores; Pulse runs the decision sequence (access ->
+  safety -> clinical -> intent -> facts -> record), scores opportunity only
+  after the gates (0-8; 6+ high, 3-5 moderate), and stores the decision,
+  route, score and record (no post text) on triage (migration v8,
+  `db/postgres/0004_engagement_protocol.sql`). Unknown community rules HOLD
+  competitor / switching posts; the protocol's ESCALATE route pages even when
+  the public decision is HOLD. The review desk recomputes the decision before
+  approval and sorts safety first.
+- **80/20** is a planning metric only (review-desk chip, Analytics card,
+  `GET /api/analytics/engagement-mix`), never a per-reply gate.
+- **R38 superseded**: medication names allowed for general education
+  (yellow); the compounded-equivalence rules stay red.
+- **Clinical approval**: new permission `approve_clinical` (clinical, admin);
+  reviewers cannot approve adverse-event / emergency replies, clinical users
+  can approve only those.
+- **One reply per thread**: a thread with a WellPeps reply waiting for review
+  gets no second draft (Protocol §9).
+
 ## 5. Open questions
+- Everything in the "FINALIZE — needed from WellPeps" checklist of
+  `docs/RULES-OF-ENGAGEMENT.md`, especially the go-live blockers (protocol
+  approval, named escalation contacts, after-hours and failed-handoff
+  fallback, community rules, listening access, data retention, the
+  regression run) and the approval blockers (support channel, care routing,
+  pricing, lab terms, gated-download disclosure).
+- WellPeps to confirm the "Retained earlier safeguards" table.
 - Compliance sign-off for the new claims (`CLM-PRICE-FOLLOWUP`,
   `CLM-PRICE-ALLIN`, `CLM-EDU-*`) and the reply examples (all PENDING).
   `CLM-PRICE-ALLIN` says standard shipping is included (site PRICE_NOTE) but
@@ -220,12 +259,12 @@ Steps 4–6 respect quiet hours and budget; 1–3 do not (triage has budget prio
 - Flip the guide links to `live: true` in config/links.yaml once the site's
   guide pages are deployed (they 404 as of 2026-10-06) and `pulse links check`
   is green. Until then approval of any reply with a guide link is blocked.
-- R38 decision: medication names are still forbidden in replies (toggle on),
-  which also keeps the NAD+ guide claim out of drafts.
+- R38 decided 2026-10-07: superseded by the guidelines (names allowed for
+  general education, yellow for review); the NAD+ guide is offered for NAD+.
 - Approved claims library content + physician/compliance sign-off.
 - Named clinical owner + backup for the 15-min adverse-event SLA (incl. nights/weekends).
 - Legal sign-off on Apify scraping; mention-text retention period (default 180 days).
-- R38 medication-name rule and LegitScript status (R12) → config toggles.
+- LegitScript status (R12) → config toggle `allow_certification_claims`.
 - API mode: dollar budget instead of subscription quota throttle.
 - Slack query bot: confirm with compliance that storing the first 200
   characters of staff questions in `actions` is acceptable, and remind staff

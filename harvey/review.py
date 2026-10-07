@@ -10,6 +10,13 @@ latest draft has text, re-running the deterministic compliance filter is not
 red, no registry link in the text is still ``live: false`` (config/links.yaml),
 the draft cites at least one claim, and (when
 ``review.require_publishable_claims``) every cited claim is signed off.
+
+Rules of engagement (docs/RULES-OF-ENGAGEMENT.md) add: the filter runs with
+the community's rules (config/communities.yaml); no cited claim may have an
+open FINALIZE item; the competitor / switching protocol's live decision must
+allow a public reply (not HOLD, DO NOT ENGAGE or MONITOR ONLY, recomputed
+with the current config); and an adverse-event or emergency reply needs a
+clinical approver (role clinical or admin; ``approve_clinical``).
 """
 
 import json
@@ -17,8 +24,8 @@ import logging
 from dataclasses import dataclass
 from datetime import datetime, timezone
 
-from harvey import explain, knowledge, links
-from harvey.compliance import compliance_filter
+from harvey import auth, communities, engagement, explain, knowledge, links, protocol
+from harvey.compliance import ReplyContext, compliance_filter
 from harvey.config import ESCALATION_KINDS
 from harvey.escalation import SEVERE_KINDS, escalate
 from harvey.sandbox import urls as sandbox_urls
@@ -199,6 +206,7 @@ async def feed(state, *, status=None, platform=None, competitor=None, product=No
         f"substr(m.text, 1, {PREVIEW_CHARS}) AS text, length(m.text) > {PREVIEW_CHARS} AS text_truncated, "
         "m.lang, m.posted_at, m.collected_at, m.owned_channel, m.status, "
         "t.category, t.urgency, t.competitor, t.product, t.drug, t.subject_type, t.sentiment, "
+        "t.subtype, t.protocol_decision, t.protocol_route, t.opportunity_score, "
         f"t.relevant {base} ORDER BY m.collected_at {direction}, m.id {direction} LIMIT ? OFFSET ?"
     ), (*params, limit, offset))
     for row in rows:
@@ -223,7 +231,7 @@ def all_claims() -> list[dict]:
              "publishable": c.id in publishable} for c in knowledge.claims()]
 
 
-async def detail(state, mention_id: int, config) -> dict:
+async def detail(state, mention_id: int, config, role: str | None = None) -> dict:
     mention = await state.get_mention(mention_id)
     if mention is None:
         raise ReviewError(404, "mention not found")
@@ -236,7 +244,9 @@ async def detail(state, mention_id: int, config) -> dict:
     audit = await state.list_audit(mention_id)
     claim_ids = list(dict.fromkeys(cid for d in drafts for cid in d.claim_ids))
     blockers = approval_blockers(mention.status, drafts[0] if drafts else None,
-                                 mention.platform.value, config)
+                                 mention.platform.value, config, mention=mention, triage=triage, role=role)
+    info = await engagement.engagement_info(state, mention, triage, drafts[0] if drafts else None)
+    info["handoff"] = _handoff(escalations, triage)
     return {
         "why": _detail_why(mention, triage, escalations, audit),
         "mention": mention.model_dump(mode="json"),
@@ -247,8 +257,28 @@ async def detail(state, mention_id: int, config) -> dict:
         "audit": [e.model_dump(mode="json") for e in audit],
         "claims": _claim_info(claim_ids),
         "tracked_link": tracked_link(drafts[0] if drafts else None),
-        "approval": {"allowed": not blockers, "blockers": blockers},
+        "approval": {"allowed": not blockers, "blockers": blockers,
+                     "clinical_required": engagement.requires_clinical_approval(triage)},
+        "engagement": info,
     }
+
+
+def _handoff(escalations: list[dict], triage: Triage | None) -> dict | None:
+    """Whether an escalation actually reached its owner (Protocol §5: never
+    claim "escalated" unless the configured handoff succeeded)."""
+    if escalations:
+        current = next((e for e in reversed(escalations) if not e.get("acked_at")), escalations[-1])
+        paged = bool(current.get("notified_at"))
+        return {"kind": current.get("kind"), "paged": paged, "acked": bool(current.get("acked_at")),
+                "status": ("acknowledged" if current.get("acked_at") else "paged, waiting for the owner"
+                           if paged else "NOT handed off: the page did not go out (retrying; use the fallback "
+                                         "contact)")}
+    route = getattr(triage, "protocol_route", "") if triage is not None else ""
+    if route == protocol.ROUTE_SUPPORT:
+        return {"kind": "support", "paged": False, "acked": False,
+                "status": "NOT handed off: no support escalation queue yet (FINALIZE support_channel); route it "
+                          "by hand and record the handoff"}
+    return None
 
 
 def _detail_why(mention, triage, escalations: list[dict], audit) -> dict | None:
@@ -276,20 +306,54 @@ def tracked_link(draft: Draft | None) -> dict | None:
 # --- Approval gate ------------------------------------------------------------------------------------
 
 
-def approval_blockers(status: MentionStatus, draft: Draft | None, platform: str, config) -> list[str]:
-    """Human-readable reasons approval is refused; empty when it may proceed."""
+def _community_context(mention) -> ReplyContext | None:
+    if mention is None:
+        return None
+    status = communities.status_for_url(mention.url)
+    return ReplyContext(community_id=status.id, participation=status.participation,
+                        permission_obtained=status.permission_obtained, links_allowed=status.links_allowed)
+
+
+def _protocol_blocker(mention, triage: Triage | None) -> str:
+    """The protocol's decision, recomputed with the current config (e.g. after
+    a community's rules were verified), when it allows no public reply."""
+    if mention is None or triage is None or not triage.protocol_decision:
+        return ""
+    prior = bool((triage.protocol or {}).get("prior_clinical_in_thread"))
+    live = protocol.applied(triage, mention, prior_clinical=prior)
+    if live.protocol_decision in protocol.NO_DRAFT_DECISIONS:
+        label = protocol.LABELS[live.protocol_decision]
+        why = "; ".join(live.protocol.get("blockers") or live.protocol.get("rationale") or [])
+        return f"competitor/switching protocol says {label}: no public reply ({why})"
+    return ""
+
+
+def approval_blockers(status: MentionStatus, draft: Draft | None, platform: str, config, *,
+                      mention=None, triage: Triage | None = None, role: str | None = None) -> list[str]:
+    """Human-readable reasons approval is refused; empty when it may proceed.
+    ``role``: the approver's role (None = not known yet: the clinical gate is
+    reported separately as ``clinical_required``)."""
     if status is not MentionStatus.IN_REVIEW:
         return [f"only a mention waiting in review can be approved (this one is {status.value})"]
     if draft is None or not draft.text.strip():
         return ["there is no draft reply to approve; write one with Save edit first"]
     blockers = []
-    gate = compliance_filter(draft.text, platform, draft.claim_ids, require_publishable=False)
+    if role is not None and engagement.requires_clinical_approval(triage) and not auth.can(role, "approve_clinical"):
+        blockers.append("clinical approval required: an adverse-event or emergency reply may be approved only by "
+                        "a clinical or admin user")
+    protocol_block = _protocol_blocker(mention, triage)
+    if protocol_block:
+        blockers.append(protocol_block)
+    gate = compliance_filter(draft.text, platform, draft.claim_ids, require_publishable=False,
+                             context=_community_context(mention))
     if gate.tier == "red":
         reasons = "; ".join(f"{h.rule_id}: {h.reason}" for h in gate.hits if h.rule_id != "CLAIMS")
         blockers.append("compliance filter is red" + (f" ({reasons})" if reasons else ""))
     for link in links.not_live(draft.text):
         blockers.append(f"tracked link \"{link.label}\" ({link.id}) is not live yet: deploy the page, "
                         "confirm it with `pulse links check`, then set live: true in config/links.yaml")
+    for cid, missing in knowledge.unresolved_finalize(draft.claim_ids):
+        blockers.append(f"FINALIZE: {cid} depends on something WellPeps has not provided yet ({missing})")
     if not draft.claim_ids:
         blockers.append("the draft cites no approved claim IDs (no claim ID, no publish)")
     elif config.review.require_publishable_claims:
@@ -373,12 +437,24 @@ async def edit(state, mention_id: int, text: str, claim_ids: list[str], actor: s
     return EditOutcome(draft_id=draft_id, version=draft.version, tier=gate.tier, verdict=verdict.value)
 
 
-async def approve(state, mention_id: int, actor: str, config, draft_id: int | None = None) -> None:
+async def approve(state, mention_id: int, actor: str, config, draft_id: int | None = None,
+                  role: str | None = None) -> None:
+    """``role``: the approver's role. None counts as a reviewer (may approve
+    routine replies, never a clinical-approval one)."""
     mention = await _mention_or_404(state, mention_id)
     draft = await state.get_latest_draft(mention_id)
     if draft_id is not None and (draft is None or draft.id != draft_id):
         raise ReviewError(409, "the draft changed since you opened it; reload and review the latest version")
-    blockers = approval_blockers(mention.status, draft, mention.platform.value, config)
+    triage = await state.get_triage(mention_id)
+    role = role or "reviewer"
+    clinical = engagement.requires_clinical_approval(triage)
+    if clinical and not auth.can(role, "approve_clinical"):
+        raise ReviewError(403, "clinical approval required: an adverse-event or emergency reply may be approved "
+                               "only by a clinical or admin user")
+    if not clinical and not auth.can(role, "review"):
+        raise ReviewError(403, "your role does not allow this")
+    blockers = approval_blockers(mention.status, draft, mention.platform.value, config, mention=mention,
+                                 triage=triage, role=role)
     if blockers:
         raise ReviewError(409, "approval refused: " + "; ".join(blockers))
     await _move(state, mention_id, MentionStatus.APPROVED)
@@ -388,7 +464,8 @@ async def approve(state, mention_id: int, actor: str, config, draft_id: int | No
         mention_id=mention_id, draft_id=draft.id, event=AuditEventType.APPROVED, actor=actor,
         claim_ids=draft.claim_ids, final_text=draft.text, permalink=mention.url,
         filter_result={"ok": gate.ok, "tier": gate.tier, "hits": [h._asdict() for h in gate.hits]},
-        verdict={"version": draft.version, "review_verdict": getattr(draft.review_verdict, "value", None)},
+        verdict={"version": draft.version, "review_verdict": getattr(draft.review_verdict, "value", None),
+                 "role": role, "clinical_approval": clinical},
     ))
 
 

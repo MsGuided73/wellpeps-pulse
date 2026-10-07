@@ -1,6 +1,8 @@
-# Source: conversion reply playbook brief (2026-10-06); claims from
-#         config/claims.yaml, links from config/links.yaml.
-# Generated: 2026-10-06 for the conversion reply playbook.
+# Source: conversion reply playbook brief (2026-10-06), rewritten 2026-10-07 to
+#         conform to WellPeps' Community Engagement guidelines and the Competitor
+#         Mentions and Provider Switching Protocol (docs/RULES-OF-ENGAGEMENT.md);
+#         claims from config/claims.yaml, links from config/links.yaml.
+# Generated: 2026-10-06 for the conversion reply playbook; revised 2026-10-07.
 # Do not add internal costs, prices, real people's posts or handles here.
 #
 # Few-shot STYLE GUIDANCE for the drafter (prompts/draft.md). These are not
@@ -8,13 +10,17 @@
 # until compliance signs them off, and every real draft still goes through the
 # compliance filter, the adversarial reviewer and a human.
 #
-# Each example follows the purchase-intent / question playbook: disclosure
-# first, a general provider-neutral answer, ONE WellPeps fact from a claim,
-# at most one registry link (only via a cited guide claim), then the
-# provider-determines line. Reddit examples stay under 90 words.
+# What changed (superseded playbook, see RULES-OF-ENGAGEMENT.md "Superseded
+# earlier rules"): the disclosure is the guide's primary form "I work with
+# WellPeps." (Guide §4; Protocol §7); a WellPeps fact appears only when the
+# person asks about WellPeps or explicitly asks for alternatives (Protocol §1,
+# §7; Operations Manual §12.2), never "one monthly price" (Live Reference §6
+# needs verification); a resource only when it directly answers the question,
+# with its email gate stated (Protocol §8; Pre-LegitScript strategy "Not every
+# comment gets a link"); 40-90 words (Protocol §7).
 # tests/test_reply_playbook.py checks each reply passes compliance_filter
-# (only "link not live yet" may show while the guide pages are not deployed).
-# In the prompt, registry URLs are shown as <guide link>.
+# (only "link not live yet" and the guide's FINALIZE / medication-name review
+# notes may show). In the prompt, registry URLs are shown as <guide link>.
 
 status: PENDING
 usage: style guidance only
@@ -25,29 +31,29 @@ examples:
     platform: reddit
     program: Weight Loss
     post: "anyone tried compounded tirzepatide via telehealth? Trying to figure out which providers include the follow-up visits in the price."
-    reply: "Full disclosure: I work with WellPeps, so I'm not neutral. When you compare telehealth programs, it's worth asking whether follow-up visits with a licensed clinician are included or billed separately, how dose adjustments are handled, and which pharmacy prepares the medication. At WellPeps, follow-up care is included in the one monthly price. We also have a free guide with questions to ask before choosing a provider and a checklist: https://wellpeps.com/smart-patient-guides/glp-1-weight-loss. Whether treatment is right for you is always up to a licensed clinician."
-    claim_ids: [CLM-R3-DISCLOSURE, CLM-R7-PROVIDER-CHECKLIST, CLM-PRICE-FOLLOWUP, CLM-EDU-GUIDE-GLP-1-WEIGHT-LOSS, CLM-R22-PROVIDER-DETERMINES]
+    reply: "I work with WellPeps. When you compare telehealth programs, ask whether follow-up with a licensed clinician is included or billed separately, how dose adjustments are handled, and which pharmacy prepares the medication. WellPeps is one option you can evaluate: if treatment is prescribed, ongoing support is part of the WellPeps process. Our free guide (it asks for your email) has questions to ask before choosing a provider: https://wellpeps.com/smart-patient-guides/glp-1-weight-loss."
+    claim_ids: [CLM-AMG-04-WORK-WITH, CLM-R7-PROVIDER-CHECKLIST, CLM-LR-02-ONGOING-SUPPORT, CLM-EDU-GUIDE-GLP-1-WEIGHT-LOSS]
 
   - id: EX-QUESTION-ONLINE-CLINIC
     category: question
     platform: reddit
     program: Sexual Wellness
     post: "How do you tell if an online ED clinic is legit? So many ads lately."
-    reply: "Full disclosure: I work with WellPeps, so I'm not neutral. A few things worth checking with any online clinic: whether you are actually reviewed by a licensed clinician, what follow-up is included, and which pharmacy dispenses the medication. At WellPeps, follow-up care with a licensed clinician is included in the one monthly price. Our free guide has questions to ask before choosing care: https://wellpeps.com/smart-patient-guides/sexual-wellness. A licensed healthcare provider determines whether treatment is appropriate."
-    claim_ids: [CLM-R3-DISCLOSURE, CLM-R7-PROVIDER-CHECKLIST, CLM-PRICE-FOLLOWUP, CLM-EDU-GUIDE-SEXUAL-WELLNESS, CLM-R22-PROVIDER-DETERMINES]
+    reply: "I work with WellPeps. A few things worth checking with any online clinic are whether you are actually reviewed by a licensed clinician, what follow-up is included, how dose adjustments are handled, and which pharmacy dispenses the medication. A licensed healthcare provider determines whether treatment is appropriate."
+    claim_ids: [CLM-AMG-04-WORK-WITH, CLM-R7-PROVIDER-CHECKLIST, CLM-R22-PROVIDER-DETERMINES]
 
   - id: EX-QUESTION-WHAT-TO-ASK
     category: question
     platform: facebook
     program: Healthy Aging & Vitality
     post: "Thinking about peptide therapy through an online clinic. What should I ask first?"
-    reply: "Disclosure: I work with WellPeps, so I am not neutral. Good thing to ask up front. It's worth checking whether you are actually reviewed by a licensed clinician, what follow-up is included, and which pharmacy dispenses the medication. At WellPeps, follow-up care with a licensed clinician is included in the one monthly price. Our free guide covers questions to ask before choosing a treatment program: https://wellpeps.com/smart-patient-guides/healthy-aging-vitality. A licensed healthcare provider determines whether treatment is appropriate."
-    claim_ids: [CLM-R3-DISCLOSURE, CLM-R7-PROVIDER-CHECKLIST, CLM-PRICE-FOLLOWUP, CLM-EDU-GUIDE-HEALTHY-AGING-VITALITY, CLM-R22-PROVIDER-DETERMINES]
+    reply: "I work with WellPeps. Good thing to ask up front: whether you are actually reviewed by a licensed clinician, what follow-up is included, and which pharmacy dispenses the medication. Our free guide (it asks for your email) covers questions to ask before choosing a treatment program: https://wellpeps.com/smart-patient-guides/healthy-aging-vitality. A licensed healthcare provider determines whether treatment is appropriate."
+    claim_ids: [CLM-AMG-04-WORK-WITH, CLM-R7-PROVIDER-CHECKLIST, CLM-EDU-GUIDE-HEALTHY-AGING-VITALITY, CLM-R22-PROVIDER-DETERMINES]
 
   - id: EX-QUESTION-NO-LINK
     category: question
     platform: facebook
     program: ""
     post: "Do these telehealth places charge extra for follow-up visits?"
-    reply: "Disclosure: I work with WellPeps, so I am not neutral. It's worth asking any provider whether follow-up visits are included or billed separately. At WellPeps, follow-up care with a licensed clinician is included in the one monthly price. A licensed healthcare provider determines whether treatment is appropriate."
-    claim_ids: [CLM-R3-DISCLOSURE, CLM-R7-PROVIDER-CHECKLIST, CLM-PRICE-FOLLOWUP, CLM-R22-PROVIDER-DETERMINES]
+    reply: "I work with WellPeps. It varies, so it's worth asking any provider whether follow-up visits are included or billed separately, what the full recurring price covers, and what the cancellation terms are. A licensed healthcare provider determines whether treatment is appropriate."
+    claim_ids: [CLM-AMG-04-WORK-WITH, CLM-R7-PROVIDER-CHECKLIST, CLM-R22-PROVIDER-DETERMINES]

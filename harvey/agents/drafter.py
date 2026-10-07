@@ -19,6 +19,14 @@ Flow for ``Drafter.draft``:
 5. Rewrite any registry link in the reply to this mention's tracked (UTM)
    URL, so the URL a human copies is always the canonical one.
 
+Rules of engagement (docs/RULES-OF-ENGAGEMENT.md): ``guidance``
+(harvey.engagement.DraftGuidance) carries the situation, its template (Guide
+§25 A-E), the persona's exact opening disclosure ("I work with WellPeps." by
+default), the situation's preferred claims (offered first), and whether this
+community allows a link or promotion at all. With no link allowed, claim
+links are not shown to the model. Influencer-only wording and guide
+templates with an unfilled [slot] are never offered.
+
 The drafter never decides whether a reply is safe. The compliance filter,
 the adversarial reviewer, and a human do that downstream.
 """
@@ -41,17 +49,25 @@ PROMPT_PATH = prompting.PROMPTS_DIR / "draft.md"
 RULES_PATH = prompting.PROMPTS_DIR / "reply_rules.md"
 AGENT = "drafter"
 TASK = "reply"
-MAX_CLAIMS = 8
+MAX_CLAIMS = 12
 MAX_ATTEMPTS = 2  # first try + one retry
 FAILED_REASON = "draft_failed"
 NO_REPLY_REASON = "drafter returned no reply"
 MAX_RATIONALE_CHARS = 500
 REDDIT_MAX_WORDS = 90
 PLAYBOOK_CATEGORIES = frozenset({"purchase_intent", "question"})
-DISCLOSURE_CLAIM = "CLM-R3-DISCLOSURE"
-# The playbook's fixed claims, in reply order (the guide claim goes right
-# after the disclosure; see candidate_claims).
-PLAYBOOK_CLAIMS = (DISCLOSURE_CLAIM, "CLM-R7-PROVIDER-CHECKLIST", "CLM-PRICE-FOLLOWUP",
+# The Approved Messaging & Response Guide §4 primary form ("I work with
+# WellPeps."). The older "Disclosure: I work with WellPeps, so I am not
+# neutral." (CLM-R3-DISCLOSURE) stays allowed but is no longer the default.
+DISCLOSURE_CLAIM = "CLM-AMG-04-WORK-WITH"
+# The playbook's fixed claims, in reply order: disclosure, a provider-neutral
+# answer, the approved ongoing-support fact (used only when WellPeps is
+# relevant), the provider-determines line (Operations Manual §18.1). Since the
+# rules of engagement (2026-10-07) the guide claim is no longer pushed second
+# and no price claim leads: a resource is optional and only when it directly
+# answers (Protocol §8), a WellPeps fact only when asked or when alternatives
+# are requested (Protocol §1, §7). Both stay in the pool.
+PLAYBOOK_CLAIMS = (DISCLOSURE_CLAIM, "CLM-R7-PROVIDER-CHECKLIST", "CLM-LR-02-ONGOING-SUPPORT",
                    "CLM-R22-PROVIDER-DETERMINES")
 SERIES_GUIDE_CLAIM = "CLM-EDU-GUIDES"
 GUIDE_LINK_PLACEHOLDER = "<guide link>"
@@ -108,10 +124,20 @@ def _category(category) -> str:
     return getattr(category, "value", category) or ""
 
 
-def candidate_claims(product: str, claims=None, *, drug: str = "", category=None) -> list[Claim]:
+def offerable(claim: Claim) -> bool:
+    """Claims the drafter may be shown: not Brand Ambassador / partner
+    wording (Pulse never drafts as an influencer) and not a guide template
+    with an unfilled [slot] (a human fills those)."""
+    return not claim.influencer_only and not claim.has_placeholder
+
+
+def candidate_claims(product: str, claims=None, *, drug: str = "", category=None,
+                     preferred=(), disclosure: str = DISCLOSURE_CLAIM) -> list[Claim]:
     """Claims usable for a mention about ``product`` ("" = no product) or
-    ``drug``; the playbook claims come first for purchase_intent / question."""
-    pool = list(knowledge_module.claims() if claims is None else claims)
+    ``drug``; the playbook claims come first for purchase_intent / question,
+    and the situation's ``preferred`` claims (with the ``disclosure`` claim
+    first) before everything else."""
+    pool = [c for c in (knowledge_module.claims() if claims is None else claims) if offerable(c)]
     about = _about(product, drug)
     specific = [c for c in pool if about & set(c.products)]
     general = [c for c in pool if "*" in c.products and c not in specific]
@@ -120,8 +146,12 @@ def candidate_claims(product: str, claims=None, *, drug: str = "", category=None
         by_id = {c.id: c for c in pool}
         fixed = [by_id[cid] for cid in PLAYBOOK_CLAIMS if cid in by_id]
         guide = guide_claim(product, drug, pool)
-        first = fixed[:1] + ([guide] if guide else []) + fixed[1:]
+        first = fixed + ([guide] if guide else [])   # offered, never required (Protocol §8)
         ordered = first + [c for c in ordered if c not in first]
+    if preferred:
+        by_id = {c.id: c for c in pool}
+        lead = [by_id[cid] for cid in (disclosure, *preferred) if cid in by_id]
+        ordered = lead + [c for c in ordered if c not in lead]
     unique: dict[str, Claim] = {}
     for claim in ordered:
         unique.setdefault(claim.id, claim)
@@ -158,16 +188,52 @@ def _feedback_block(feedback: list[str]) -> str:
     )
 
 
-def _claim_line(claim: Claim, mention: Mention) -> str:
+def _claim_line(claim: Claim, mention: Mention, allow_link: bool = True) -> str:
     line = f"- [{claim.id}] {claim.text}"
-    link = knowledge_module.links_by_id().get(claim.link_id or "")
+    link = knowledge_module.links_by_id().get(claim.link_id or "") if allow_link else None
     if link is not None:
         line += f"\n  Link for this claim: {links.tracked_url_for(link, mention)}"
     return line
 
 
-def _claims_block(claims: list[Claim], mention: Mention) -> str:
-    return "\n".join(_claim_line(c, mention) for c in claims) or "(none)"
+def _claims_block(claims: list[Claim], mention: Mention, allow_link: bool = True) -> str:
+    return "\n".join(_claim_line(c, mention, allow_link) for c in claims) or "(none)"
+
+
+def engagement_block(guidance) -> str:
+    """The rules-of-engagement section of the prompt (all from config, never
+    from the mention)."""
+    if guidance is None:
+        return ("- Open with exactly this sentence: \"I work with WellPeps.\"\n"
+                "- Answer the actual question first; educate before promoting.")
+    lines = [f"- Situation: {guidance.label}."]
+    if guidance.template:
+        lines.append(f"- Shape (Approved Messaging & Response Guide, Template {guidance.template}): "
+                     f"{guidance.template_structure} Fill the [bracketed] parts ONLY with approved claim "
+                     "texts; never leave brackets in the reply.")
+    if guidance.notes:
+        lines.append(f"- {guidance.notes}")
+    lines.append(f"- Open with exactly this sentence: \"{guidance.disclosure}\" "
+                 f"(cite {guidance.disclosure_claim}).")
+    if guidance.preferred_claims:
+        lines.append("- Prefer these claims for this situation: " + ", ".join(guidance.preferred_claims) + ".")
+    if guidance.allow_link:
+        lines.append("- A link is allowed only if it directly answers the question; most replies need none.")
+    else:
+        lines.append(f"- No link in this reply ({guidance.link_note}).")
+    if guidance.education_only:
+        lines.append(f"- Education only: no call to action, no pricing, no guide or assessment offer "
+                     f"({guidance.promotion_note}).")
+    if getattr(guidance, "protocol_label", ""):
+        lines.append(f"- Competitor / switching protocol: {guidance.protocol_label}. Respond to the unmet need "
+                     f"({guidance.need_focus or 'answer the actual question'}); never name, repeat or attack "
+                     "the other provider, never treat their complaint as fact, never infer the other provider "
+                     "failed clinically, and never promise the same medication, dose, labs, response times or "
+                     "a smooth transfer.")
+        if guidance.brand_limits:
+            lines.append(f"- WellPeps presence ({guidance.brand_mode.replace('_', ' ')}): {guidance.brand_limits}.")
+        lines.append("- Aim for 40 to 90 words. A resource is optional and never required to get the answer.")
+    return "\n".join(lines)
 
 
 def examples_block(examples=None) -> str:
@@ -188,10 +254,13 @@ def length_rule(platform: str) -> str:
     return f"at most {max_chars} characters"
 
 
-def build_prompt(mention: Mention, triage: Triage, claims: list[Claim], nonce: str | None = None) -> str:
+def build_prompt(mention: Mention, triage: Triage, claims: list[Claim], nonce: str | None = None,
+                 guidance=None) -> str:
     platform = mention.platform.value
+    allow_link = guidance is None or guidance.allow_link
     return prompting.render(PROMPT_PATH, {
-        "claims": _claims_block(claims, mention),
+        "claims": _claims_block(claims, mention, allow_link),
+        "engagement": engagement_block(guidance),
         "examples": examples_block(),
         "never_write": _never_write_block(never_write_phrases(knowledge_module.compliance_rules())),
         "rules": RULES_PATH.read_text(encoding="utf-8").strip(),
@@ -255,6 +324,7 @@ class Drafter:
         triage: Triage,
         feedback: list[str] | None = None,
         max_calls: int | None = None,
+        guidance=None,
     ) -> DraftProposal:
         """Draft one reply.
 
@@ -262,12 +332,17 @@ class Drafter:
         hits); they are appended after the mention so the model rewrites.
         ``max_calls`` caps model calls for this draft (default
         ``max_attempts``); ``DraftProposal.calls`` reports how many were used.
+        ``guidance``: the rules-of-engagement guidance for this mention
+        (harvey.engagement.guidance_for), or None for the defaults.
         """
-        claims = candidate_claims(triage.product, self.knowledge.claims(), drug=triage.drug,
-                                  category=triage.category)
+        claims = candidate_claims(
+            triage.product, self.knowledge.claims(), drug=triage.drug, category=triage.category,
+            preferred=tuple(getattr(guidance, "preferred_claims", ()) or ()),
+            disclosure=getattr(guidance, "disclosure_claim", DISCLOSURE_CLAIM) or DISCLOSURE_CLAIM,
+        )
         offered = [c.id for c in claims]
         model = _model_name(self.brain, AGENT, TASK)
-        prompt = build_prompt(mention, triage, claims)
+        prompt = build_prompt(mention, triage, claims, guidance=guidance)
         if feedback:
             prompt += _feedback_block(feedback)
         attempts = self.max_attempts if max_calls is None else max(1, min(int(max_calls), self.max_attempts))

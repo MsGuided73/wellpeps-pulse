@@ -5,6 +5,8 @@ import re
 from datetime import datetime, timedelta
 
 import pytest
+
+from harvey.escalation import SEVERE_KINDS, escalation_kind
 import pytest_asyncio
 
 from harvey.agents.triager import (
@@ -378,7 +380,7 @@ async def test_triage_batch_routes_statuses_and_writes_audit(state):
     assert statuses == {
         praise: MentionStatus.TRIAGED,
         noise: MentionStatus.DROPPED,
-        adverse: MentionStatus.ESCALATED,
+        adverse: MentionStatus.TRIAGED,  # paged, kept for the approved boundary reply (about WellPeps)
         viral: MentionStatus.TRIAGED,  # urgent, but not an escalation category
     }
     for mid in (praise, noise, adverse, viral):
@@ -483,7 +485,10 @@ async def test_sample_fixture_end_to_end_with_fake_brain(state):
     report = await triage_batch(state, Triager(brain), limit=100)
 
     assert report.processed == (await state.get_state_summary())["total"]
-    escalated = await state.list_mentions(status=MentionStatus.ESCALATED, limit=100)
+    # Escalated = a severe escalation was opened; an adverse event or billing
+    # complaint about WellPeps stays triaged for its approved boundary reply.
+    escalated = [m for m in await state.list_mentions(limit=100)
+                 if escalation_kind(await state.get_triage(m.id)) in SEVERE_KINDS]
     texts = " ".join(m.text for m in escalated)
     for marker in ("emergency room", "my lawyer", "HIPAA", "unauthorized charges"):
         assert marker in texts

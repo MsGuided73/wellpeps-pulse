@@ -176,7 +176,15 @@ def test_patient_confirmation_is_red(text, claim_id):
 
 
 @pytest.mark.parametrize("text", ["Semaglutide is one option.", "People compare Zepbound and Mounjaro.", "Many ask about NAD+ lately."])
-def test_medication_names_red_when_toggle_on(text, claim_id):
+def test_medication_names_red_when_toggle_on(text, claim_id, tmp_path, monkeypatch):
+    for p in CONFIG_DIR.glob("*.yaml"):
+        shutil.copy(p, tmp_path / p.name)
+    data = yaml.safe_load((tmp_path / "compliance_rules.yaml").read_text(encoding="utf-8"))
+    data["toggles"]["forbid_medication_names_in_replies"] = True
+    (tmp_path / "compliance_rules.yaml").write_text(yaml.safe_dump(data), encoding="utf-8")
+    monkeypatch.setenv("PULSE_CONFIG_DIR", str(tmp_path))
+    knowledge.reload()
+
     result = compliance_filter(text, "facebook", [claim_id])
     assert result.tier == "red"
     assert any(h.kind == "medication_name" and h.rule_id == "R38" for h in result.hits)
@@ -265,13 +273,31 @@ def test_hit_shape(claim_id):
     assert hit.rule_id == "R14" and hit.match.lower() == "clinically proven" and hit.reason
 
 
-@pytest.mark.parametrize("claim", knowledge.claims(), ids=lambda c: c.id)
+@pytest.mark.parametrize("claim", [c for c in knowledge.claims() if not c.has_placeholder], ids=lambda c: c.id)
 def test_seeded_claim_wording_is_never_hard_blocked(claim):
     # Approved-library wording must not trip the prohibited/privacy rules.
     # Only the R38 medication-name toggle may block it (e.g. the NAD+ claim).
+    # Yellow hits (an open FINALIZE item, R42 kind "finalize") are not blocks:
+    # the red hits are what the filter itself reports as blocking.
     result = compliance_filter(f"{DISCLOSURE} {claim.text}", "facebook", [claim.id])
-    blocking = [h for h in result.hits if h.kind != "yellow" and h.rule_id != "R38"]
+    blocking = [h for h in result.red_hits if h.rule_id != "R38"]
     assert blocking == []
+
+
+@pytest.mark.parametrize("claim", [c for c in knowledge.claims() if c.has_placeholder], ids=lambda c: c.id)
+def test_guide_templates_with_an_unfilled_slot_are_red_until_a_human_fills_them(claim):
+    # Guide wording with a FINALIZE slot ("[approved link]") is a template:
+    # the slot itself is red (R42), and the claim is never publishable.
+    result = compliance_filter(f"{DISCLOSURE} {claim.text}", "facebook", [claim.id])
+    assert any(h.rule_id == "R42" for h in result.red_hits)
+    assert claim.finalize and claim.finalize_key is None
+    assert claim.id not in knowledge.publishable_claim_ids()
+
+
+def test_red_hits_are_the_blocking_subset():
+    result = compliance_filter("Guaranteed results, act now.", "facebook", [])
+    assert result.tier == "red" and set(result.red_hits) <= set(result.hits)
+    assert compliance_filter(f"{DISCLOSURE} Thanks for asking.", "facebook", ["CLM-AMG-04-WORK-WITH"]).red_hits == ()
 
 
 def test_filter_is_deterministic(claim_id):

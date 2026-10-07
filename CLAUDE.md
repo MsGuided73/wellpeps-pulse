@@ -7,7 +7,9 @@ and drafts replies that humans review. It is **not** a sales or outreach
 tool.
 
 The roadmap and data model are in `docs/PLAN.md`. Read it before changing
-behavior. Current status: **Phase 8 complete**. The data layer, config, idle
+behavior. How Pulse engages in public is defined by
+`docs/RULES-OF-ENGAGEMENT.md`, the source of truth for engagement rules.
+Current status: **Phase 8 complete**. The data layer, config, idle
 heartbeat, minimal dashboard, knowledge files (`config/*.yaml`) and the
 deterministic compliance filter (`harvey/compliance.py`) exist.
 - Phase 3: collector registry + JSONL fixture collector (`harvey/collectors/`)
@@ -104,6 +106,32 @@ deterministic compliance filter (`harvey/compliance.py`) exist.
   yellow + approval blocker), migration v7 (`drafts.link_json`,
   `db/postgres/0003_draft_links.sql`), `harvey/reply_analytics.py` +
   `GET /api/analytics/replies` (CSV export) and `harvey/web/replies.js`.
+  Parts of the playbook are superseded by the rules of engagement below
+  (see the "Superseded earlier rules" table).
+
+- Rules of engagement (2026-10-07): **`docs/RULES-OF-ENGAGEMENT.md` is the
+  source of truth** for how Pulse engages. Priority order (binding user
+  instruction): (1) the Competitor Mentions and Provider Switching Protocol
+  V1 for its domain; (2) the other WellPeps Community Engagement documents
+  (Approved Messaging & Response Guide, Live Reference, Compliance Training,
+  Operations Manual, Community Groups and Forums, Pre-LegitScript strategy);
+  (3) everything earlier (Gameplan, R1-R39, the conversion playbook, Pulse
+  defaults) only where those are silent, except the listed retained
+  safeguards. Machine part: `config/engagement_guide.yaml` (situations,
+  templates, persona, `switching_protocol`, `finalize`),
+  `config/communities.yaml`, guide / Live Reference wording as `CLM-AMG-*` /
+  `CLM-LR-*` claims (`claims_policy.trust_approved_messaging_guide`), R40-R49
+  in the filter. Code: `harvey/engagement.py` (situation match, also as a SQL
+  CASE for the draftable query; stop rules; one reply per thread; review-desk
+  info; the 80/20 mix as a planning metric only), `harvey/protocol.py`
+  (decision sequence, opportunity score, record; applied in `triage_batch`
+  after the model call; its route feeds `escalation_kind`),
+  `harvey/communities.py`, `harvey/promotion.py`. Migration v8 /
+  `db/postgres/0004_engagement_protocol.sql` (triage subtype,
+  protocol_decision, protocol_route, opportunity_score, protocol_json).
+  Adverse-event and emergency replies need role clinical or admin
+  (`approve_clinical`). Eval: `tests/test_protocol_eval.py` runs the
+  protocol's 25 examples (`tests/fixtures/protocol_examples.yaml`).
 
 Later phases add everything else. Don't build ahead of the phase you've
 been asked to do.

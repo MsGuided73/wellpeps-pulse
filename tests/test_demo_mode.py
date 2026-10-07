@@ -251,3 +251,30 @@ def test_approval_rules_unchanged_without_the_demo_config(app_state, tmp_path, s
     assert resp.status_code == 409 and "not approved for publishing" in resp.json()["detail"]
     for cid in CLEAN_IDS:
         assert cid in resp.json()["detail"]
+
+
+def test_demo_config_registers_sandbox_communities_and_finalize_placeholders(tmp_path, monkeypatch):
+    """Rules of engagement in the DEMO copy only: fictional sandbox communities
+    with a spread of rules, FINALIZE placeholders; the real config untouched."""
+    from harvey import communities, engagement
+    from harvey.paths import PROJECT_ROOT
+
+    real = (PROJECT_ROOT / "config" / "communities.yaml").read_text(encoding="utf-8")
+    directory = demo_config.write_demo_config(tmp_path / "demo-config")
+    monkeypatch.setenv("PULSE_CONFIG_DIR", str(directory))
+    knowledge.reload()
+    try:
+        base = "http://127.0.0.1:5555/sandbox/f/c/{}/1"
+        assert communities.status_for_url(base.format("telehealth_reviews")).participation == "allowed"
+        assert communities.status_for_url(base.format("glp1_support_group")).participation == "prohibited"
+        assert communities.status_for_url(base.format("peptide_questions")).participation == "with_permission"
+        assert communities.status_for_url(base.format("quick_takes")).participation == "unknown"
+        assert "support_channel" in knowledge.finalized_keys()
+        assert not knowledge.unresolved_finalize(["CLM-AMG-APPX-COMPLAINT"])
+        assert knowledge.unresolved_finalize(["CLM-AMG-13-MISINFO"])      # a [slot]: only a human fills it
+        assert engagement.situation_for("question").id == "question"
+    finally:
+        monkeypatch.setenv("PULSE_CONFIG_DIR", "")
+        knowledge.reload()
+    assert (PROJECT_ROOT / "config" / "communities.yaml").read_text(encoding="utf-8") == real
+    assert not any(c.demo for c in knowledge.communities())

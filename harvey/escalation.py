@@ -45,6 +45,18 @@ _KIND_BY_CATEGORY = {
     Category.PRIVACY: "privacy",
     Category.BILLING_FRAUD: "billing_fraud",
 }
+# Triage subtypes that escalate whatever the category (rules of engagement,
+# docs/RULES-OF-ENGAGEMENT.md; Approved Messaging & Response Guide §11, §23):
+# an emergency goes to the clinical owner; legal threats and regulator
+# contacts go to legal. A media inquiry to WellPeps goes to legal too until
+# WellPeps names a media contact (FINALIZE escalation_contacts).
+_KIND_BY_SUBTYPE = {
+    "emergency": "adverse_event",
+    "self_harm": "adverse_event",
+    "legal_threat": "legal",
+    "regulatory_contact": "legal",
+}
+_WELLPEPS_ONLY_SUBTYPES = {"media_inquiry": "legal"}
 VIRAL_NEGATIVE = "viral_negative"
 # Kinds whose mention leaves the reply queue (status ``escalated``). A
 # viral negative is paged but stays ``triaged`` so a reply can be drafted.
@@ -77,14 +89,25 @@ def escalation_kind(triage: Triage) -> str | None:
     """The escalation kind for a triage result, or None if it isn't one.
 
     Severe categories escalate at any urgency (the triager's safety net
-    forces them to urgent). An urgent complaint about WellPeps itself is a
-    viral negative.
+    forces them to urgent), and so do the subtypes in ``_KIND_BY_SUBTYPE``
+    (and a media inquiry to WellPeps) and the competitor / switching
+    protocol's escalation route. An urgent complaint about WellPeps itself is
+    a viral negative.
     """
     if not triage.relevant:
         return None
-    kind = _KIND_BY_CATEGORY.get(triage.category)
+    kind = _KIND_BY_CATEGORY.get(triage.category) or _KIND_BY_SUBTYPE.get(triage.subtype or "")
     if kind:
         return kind
+    # The competitor / switching protocol's safety and incident route
+    # (harvey/protocol.py; [CP] §4 step 2, §5), also when the public decision
+    # is HOLD / DO NOT ENGAGE ("safety observations may still be routed
+    # internally"). "support" has no paging owner yet (FINALIZE support_channel).
+    route = getattr(triage, "protocol_route", "") or ""
+    if route in SEVERE_KINDS:
+        return route
+    if triage.subject_type == "wellpeps" and (triage.subtype or "") in _WELLPEPS_ONLY_SUBTYPES:
+        return _WELLPEPS_ONLY_SUBTYPES[triage.subtype]
     if (
         triage.category is Category.COMPLAINT
         and triage.urgency is Urgency.URGENT

@@ -34,7 +34,38 @@ function rpRender(d) {
     '<div class="an-empty">No replies were approved in this period.</div>';
 }
 
+// The 80/20 planning card: GET /api/analytics/engagement-mix (our own replies).
+function mixRows(rows, key, labelFn) {
+  return rows.map(r => [escHtml(labelFn(r[key])) + (r.over ? ' ' + toneBadge('over 20%', 'waiting') : ''),
+    escHtml(String(r.education)), escHtml(String(r.promotion)),
+    escHtml(String(Math.round(r.promotional_share * 100)) + '%')]);
+}
+
+function mixRender(d) {
+  document.getElementById('mix-tiles').innerHTML = '<div class="an-mini">' +
+    anMini('Education', String(d.education)) + anMini('Promotion', String(d.promotion)) +
+    anMini('Promotional share', String(Math.round(d.promotional_share * 100)) + '%') + '</div>';
+  const head = ['', 'Education', 'Promotion', 'Share'];
+  const tables = rpTable('By platform', ['Platform'].concat(head.slice(1)),
+      mixRows(d.by_platform, 'platform', p => label('platform', p))) +
+    rpTable('By community', ['Community'].concat(head.slice(1)),
+      mixRows(d.by_community, 'community', c => c === 'none' ? 'No community (owned / review sites)' : c));
+  document.getElementById('mix-tables').innerHTML = tables ||
+    '<div class="an-empty">No replies were approved in this period.</div>';
+}
+
+async function mixLoad(days) {
+  const r = await request('/api/analytics/engagement-mix?days=' + rpDays(days));
+  if (!r.ok) {
+    document.getElementById('mix-tables').innerHTML = '<div class="an-empty">' +
+      escHtml((r.data && r.data.detail) || 'Could not load the education / promotion mix.') + '</div>';
+    return;
+  }
+  mixRender(r.data);
+}
+
 async function rpLoad(days) {
+  if (document.getElementById('mix-card')) mixLoad(days);
   const n = rpDays(days);
   document.getElementById('rp-csv').setAttribute('href', '/api/analytics/replies?format=csv&days=' + n);
   const r = await request('/api/analytics/replies?days=' + n);

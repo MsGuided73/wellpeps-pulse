@@ -20,6 +20,25 @@ For each triaged, reply-appropriate, non-severe mention (oldest first):
 An empty reply (no claim fits) is saved as ``needs_human`` with the
 drafter's reason and goes to review too. Nothing here approves or posts:
 ``in_review`` is as far as automation goes.
+
+Rules of engagement (docs/RULES-OF-ENGAGEMENT.md, harvey/engagement.py) come
+first, before any model call:
+- a community whose rules prohibit brand participation: no reply; the
+  mention stays ``triaged`` with a ``skipped`` audit event (never retried);
+- a stop rule (Guide §22: WellPeps already replied twice in the thread, the
+  person repeats an individual medical request after a boundary reply, an
+  abusive thread): the graceful close or an empty draft, ``needs_human``;
+- a ``boundary_only`` situation (dose, labs, adverse event, emergency, media,
+  complaint, ...): the guide's approved response verbatim, disclosure first,
+  no drafter or reviewer call, ``needs_human`` (a human confirms it fits;
+  adverse events and emergencies need a clinical approver);
+- otherwise the drafter gets the situation's template, preferred claims, the
+  persona's disclosure, the community's link / promotion limits and, for the
+  competitor / switching protocol, its brand mode and the unmet need; the
+  filter checks the draft against the same community context.
+- a thread with another WellPeps reply already waiting for review gets no
+  second one (``skipped``; Competitor/Switching Protocol §9).
+The 80/20 share never gates a reply (a planning metric, Protocol §1).
 """
 
 import inspect
@@ -27,8 +46,8 @@ import logging
 from dataclasses import dataclass
 from typing import Awaitable, Callable
 
-from harvey import knowledge, links
-from harvey.compliance import GateResult, compliance_filter
+from harvey import engagement, knowledge, links
+from harvey.compliance import GateResult, ReplyContext, compliance_filter
 from harvey.models import (
     AuditEvent,
     AuditEventType,
@@ -62,6 +81,8 @@ class DraftReport:
     passed: int = 0
     rejected: int = 0
     errors: int = 0
+    skipped: int = 0             # no reply: the community prohibits brand participation
+    approved_responses: int = 0  # verbatim guide responses / graceful closes (no model call)
     budget_exhausted: bool = False
 
 
@@ -86,7 +107,7 @@ def _reason_line(reason: dict) -> str:
     return f"{reason['rule_id']}: {reason['explanation']}"
 
 
-async def _review(reviewer, proposal, mention: Mention, gate: GateResult):
+async def _review(reviewer, proposal, mention: Mention, gate: GateResult, guidance=None):
     """(verdict, reason lines, reviewer label, raw reasons)."""
     if gate.tier == "red":
         lines = [_hit_line(h) for h in gate.hits]
@@ -95,7 +116,7 @@ async def _review(reviewer, proposal, mention: Mention, gate: GateResult):
         ]
     by_id = knowledge.claims_by_id()
     claims = [by_id[cid] for cid in proposal.claim_ids if cid in by_id]
-    result = await reviewer.review(proposal.reply, mention.platform.value, mention, claims)
+    result = await reviewer.review(proposal.reply, mention.platform.value, mention, claims, guidance=guidance)
     return result.verdict, [_reason_line(r) for r in result.reasons], REVIEWER_ACTOR, result.reasons
 
 
@@ -195,12 +216,13 @@ def _count(report: DraftReport, verdict: ReviewVerdict, tier: str | None) -> Non
         report.needs_human += 1
 
 
-def _filter(proposal, mention: Mention) -> GateResult:
+def _filter(proposal, mention: Mention, context: ReplyContext | None = None) -> GateResult:
     return compliance_filter(proposal.reply, mention.platform.value, proposal.claim_ids,
-                             require_publishable=False)
+                             require_publishable=False, context=context)
 
 
-async def _redraft_if_red(drafter, mention, triage, proposal, report: DraftReport):
+async def _redraft_if_red(drafter, mention, triage, proposal, report: DraftReport,
+                          context: ReplyContext | None = None, guidance=None):
     """(final proposal, its gate or None, superseded (proposal, gate) or None).
 
     A red first draft gets exactly one rewrite with the filter's reasons,
@@ -208,21 +230,101 @@ async def _redraft_if_red(drafter, mention, triage, proposal, report: DraftRepor
     """
     if not proposal.reply:
         return proposal, None, None
-    gate = _filter(proposal, mention)
+    gate = _filter(proposal, mention, context)
     used = int(getattr(proposal, "calls", 1) or 1)
     if gate.tier != "red" or used >= MAX_DRAFTER_CALLS:
         return proposal, gate, None
     feedback = [_hit_line(h) for h in gate.hits]
     logger.info(f"draft for mention {mention.id} was red; redrafting once ({len(feedback)} reason(s))")
     report.redrafted += 1
-    second = await drafter.draft(mention, triage, feedback=feedback, max_calls=MAX_DRAFTER_CALLS - used)
-    return second, (_filter(second, mention) if second.reply else None), (proposal, gate)
+    second = await drafter.draft(mention, triage, feedback=feedback, max_calls=MAX_DRAFTER_CALLS - used,
+                                 guidance=guidance)
+    return second, (_filter(second, mention, context) if second.reply else None), (proposal, gate)
+
+
+@dataclass(frozen=True)
+class _Fixed:
+    """A reply Pulse writes without a model: an approved response or the close."""
+
+    reply: str
+    claim_ids: list
+    rationale: str = ""
+    needs_human_reason: str | None = None
+    model: str = engagement.APPROVED_RESPONSE_MODEL
+    dropped_claim_ids: tuple = ()
+    calls: int = 0
+
+
+async def _skip(state, mention: Mention, reason: str, report: DraftReport) -> None:
+    """No reply at all; the mention stays ``triaged`` (audited once, never retried)."""
+    await state.append_audit(AuditEvent(
+        mention_id=mention.id, event=AuditEventType.SKIPPED, actor=DRAFTER_ACTOR,
+        verdict={"reason": reason}, permalink=mention.url,
+    ))
+    report.skipped += 1
+    logger.info(f"mention {mention.id}: no reply ({reason})")
+
+
+async def _record_fixed(state, mention: Mention, fixed: _Fixed, context: ReplyContext,
+                        reasons: list[str], report: DraftReport) -> None:
+    """An approved response / graceful close: filtered with the community
+    context, never sent to the model reviewer, always ``needs_human``."""
+    gate = _filter(fixed, mention, context)
+    raw = [{"rule_id": "ENGAGEMENT", "explanation": r} for r in reasons]
+    verdict = ReviewVerdict.REJECT if gate.tier == "red" else ReviewVerdict.NEEDS_HUMAN
+    lines = [*reasons, *([_hit_line(h) for h in gate.red_hits] if gate.tier == "red" else [])]
+    await _record_reply(state, mention, fixed, gate, verdict, lines, FILTER_ACTOR, raw)
+    report.drafted += 1
+    report.approved_responses += 1
+    _count(report, verdict, gate.tier)
+
+
+def _approved_reasons(situation, triage) -> list[str]:
+    response = engagement.approved_response_id(situation, triage)
+    source = knowledge.claims_by_id()[response].source
+    reasons = [f"approved response, verbatim ({source}; situation: {situation.label}): a human confirms "
+               "it fits this post before approving"]
+    if engagement.requires_clinical_approval(triage):
+        reasons.append("clinical approval required: only a clinical or admin user may approve this reply")
+    if situation.escalate:
+        reasons.append(f"also escalated ({situation.escalate}); follow the internal escalation procedure")
+    return reasons
 
 
 async def _draft_one(state, drafter, reviewer, mention: Mention, report: DraftReport) -> None:
     triage = await state.get_triage(mention.id)
-    first = await drafter.draft(mention, triage)
-    proposal, gate, superseded = await _redraft_if_red(drafter, mention, triage, first, report)
+    situation = engagement.situation_of(triage)
+    records = await engagement.recent_replies(state)
+    context = engagement.context_from(mention, records)
+    if context.participation == "prohibited":
+        await _skip(state, mention, f"brand participation is prohibited in community {context.community_id} "
+                                    "(config/communities.yaml); WellPeps approval never overrides a "
+                                    "community rule", report)
+        return
+    stop = engagement.stop_decision_from(mention, triage, records)
+    if stop is not None:
+        if stop.action == "skip":
+            await _skip(state, mention, stop.reason, report)
+            return
+        if stop.action == "close":
+            text, ids = engagement.close_reply()
+            await _record_fixed(state, mention, _Fixed(reply=text, claim_ids=ids, rationale=stop.reason),
+                                context, [stop.reason], report)
+            return
+        await _record_empty(state, mention, _Fixed(reply="", claim_ids=[], needs_human_reason=stop.reason,
+                                                   model=""))
+        _count(report, ReviewVerdict.NEEDS_HUMAN, None)
+        return
+    if situation.reply == "boundary_only":
+        text, ids = engagement.approved_reply(situation, triage)
+        reasons = _approved_reasons(situation, triage)
+        await _record_fixed(state, mention, _Fixed(reply=text, claim_ids=ids, rationale=reasons[0]),
+                            context, reasons, report)
+        return
+    guidance = engagement.guidance_for(situation, context, triage)
+    first = await drafter.draft(mention, triage, guidance=guidance)
+    proposal, gate, superseded = await _redraft_if_red(drafter, mention, triage, first, report,
+                                                       context, guidance)
     attempt = 2 if superseded else 1
     if not proposal.reply:
         if superseded:
@@ -230,7 +332,7 @@ async def _draft_one(state, drafter, reviewer, mention: Mention, report: DraftRe
         await _record_empty(state, mention, proposal, attempt)
         _count(report, ReviewVerdict.NEEDS_HUMAN, None)
         return
-    verdict, lines, label, raw = await _review(reviewer, proposal, mention, gate)
+    verdict, lines, label, raw = await _review(reviewer, proposal, mention, gate, guidance)
     # Nothing is stored until the review is done, so a crash leaves the
     # mention ``triaged`` with no partial drafts; it is retried next cycle.
     if superseded:

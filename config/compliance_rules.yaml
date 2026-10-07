@@ -18,7 +18,13 @@
 # reviewer, human approval); see docs.
 
 toggles:
-  forbid_medication_names_in_replies: true   # R38 (open item: confirm scope after Month 1)
+  # R38 (blanket medication-name ban) is SUPERSEDED (2026-10-07): the guidelines
+  # allow general treatment-category education by name ([CT] Module 3 "What is
+  # the difference between semaglutide and tirzepatide?" can be answered
+  # generally; [CG] Official Account; [OM] §9.1) and only forbid individual
+  # recommendations and doses. Names are yellow for review ([PL] REVIEW FIRST:
+  # "Medication names"). The compounded-equivalence safeguards (R15/R16) stay red.
+  forbid_medication_names_in_replies: false
   allow_certification_claims: false         # R12 (LegitScript certification pending)
 
 limits:
@@ -38,13 +44,30 @@ limits:
 # RED. third_person patterns talk about WellPeps like a neutral customer or
 # bystander ("I signed up with WellPeps", "check out WellPeps"); they are RED
 # when the disclosure is missing too (astroturfing), with their own reason.
+#
+# Approved forms (2026-10-06): the Approved Messaging & Response Guide §4
+# forms ("I work with WellPeps." is the primary one and the drafter's default;
+# "I'm part of the WellPeps team." for the community team). "I work for" /
+# "I'm with" WellPeps say the same affiliation just as plainly, so they stay
+# accepted. "Full disclosure: I work with WellPeps, so I'm not neutral." stays
+# allowed: it is in the first sentence, so it is not buried (Guide §4 "Do Not
+# Use: a disclosure buried where a reasonable viewer is unlikely to notice it").
+# influencer_forms are the Brand Ambassador / partner forms (Guide §4): they
+# disclose, but Pulse never drafts as an influencer, so they are yellow (R47).
 disclosure:
   required: true
+  default_form: "I work with WellPeps."
   forms:
     - "I work with WellPeps"
+    - "I'm part of the WellPeps team"
+    - "I am part of the WellPeps team"
     - "I work for WellPeps"
     - "I'm with WellPeps"
     - "I am with WellPeps"
+  influencer_forms:
+    - "I'm a WellPeps Brand Ambassador"
+    - "I am a WellPeps Brand Ambassador"
+    - "I partner with WellPeps"
   third_person:
     - {id: R2, pattern: '\b(?:I|we)\s+(?:used|use|tried|chose|picked|went\s+with|signed\s+up\s+(?:with|for)|switched\s+to|love|recommend)\s+WellPeps\b', reason: "talks about WellPeps as a customer would (astroturfing) without disclosure", source: "R2 ([PB] §05, §14 RED) + R3", examples: ["I went with WellPeps"]}
     - {id: R2, pattern: '\b(?:check\s+out|try|look\s+into|go\s+with|give)\s+WellPeps\b', reason: "recommends WellPeps like a neutral bystander without disclosure", source: "R2 + R3", examples: ["check out WellPeps"]}
@@ -75,7 +98,10 @@ prohibited:
   - {id: R12, pattern: '\bFDA[- ]?(?:approved|certified|registered|licensed)\s+(?:pharmac(?:y|ies)|compounding|compounders?)\b', reason: "pharmacies are not FDA-approved; false accreditation claim", source: "R12 + R27"}
 
   # --- R13: promised outcomes
-  - {id: R13, pattern: '\bguarantee(?:d|s)?\b', reason: "guaranteed outcome", source: "R13 ([CS] Rule 1)", examples: ["guaranteed results"]}
+  # The guide's own approved wording negates it ("no specific amount of weight
+  # loss can be guaranteed", "does not guarantee treatment"): a "guarantee"
+  # negated earlier in the same sentence is not a hit (Guide §7, §15, §26).
+  - {id: R13, pattern: '\bguarantee(?:d|s)?\b', except_pattern: '\b(?:no(?!\s+doubt)|not|never|cannot|can.t|can\s+not|won.t|doesn.t|does\s+not|isn.t|is\s+not|aren.t|are\s+not)\b[^.!?;]{0,60}?\bguarantee(?:d|s)?\b', reason: "guaranteed outcome", source: "R13 ([CS] Rule 1); Guide §26 Guaranteed / Guaranteed results", examples: ["guaranteed results", "Results are guaranteed"]}
   - {id: R13, pattern: '\b(?:lose|drop|shed|losing|dropping)\s+(?:up\s+to\s+)?\d+(?:\.\d+)?\s*(?:%|(?:lbs?|pounds|kg|kilos|percent|(?:pant\s+|dress\s+)?sizes?)\b)', reason: "promised weight-loss amount", source: "R13 + R17 ([CS] Rule 1, 5)"}
   - {id: R13, pattern: '\b(?:rapid|fast|quick|effortless|easy)\s+weight[- ]loss\b', reason: "rapid/effortless weight loss", source: "R13"}
   - {id: R13, pattern: '\bfat[- ]burn(?:ing|ers?)?\b|\bburns?\s+fat\b', reason: "fat-burning claim", source: "R13"}
@@ -163,8 +189,62 @@ prohibited:
   # --- R39: urgency / countdown language
   - {id: R39, pattern: '\b(?:spots?\s+(?:are\s+)?(?:limited|filling)|limited[- ]time|limited\s+(?:spots|availability|supply)|today\s+only|act\s+(?:now|fast)|hurry|while\s+(?:supplies|spots)\s+last|ends\s+(?:tonight|today|soon|at\s+midnight)|last\s+chance|don.?t\s+miss\s+out|only\s+\d+\s+(?:spots|left))\b', reason: "urgency language", source: "R39 (LegitScript Enterprise Fact Sheet p.2)", examples: ["limited-time", "act now"]}
 
+  # --- R40-R42: Approved Messaging & Response Guide (2026-10-06) -----------------
+  # R40: never argue or dismiss (Guide §9 "Do Not Say"; [OM] §13, §19).
+  - {id: R40, pattern: '\bthat.s\s+(?:simply\s+|just\s+)?not\s+true\b|\bthat\s+is\s+(?:simply\s+|just\s+)?not\s+true\b', reason: "argumentative \"That's not true.\" (say \"Just to clarify...\" and correct the information, not the person)", source: "Guide §9 Do Not Say, §21", examples: ["That's not true."]}
+  - {id: R40, pattern: '\byou.re\s+(?:just\s+|simply\s+|completely\s+)?wrong\b|\byou\s+are\s+(?:just\s+|simply\s+|completely\s+)?wrong\b', reason: "argumentative \"You're wrong.\"", source: "Guide §9 Do Not Say", examples: ["You're wrong."]}
+  - {id: R40, pattern: '\byou\s+must\s+have\s+(?:misunderstood|misread|missed)\b', reason: "dismissive \"You must have misunderstood.\"", source: "Guide §9 Do Not Say; [OM] §19", examples: ["You must have misunderstood."]}
+  - {id: R40, pattern: '\b(?:nobody|no\s+one)\s+else\s+(?:has\s+)?(?:ever\s+)?complain', reason: "dismissive \"Nobody else has complained.\"", source: "Guide §9 Do Not Say", examples: ["Nobody else has complained."]}
+  - {id: R40, pattern: '\b(?:delete|remove|take\s+down)\s+(?:your|this|that|the)\s+(?:comment|post|review)\b', reason: "asks the person to delete their comment", source: "Guide §9 Do Not Say; [OM] §16.3", examples: ["Delete your comment and DM me."]}
+  # R41: individual directives, causation and unapproved comparisons (Guide §7, §26; [OM] §8).
+  - {id: R41, pattern: '\bstop\s+taking\b', reason: "\"Stop taking...\" is an individual medication instruction", source: "Guide §26; [LR] §13.4", examples: ["Stop taking it."]}
+  - {id: R41, pattern: '\byou\s+need\s+(?:to\s+(?:take|start|stop|try|use|switch|increase|decrease|inject|get\s+on)\b|(?:a\s+|an\s+|the\s+|some\s+|more\s+|less\s+)?(?:higher\s+|lower\s+|different\s+|stronger\s+)?(?:dose|dosage|medication|meds|prescription|injection|shot)s?\b)', reason: "\"You need...\" treatment directive", source: "Guide §26; [LR] §13.4", examples: ["You need to take", "you need a higher dose"]}
+  - {id: R41, pattern: '\bbest\s+(?:treatment|medication|med|option|choice|dose|program)\s+for\s+you\b', reason: "\"Best treatment for you\" is an individual recommendation", source: "Guide §26", examples: ["the best treatment for you"]}
+  - {id: R41, pattern: '\b(?:is|was|\S+.s)\s+(?:definitely|probably|likely|clearly|obviously|almost\s+certainly)\s+(?:caused\s+by|from|due\s+to|related\s+to|a\s+side\s+effect)\b|\b(?:definitely|probably|likely)\s+caused\s+by\b|\b(?:probably|likely|definitely)\s+(?:unrelated|not\s+related)\b', reason: "states or dismisses causation (\"This is definitely caused by...\", \"probably unrelated\")", source: "Guide §10, §26; [OM] §14.2, §19", examples: ["This is definitely caused by", "That's probably unrelated"]}
+  - {id: R41, pattern: '\b(?:this|it|that|we|they)\s+(?:will|.ll|is\s+going\s+to|are\s+going\s+to)\s+fix\b', reason: "\"This will fix...\" outcome promise", source: "Guide §7, §26", examples: ["This will fix your problem"]}
+  - {id: R41, pattern: '\bbetter\s+than\s+your\s+(?:doctor|provider|physician|clinician)', reason: "\"Better than your doctor's treatment\" disparages other care", source: "Guide §26; [OM] §8", examples: ["better than your doctor's treatment"]}
+  - {id: R41, pattern: '\b(?:safer|more\s+effective|superior)\s+(?:than|to)\b|\b(?:WellPeps|we|our\s+(?:service|program|care|price|pricing|treatment)s?)\s+(?:is\s+|are\s+)?(?:much\s+|way\s+|far\s+)?(?:better|cheaper)\s+than\b|\bwe.re\s+(?:much\s+|way\s+|far\s+)?(?:better|cheaper|the\s+best)\b', reason: "unapproved superiority / safety / efficacy / price comparison", source: "Guide §13, §26; [CT] Module 4; [LR] §13.4", examples: ["safer than", "WellPeps is better than"]}
+  - {id: R41, pattern: '\bno\s+risks?\b', reason: "\"No risk\"", source: "Guide §26; [LR] §13.4", examples: ["no risk"]}
+  - {id: R41, pattern: '\b(?:almost\s+|nearly\s+)?everyone\s+can\s+get\b|\balmost\s+everyone\s+qualifies\b', reason: "implies universal eligibility", source: "Guide §7; [OM] §19", examples: ["almost everyone can get it"]}
+  # The Operations Manual §19 "Do not say" lines the patterns above miss.
+  - {id: R41, pattern: '\b(?:most|many|typical|average)\b[^.!?;]{0,30}\b(?:lose|drop|shed)\s+(?:at\s+least|about|around|over|more\s+than|nearly|almost)\s+\d', reason: "typical-result / weight-loss amount claim", source: "[OM] §19 (\"Most people lose at least 25 pounds.\"); Guide §7", examples: ["Most people lose at least 25 pounds"]}
+  - {id: R41, pattern: '\b(?:start|begin)\s+(?:low|high|at|on|with)\b[^.!?;]{0,40}\b(?:increase|titrate|go\s+up|bump\s+(?:it\s+)?up)\b|\b(?:increase|decrease|raise|lower|titrate|double)\s+(?:your\s+|the\s+)?(?:dose|dosage)\b', reason: "dosing instruction", source: "[OM] §19 (\"Start low and increase after a month.\"); Guide §6", examples: ["Start low and increase after a month", "increase your dose"]}
+  - {id: R41, pattern: '\bskip\s+(?:it|the\s+next\s+(?:dose|shot|injection)|your\s+(?:next\s+)?(?:dose|shot|injection))\b|\b(?:keep|continue)\s+taking\b', reason: "tells the person to skip or keep taking a medication", source: "[OM] §19 (\"Yes, skip it until you feel better.\", \"Keep taking your medication.\"); Guide §6, §10", examples: ["skip it until you feel better", "Keep taking your medication"]}
+  - {id: R41, pattern: '\byour\s+(?:labs?|lab\s+work|bloodwork|blood\s+work|numbers|levels)\s+(?:look|looks|are|seem|seems)\b', reason: "interprets the person's lab results", source: "[OM] §10.3 (\"Your labs look fine.\"); Guide §6", examples: ["Your labs look fine"]}
+  - {id: R41, pattern: '\b(?:it.s|it\s+is|this\s+is|that.s|that\s+is|they.re|they\s+are)\s+(?:very|totally|perfectly|really|super|extremely)\s+safe\b', reason: "blanket safety assurance", source: "[OM] §19 (\"Yes, it's very safe.\"); Guide §7", examples: ["it's very safe"]}
+  - {id: R41, pattern: '\b(?:would|will|might|could)\s+(?:probably\s+|likely\s+|definitely\s+)?(?:be\s+)?(?:better|best|the\s+right\s+(?:choice|option|one))\s+for\s+you\b', reason: "recommends a treatment for the individual", source: "[OM] §19 (\"Tirzepatide would probably be better for you.\"); Guide §6", examples: ["would probably be better for you"]}
+  # R42: a FINALIZE slot left in the text ("[approved link]", "[insert ...]").
+  # No examples: the drafter is told never to leave [brackets] (prompts/draft.md).
+  - {id: R42, pattern: '\[(?:approved|insert|current|optional|brief)\b[^\]]{0,80}\]', reason: "unfilled FINALIZE placeholder from the guide; a human must fill it with approved content", source: "Guide §13-§15, §25"}
+
+  # --- R49: Competitor Mentions and Provider Switching Protocol (2026-10-06) ----
+  # [CP] §1 governing rules, §6 capability limits, §7 words to avoid, §8, and
+  # each example's "Do not say" line (tests/fixtures/protocol_examples.yaml).
+  # Naming the competitor itself is R48 (checked in harvey/compliance.py).
+  - {id: R49, pattern: '\bwe\s+(?:hear|have\s+heard|see)\s+(?:that|this)\b[^.!?;]{0,40}\ball\s+the\s+time\b|\bI.ve\s+heard\s+that\s+too\b', reason: "adopts the poster's complaint about another provider as fact", source: "[CP] §1, §7, Example 1", examples: ["We hear that about them all the time", "I've heard that too"]}
+  - {id: R49, pattern: '\bunlike\s+(?:them|they|those|other|others|some|many|most|your|the\s+other)\b', reason: "\"Unlike them\": implied superiority over another provider", source: "[CP] §7", examples: ["unlike them"]}
+  - {id: R49, pattern: '\bwe\s+(?:actually|really|truly|genuinely)\s+care\b|\bwe\s+care\s+more\b|\bwe\s+do\s+it\s+right\b|\bfinally,?\s+a\s+(?:provider|clinic|company|service)\s+that\b', reason: "\"We actually care\" / \"We do it right\" / \"Finally, a provider that...\": implied superiority", source: "[CP] §7, Example 2", examples: ["We actually care", "we care more", "We do it right", "Finally, a provider that monitors you"]}
+  - {id: R49, pattern: '\b(?:we|WellPeps|our\s+(?:team|program|service|providers?|clinicians?))\b[^.!?;]{0,30}\b(?:better|faster|superior)\s+(?:medical\s+)?(?:care|support|service|follow-?up|shipping|providers?|monitoring|communication)\b|\bour\s+faster\b', reason: "unsupported superiority claim about WellPeps' service", source: "[CP] §1, §7, Examples 1, 7, 11; Guide §13", examples: ["We have better support", "we offer better medical care", "switch to our faster shipping"]}
+  - {id: R49, pattern: '\b(?:switch|move|come|transfer)\s+(?:over\s+)?to\s+(?:us|WellPeps)\b|\btry\s+us\b|\bchoose\s+(?:us|WellPeps)\b|\bsign\s+up\s+(?:now|today)\b', reason: "switching pitch / pressure to switch", source: "[CP] §1, §5, §11, Examples 2, 4, 9, 25", examples: ["Switch to WellPeps", "Try us", "Choose WellPeps", "sign up now"]}
+  - {id: R49, pattern: '\b(?:the\s+)?others\s+just\s+(?:sell|hand\s+out|push)\b|\bjust\s+sell\s+prescriptions\b', reason: "disparages other providers", source: "[CP] §1, Example 9; Guide §3", examples: ["the others just sell prescriptions"]}
+  - {id: R49, pattern: '\bnegligen(?:t|ce)\b|\bmalpractice\b|\b(?:their|its|his|her)\s+care\s+(?:is|was)\s+(?:unsafe|dangerous|negligent|bad|terrible|poor)\b', reason: "a clinical or legal judgement about another provider's care", source: "[CP] §1, Examples 8, 22", examples: ["That is negligent care", "their care is unsafe"]}
+  - {id: R49, pattern: '\b(?:they|she|he|your\s+(?:doctor|clinic|provider|prescriber))\s+should\s+have\s+(?:ordered|tested|checked|caught|prescribed|monitored|done)\b|\bshould\s+have\s+tested\s+you\b|\b(?:they|she|he)\s+(?:missed|overlooked|failed\s+to\s+(?:order|test|check|catch|monitor))\b', reason: "infers that another provider failed clinically", source: "[CP] §1, Examples 3, 8, 16", examples: ["they should have tested you", "they missed a problem"]}
+  - {id: R49, pattern: '\byour\s+(?:results|labs?|numbers|values)\s+show\b', reason: "interprets the person's results", source: "[CP] Example 16; Guide §6", examples: ["Your results show"]}
+  - {id: R49, pattern: '\b(?:our|WellPeps.?|the)\s+(?:medication|meds?|formulation|formula|version|product)\b[^.!?;]{0,30}\b(?:did\s+not|didn.t|could\s+not|couldn.t|cannot|can.t)\s+(?:have\s+)?caused?\b|\b(?:our|WellPeps.?)\s+(?:formulation|formula|version|medication)s?\s+(?:is|are)\s+(?:easier|gentler|better|stronger|safer)\b', reason: "states causation or a formulation advantage", source: "[CP] Examples 4, 18; Guide §10", examples: ["Our medication did not cause that", "our formulation is easier on your stomach"]}
+  - {id: R49, pattern: '\b(?:we\s+(?:will|.ll|can)\s+)?match\s+your\s+(?:current\s+)?(?:dose|dosage|medication|prescription)\b|\bkeep\s+(?:you\s+on\s+)?your\s+(?:current\s+|same\s+)?(?:dose|dosage|medication)\b|\b(?:same|current)\s+(?:dose|dosage)\s+(?:will|would)\s+continue\b|\buninterrupted\s+(?:treatment|care|supply)\b|\bwe(?:\s+will|.ll|\s+can)\s+transfer\s+your\b', reason: "promises treatment continuation when switching", source: "[CP] §6, Example 12", examples: ["we will match your dose", "keep your current dose", "uninterrupted treatment"]}
+  - {id: R49, pattern: '\bdouble\s+up\b|\bgo\s+back\s+(?:down\s+)?to\s+(?:your\s+)?(?:old|previous|prior|lower|last)\s+(?:dose|dosage)\b', reason: "individual dosing instruction", source: "[CP] Examples 5, 11; Guide §6", examples: ["Double up when it arrives", "Go back to your old dose"]}
+  - {id: R49, pattern: '\b(?:answer|respond|reply|get\s+back\s+to\s+you)\w*\s+(?:to\s+\w+\s+)?within\s+(?:an?\s+|one\s+|\d+\s*)?(?:minutes?|hours?|days?|business\s+days?)\b|\b24/7\b|\baround\s+the\s+clock\b|\bdirect\s+(?:physician|doctor)\s+access\b|\b(?:same|next)[- ]day\s+(?:response|answers?|replies)\b', reason: "response-time / access promise not in approved material (ongoing support is not a response-time guarantee)", source: "[CP] §6, Example 20", examples: ["We answer within an hour", "24/7"]}
+  - {id: R49, pattern: '\b(?:all\s+)?(?:lab\s+tests?|labs?|lab\s*work|blood\s*work|testing)\s+(?:are\s+|is\s+)?(?:always\s+)?(?:included|free)\b|\bfree\s+(?:labs?|lab\s+tests?|testing|blood\s*work)\b|\bwe\s+include\s+(?:labs?|lab\s+tests?|testing|blood\s*work)\b', reason: "lab inclusion is not established (Live Reference §6 Labs: CONFIRM)", source: "[CP] §6, Examples 3, 19; [LR] §6", examples: ["We include labs", "all lab tests are included", "free labs"]}
+  - {id: R49, pattern: '\beverything\s+(?:is\s+)?included\b|\ball[- ]inclusive\b', reason: "\"Everything included\" needs operational verification (Live Reference §6)", source: "[CP] §6; [LR] §6", examples: ["Everything included"]}
+  - {id: R49, pattern: '\bget\s+(?:you\s+)?anything\s+compounded\b|\banything\s+compounded\b|\bwe\s+(?:can|will)\s+get\s+(?:you\s+)?(?:any|whatever)\s+(?:medication|drug|peptide)\b', reason: "implies a catalog or compounding workaround", source: "[CP] §6, Example 21", examples: ["We can get anything compounded for you"]}
+  - {id: R49, pattern: '\bexactly\s+which\s+(?:medication|treatment|dose|drug)\b|\bwe(?:\s+will|.ll|\s+can)\s+solve\s+(?:the|your|this)\b|\bwe\s+prevent\s+(?:reactions|side\s+effects)\b', reason: "promises an individual answer or outcome", source: "[CP] Examples 10, 23, 25", examples: ["tell you exactly which medication you need", "we'll solve the problem", "We prevent reactions"]}
+  - {id: R49, pattern: '\b(?:that|this|it)\s+(?:cannot|can.t|could\s+not|couldn.t)\s+(?:have\s+)?happen(?:ed)?\b|\bwould\s+never\s+treat\s+you\b', reason: "dismisses the person's account", source: "[CP] Examples 13, 17; Guide §9", examples: ["That cannot happen under our policy", "would never treat you that way"]}
+  - {id: R49, pattern: '\bI.?m\s+(?:just\s+)?(?:a|an)\s+(?:happy\s+|satisfied\s+|independent\s+|real\s+|regular\s+|ordinary\s+)+(?:customer|patient|user|member)\b|\bI.?m\s+not\s+affiliated\b', reason: "poses as an independent customer (undisclosed endorsement)", source: "[CP] §1, Example 24; Guide §4", examples: ["I'm just a happy independent customer"]}
+  - {id: R49, pattern: '\bI.?ll\s+(?:DM|PM|message|inbox)\s+you\b|\b(?:DM|PM|message|inbox)\s+me\b|\bcheck\s+your\s+(?:DMs|inbox|messages)\b|\bsend\s+(?:me|us)\s+a\s+(?:DM|PM|private\s+message)\b|\b(?:DM|PM|message)\s+us\b|\bslide\s+into\b', reason: "moves the conversation to a private channel (no unsolicited DMs; no channel migration to evade a community rule)", source: "[CP] §1, §8, §11, Example 15; [OM] §12.1; Guide §9", examples: ["I'll DM you", "DM me", "send me a DM"]}
+  - {id: R49, pattern: '\b(?:up|down)vot(?:e|es|ed|ing)\b', reason: "vote manipulation", source: "[CP] §1; [OM] §12.2", examples: ["upvote this"]}
+
 patient_confirmation:
-  - {id: R31, pattern: '\byour\s+(?:order|orders|prescription|prescriptions|Rx|account|shipment|package|refill|refills|chart|medical\s+records?|records|intake|treatment\s+plan|care\s+team|provider|WellPeps\s+provider|lab\s+results)\b', reason: "references the person's account, order, prescription or provider", source: "R31 ([CHS] §9; inferred)", examples: ["we'll look into your account", "your order", "your prescription", "your provider", "your refill"]}
+  - {id: R31, pattern: '\byour\s+(?:order|orders|prescription|prescriptions|Rx|account|shipment|package|refill|refills|chart|medical\s+records?|records|intake|treatment\s+plan|provider|WellPeps\s+provider|lab\s+results)\b|\byour\s+WellPeps\s+care\s+team\b', reason: "references the person's account, order, prescription or provider", source: "R31 ([CHS] §9; inferred). Narrowed 2026-10-07: generic \"your care team\" is allowed ([CP] Example 1: \"ask how you can contact your care team\"); \"your WellPeps care team\" stays red", examples: ["we'll look into your account", "your order", "your prescription", "your provider", "your refill"]}
   - {id: R31, pattern: '\bas\s+(?:our|a\s+WellPeps)\s+(?:patient|customer|member|client)\b', reason: "confirms patient status", source: "R31", examples: ["as our patient", "as a WellPeps customer"]}
   - {id: R31, pattern: '\b(?:you.re|you\s+are)\s+(?:a|an|one\s+of\s+our)\s+(?:existing\s+|current\s+)?(?:WellPeps\s+)?(?:patients?|customers?|members?|clients?)\b', reason: "confirms patient status", source: "R31", examples: ["you're one of our patients", "you are an existing WellPeps member"]}
   - {id: R31, pattern: '\bwe\s+(?:can\s+)?(?:see|noticed|checked|reviewed|looked\s+(?:at|into))\s+(?:that\s+)?(?:you|your)\b', reason: "implies access to the person's records", source: "R31", examples: ["we can see that you", "we checked your", "we looked into your"]}
@@ -179,5 +259,6 @@ yellow:
   - {id: R10, pattern: '\b(?:testimonials?|my\s+(?:experience|results|journey)|I\s+(?:took|take|was\s+on|am\s+on|started|tried))\b', reason: "testimonial / personal medication experience", source: "R10 + R24"}
   - {id: R12, pattern: '\bLegitScript\b', reason: "any LegitScript mention needs review while certification is pending", source: "R12"}
   - {id: R27, pattern: '\d+(?:\.\d+)?\s?%|\bstud(?:y|ies)\s+(?:show|shows|found|prove|proves)\b', reason: "statistic or study citation must come from approved material", source: "R27 + R17"}
-  - {id: R31, pattern: '\b(?:DM|message|inbox)\s+(?:us|me)\b|\bsend\s+(?:us|me)\s+a\s+(?:DM|message)\b|\breach\s+out\s+privately\b', reason: "private-channel invitation; no unsolicited DMs (R6)", source: "R31 + R6"}
+  - {id: R31, pattern: '\breach\s+out\s+privately\b', reason: "private-channel invitation; no unsolicited DMs (R6). DM invitations are red (R49)", source: "R31 + R6; [CP] §1"}
   - {id: R33, pattern: '\b(?:teens?|teenagers?|minors?|under\s+18|high\s+school(?:ers?)?|1[3-7]\s*(?:yo|y/o|years?\s+old))\b', reason: "possible minor; no weight-loss or muscle engagement with under-18s", source: "R33 ([CHS] §5-6)"}
+  - {id: R41, pattern: '(?<!\bif\s)(?<!\bwhat\s)(?<!\bwhatever\s)\byou\s+need\b', reason: "\"You need...\" can read as an individual directive (Guide §26); check it is not treatment advice", source: "Guide §26"}

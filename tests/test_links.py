@@ -19,6 +19,9 @@ from harvey.state import StateManager
 GLP1 = "https://wellpeps.com/smart-patient-guides/glp-1-weight-loss"
 DISCLOSURE = "Disclosure: I work with WellPeps, so I am not neutral."
 GUIDE_CLAIMS = ["CLM-R3-DISCLOSURE", "CLM-EDU-GUIDE-GLP-1-WEIGHT-LOSS"]
+# A real answer before the link: a link alone is a "naked link" (R43; Guide §14).
+ANSWER = ("A few things worth checking with any provider are whether a licensed clinician reviews you and "
+          "what follow-up is included.")
 
 
 @pytest.fixture(autouse=True)
@@ -215,7 +218,7 @@ def test_registry_link_without_a_backing_claim_is_red():
 
 
 def test_backed_registry_link_not_live_is_yellow():
-    result = compliance_filter(f"{DISCLOSURE} Guide: {GLP1}", "reddit", GUIDE_CLAIMS)
+    result = compliance_filter(f"{DISCLOSURE} {ANSWER} Guide: {GLP1}", "reddit", GUIDE_CLAIMS)
     assert result.ok is True and result.tier == "yellow"
     assert [(h.match, h.reason) for h in _hits(result)] == [("LNK-GUIDE-GLP-1-WEIGHT-LOSS", "link not live yet")]
 
@@ -224,15 +227,24 @@ def test_backed_live_registry_link_is_clean(tmp_path, monkeypatch):
     def edit(data):
         for link in data["links"]:
             link["live"] = True
-    _config_copy(tmp_path, monkeypatch, edit_links=edit)
-    result = compliance_filter(f"{DISCLOSURE} Guide: {GLP1}", "reddit", GUIDE_CLAIMS)
+    target = _config_copy(tmp_path, monkeypatch, edit_links=edit)
+    # The guide claims also wait on the gated-download disclosure (FINALIZE, R42 yellow).
+    result = compliance_filter(f"{DISCLOSURE} {ANSWER} Guide: {GLP1}", "reddit", GUIDE_CLAIMS)
+    assert [h.rule_id for h in result.hits] == ["R42"], result.hits
+    guide = yaml.safe_load((target / "engagement_guide.yaml").read_text(encoding="utf-8"))
+    for item in guide["finalize"]:
+        if item["key"] == "gated_download_disclosure":
+            item["value"] = "Fixture: provided"
+    (target / "engagement_guide.yaml").write_text(yaml.safe_dump(guide, sort_keys=False), encoding="utf-8")
+    knowledge.reload()
+    result = compliance_filter(f"{DISCLOSURE} {ANSWER} Guide: {GLP1}", "reddit", GUIDE_CLAIMS)
     assert result.tier == "green", result.hits
 
 
 def test_words_inside_our_tracked_url_are_not_read_as_reply_wording():
     # A subreddit named after a drug lands in utm_term; R38 must not fire on it.
     url = links.tracked_url(GLP1, platform="reddit", mention_id=1, community="tirzepatide")
-    result = compliance_filter(f"{DISCLOSURE} Guide: {url}", "reddit", GUIDE_CLAIMS)
+    result = compliance_filter(f"{DISCLOSURE} {ANSWER} Guide: {url}", "reddit", GUIDE_CLAIMS)
     assert "medication_name" not in {h.kind for h in result.hits}
     assert result.tier == "yellow"
 

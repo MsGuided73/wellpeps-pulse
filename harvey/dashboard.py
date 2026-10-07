@@ -459,7 +459,7 @@ async def get_mentions(status: str | None = None, platform: str | None = None,
 @app.get("/api/mentions/{mention_id}")
 async def get_mention_detail(mention_id: int, user: dict = VIEW,
                              config: PulseConfig = Depends(get_config)):
-    return await review.detail(await get_state(), mention_id, config)
+    return await review.detail(await get_state(), mention_id, config, role=user["role"])
 
 
 @app.get("/api/claims")
@@ -476,10 +476,14 @@ async def edit_mention(mention_id: int, body: EditBody, user: dict = REVIEW,
 
 
 @app.post("/api/mentions/{mention_id}/approve")
-async def approve_mention(mention_id: int, body: ApproveBody | None = None, user: dict = REVIEW,
+async def approve_mention(mention_id: int, body: ApproveBody | None = None, user: dict = VIEW,
                           config: PulseConfig = Depends(get_config)):
+    # Reviewers approve routine replies; an adverse-event / emergency reply
+    # needs a clinical approver (review.approve checks which applies).
+    if not (auth.can(user["role"], "review") or auth.can(user["role"], "approve_clinical")):
+        raise HTTPException(status_code=403, detail="your role does not allow this")
     await review.approve(await get_state(), mention_id, user["email"], config,
-                         draft_id=body.draft_id if body else None)
+                         draft_id=body.draft_id if body else None, role=user["role"])
     return {"success": True}
 
 
@@ -661,6 +665,16 @@ async def get_reply_analytics(days: str | None = Query(None, max_length=8),
         return Response(reply_analytics.to_csv(report), media_type="text/csv",
                         headers={"Content-Disposition": 'attachment; filename="pulse-replies.csv"'})
     return report
+
+
+@app.get("/api/analytics/engagement-mix")
+async def get_engagement_mix(days: str | None = Query(None, max_length=8), user: dict = VIEW):
+    """Education vs promotion of WellPeps' approved / posted replies, overall,
+    per platform and per community: the 80/20 planning metric (never a
+    per-reply quota; harvey/engagement.py mix_report). Our own replies only."""
+    from harvey import engagement
+
+    return await engagement.mix_report(await get_state(), reply_analytics.parse_days(days))
 
 
 @app.get("/api/analytics/{chart}")

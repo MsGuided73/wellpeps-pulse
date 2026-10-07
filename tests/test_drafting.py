@@ -37,7 +37,7 @@ class StubDrafter:
         self.proposals = proposals
         self.calls: list[int] = []
 
-    async def draft(self, mention, triage, feedback=None, max_calls=None):
+    async def draft(self, mention, triage, feedback=None, max_calls=None, guidance=None):
         self.calls.append(mention.id)
         for key, proposal in self.proposals.items():
             if key in mention.text:
@@ -50,7 +50,7 @@ class StubReviewer:
         self.verdict, self.reasons, self.boom = verdict, reasons or [], boom
         self.calls: list[dict] = []
 
-    async def review(self, reply, platform, mention, claims):
+    async def review(self, reply, platform, mention, claims, guidance=None):
         self.calls.append({"reply": reply, "platform": platform, "mention": mention.id,
                            "claims": [c.id for c in claims]})
         if self.boom:
@@ -104,9 +104,12 @@ async def test_only_reply_appropriate_non_severe_triaged_mentions_are_drafted(st
     report = await draft_batch(state, drafter, StubReviewer())
 
     assert drafter.calls == [good]
-    assert isinstance(report, DraftReport) and report.processed == 1
+    # The adverse event about WellPeps gets the guide's approved boundary reply
+    # (no model call; rules of engagement), so two were processed.
+    assert isinstance(report, DraftReport) and report.processed == 2 and report.approved_responses == 1
     assert (await state.get_mention(no_reply)).status is MentionStatus.TRIAGED
-    assert (await state.get_mention(severe)).status is MentionStatus.TRIAGED
+    assert (await state.get_mention(severe)).status is MentionStatus.IN_REVIEW
+    assert (await state.get_latest_draft(severe)).model == "approved-response"
     assert (await state.get_mention(new)).status is MentionStatus.NEW
     assert await state.get_latest_draft(no_reply) is None
 
@@ -128,11 +131,12 @@ async def test_oldest_first_up_to_limit(state):
 async def test_count_draftable_matches_selection(state):
     await _triaged(state, "clean question", 1)
     await _triaged(state, "venting", 2, reply=False)
-    await _triaged(state, "fraud", 3, category=Category.BILLING_FRAUD)
+    await _triaged(state, "fraud", 3, category=Category.BILLING_FRAUD)   # Template C boundary reply
+    await _triaged(state, "lawyer", 4, category=Category.LEGAL_REGULATORY)  # no reply
 
     summary = await state.get_state_summary()
 
-    assert summary["draftable"] == 1
+    assert summary["draftable"] == 2
 
 
 # --- Pipeline ------------------------------------------------------------------------------

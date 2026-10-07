@@ -45,8 +45,14 @@ EXAMPLE_POST = ("anyone tried compounded tirzepatide via telehealth? Trying to f
 GLP1 = "https://wellpeps.com/smart-patient-guides/glp-1-weight-loss"
 DISCLOSURE = "Disclosure: I work with WellPeps, so I am not neutral."
 NOT_LIVE = "link not live yet"
-PLAYBOOK_IDS = ["CLM-R3-DISCLOSURE", "CLM-R7-PROVIDER-CHECKLIST", "CLM-PRICE-FOLLOWUP",
+# The playbook since the rules of engagement (2026-10-07): disclosure, a
+# provider-neutral answer, the provider-determines line; the guide claim is
+# offered after them, never pushed second (Protocol §8), and no price claim leads.
+PLAYBOOK_IDS = ["CLM-AMG-04-WORK-WITH", "CLM-R7-PROVIDER-CHECKLIST", "CLM-LR-02-ONGOING-SUPPORT",
                 "CLM-R22-PROVIDER-DETERMINES"]
+# Review notes an example may show besides "link not live yet": the guide
+# claims' gated-download FINALIZE (R42).
+REVIEW_NOTES = ("FINALIZE",)
 
 
 @pytest.fixture(autouse=True)
@@ -61,9 +67,18 @@ def run(coro):
     return asyncio.run(coro)
 
 
-def _config_copy(tmp_path, monkeypatch, *, live=None, forbid_meds=None, approve=()):
+def _config_copy(tmp_path, monkeypatch, *, live=None, forbid_meds=None, approve=(), community_allowed=True,
+                 finalize=()):
     target = tmp_path / "config"
     shutil.copytree(knowledge.config_dir(), target)
+    if community_allowed:
+        # The example subreddit with verified rules that allow brand replies
+        # and links (an unverified community may carry no link, R44).
+        data = yaml.safe_load((target / "communities.yaml").read_text(encoding="utf-8"))
+        data["communities"].append({
+            "id": "reddit:r/tirzepatidecompound", "platform": "reddit", "name": "r/tirzepatidecompound",
+            "brand_participation": "allowed", "links_allowed": True, "rules_checked_at": "2026-10-01"})
+        (target / "communities.yaml").write_text(yaml.safe_dump(data, sort_keys=False), encoding="utf-8")
     if live is not None:
         data = yaml.safe_load((target / "links.yaml").read_text(encoding="utf-8"))
         for link in data["links"]:
@@ -79,6 +94,12 @@ def _config_copy(tmp_path, monkeypatch, *, live=None, forbid_meds=None, approve=
             if claim["id"] in approve:
                 claim.update(approved_by="Fixture Compliance Officer", approved_at="2026-09-01")
         (target / "claims.yaml").write_text(yaml.safe_dump(data, sort_keys=False), encoding="utf-8")
+    if finalize:
+        data = yaml.safe_load((target / "engagement_guide.yaml").read_text(encoding="utf-8"))
+        for item in data["finalize"]:
+            if item["key"] in finalize:
+                item["value"] = "Fixture: provided by WellPeps"
+        (target / "engagement_guide.yaml").write_text(yaml.safe_dump(data, sort_keys=False), encoding="utf-8")
     monkeypatch.setenv("PULSE_CONFIG_DIR", str(target))
     knowledge.reload()
 
@@ -120,9 +141,9 @@ def test_every_guide_claim_maps_to_one_program_with_a_matching_link():
 
 
 def test_new_claim_wording_is_not_red_except_r38():
-    for claim in knowledge.claims():
+    for claim in (c for c in knowledge.claims() if not c.has_placeholder):  # slots: test_compliance
         result = compliance_filter(f"{DISCLOSURE} {claim.text}", "facebook", [claim.id])
-        blocking = [h for h in result.hits if h.kind != "yellow" and h.rule_id != "R38"]
+        blocking = [h for h in result.red_hits if h.rule_id != "R38"]
         assert blocking == [], (claim.id, blocking)
 
 
@@ -131,7 +152,7 @@ def test_new_claim_wording_is_not_red_except_r38():
 
 def _example_hits(example):
     result = compliance_filter(example.reply, example.platform, example.claim_ids)
-    return result, [h for h in result.hits if h.reason != NOT_LIVE]
+    return result, [h for h in result.hits if h.reason != NOT_LIVE and not h.reason.startswith(REVIEW_NOTES)]
 
 
 def test_examples_are_pending_style_guidance():
@@ -158,12 +179,25 @@ def test_link_examples_show_only_the_not_live_yellow():
 
 
 def test_the_real_tirzepatide_scenario_is_an_example():
+    """Rewritten to the guidelines: the guide's primary disclosure, one brief
+    factual option (the person asks which providers include follow-up), no
+    'one monthly price', the guide's email gate stated."""
     example = next(e for e in knowledge.reply_examples().examples if e.post == EXAMPLE_POST)
     assert example.category == "purchase_intent" and example.platform == "reddit"
-    assert example.reply.startswith("Full disclosure: I work with WellPeps, so I'm not neutral.")
-    assert "At WellPeps, follow-up care is included in the one monthly price." in example.reply
+    assert example.reply.startswith("I work with WellPeps.")
+    assert "WellPeps is one option you can evaluate" in example.reply
+    assert "one monthly price" not in example.reply and "CLM-PRICE-FOLLOWUP" not in example.claim_ids
+    assert "it asks for your email" in example.reply
     assert links.registry_link(GLP1).id == links.find_links(example.reply)[0].link.id
-    assert example.reply.endswith("Whether treatment is right for you is always up to a licensed clinician.")
+
+
+def test_examples_follow_the_guidelines_not_the_superseded_playbook():
+    for example in knowledge.reply_examples().examples:
+        assert example.reply.startswith("I work with WellPeps.")             # Guide §4; Protocol §7
+        assert 30 <= len(example.reply.split()) <= 90                         # Protocol §7: 40-90 words
+        assert not {"CLM-PRICE-FOLLOWUP", "CLM-PRICE-ALLIN"} & set(example.claim_ids)
+        if links.find_links(example.reply):
+            assert "asks for your email" in example.reply                     # Protocol §8
 
 
 def test_examples_block_masks_registry_urls():
@@ -189,8 +223,8 @@ def _ids(claims):
     ("sildenafil", "CLM-EDU-GUIDE-SEXUAL-WELLNESS"),
     ("sermorelin", "CLM-EDU-GUIDE-HEALTHY-AGING-VITALITY"),
     ("glutathione", "CLM-EDU-GUIDE-HEALTHY-AGING-VITALITY"),
-    # The NAD+ guide names the molecule, so R38 (on) falls back to Healthy Aging.
-    ("NAD+", "CLM-EDU-GUIDE-HEALTHY-AGING-VITALITY"),
+    # R38's blanket ban is superseded, so the NAD+ guide is chosen for NAD+.
+    ("NAD+", "CLM-EDU-GUIDE-NAD-THERAPY"),
     ("", "CLM-EDU-GUIDES"),
     ("BPC-157", "CLM-EDU-GUIDES"),
 ])
@@ -198,9 +232,9 @@ def test_guide_claim_follows_the_drug_program(drug, guide):
     assert guide_claim(drug=drug).id == guide
 
 
-def test_nad_guide_is_chosen_when_medication_names_are_allowed(tmp_path, monkeypatch):
-    _config_copy(tmp_path, monkeypatch, forbid_meds=False)
-    assert guide_claim(drug="NAD+").id == "CLM-EDU-GUIDE-NAD-THERAPY"
+def test_healthy_aging_guide_is_the_fallback_if_medication_names_are_forbidden(tmp_path, monkeypatch):
+    _config_copy(tmp_path, monkeypatch, forbid_meds=True)
+    assert guide_claim(drug="NAD+").id == "CLM-EDU-GUIDE-HEALTHY-AGING-VITALITY"
 
 
 def test_guide_claim_follows_the_wellpeps_product():
@@ -210,7 +244,8 @@ def test_guide_claim_follows_the_wellpeps_product():
 @pytest.mark.parametrize("category", [Category.PURCHASE_INTENT, Category.QUESTION])
 def test_purchase_intent_always_offers_the_playbook_claims_first(category):
     ids = _ids(candidate_claims("", drug="tirzepatide", category=category))
-    assert ids[:5] == ["CLM-R3-DISCLOSURE", "CLM-EDU-GUIDE-GLP-1-WEIGHT-LOSS", *PLAYBOOK_IDS[1:]]
+    # The guide is offered after the fixed claims, never pushed second (Protocol §8).
+    assert ids[:5] == [*PLAYBOOK_IDS, "CLM-EDU-GUIDE-GLP-1-WEIGHT-LOSS"]
     assert len(ids) <= MAX_CLAIMS and len(ids) == len(set(ids))
     assert "CLM-R15-COMPOUNDED-DISCLOSURE" in ids  # drug-specific claims still offered
 
@@ -317,15 +352,14 @@ def test_third_person_wording_is_fine_once_disclosed():
 
 
 GOOD_REPLY = (
-    "Full disclosure: I work with WellPeps, so I'm not neutral. When you compare telehealth programs, "
-    "it's worth asking whether follow-up visits with a licensed clinician are included or billed separately, "
-    "how dose adjustments are handled, and which pharmacy prepares the medication. At WellPeps, follow-up "
-    "care is included in the one monthly price. We also have a free guide with questions to ask before "
-    f"choosing a provider and a checklist: {GLP1}. Whether treatment is right for you is always up to a "
-    "licensed clinician."
+    "I work with WellPeps. When you compare telehealth programs, ask whether follow-up with a licensed "
+    "clinician is included or billed separately, how dose adjustments are handled, and which pharmacy prepares "
+    "the medication. WellPeps is one option you can evaluate: if treatment is prescribed, ongoing support is "
+    "part of the WellPeps process. Our free guide (it asks for your email) has questions to ask before choosing "
+    f"a provider: {GLP1}."
 )
-GOOD_IDS = ["CLM-R3-DISCLOSURE", "CLM-R7-PROVIDER-CHECKLIST", "CLM-PRICE-FOLLOWUP",
-            "CLM-EDU-GUIDE-GLP-1-WEIGHT-LOSS", "CLM-R22-PROVIDER-DETERMINES"]
+GOOD_IDS = ["CLM-AMG-04-WORK-WITH", "CLM-R7-PROVIDER-CHECKLIST", "CLM-LR-02-ONGOING-SUPPORT",
+            "CLM-EDU-GUIDE-GLP-1-WEIGHT-LOSS"]
 
 
 def test_drafter_rewrites_the_link_to_the_mentions_tracked_url():
@@ -357,13 +391,15 @@ def _pipeline(tmp_path):
     return state, mention_id, report
 
 
-def test_fakebrain_example_post_drafts_yellow_with_a_stored_tracked_link(tmp_path):
+def test_fakebrain_example_post_drafts_yellow_with_a_stored_tracked_link(tmp_path, monkeypatch):
+    _config_copy(tmp_path, monkeypatch)
     state, mention_id, report = _pipeline(tmp_path)
 
     draft = run(state.get_latest_draft(mention_id))
     assert report.drafted == 1 and report.redrafted == 0
     assert draft.tier == "yellow" and draft.review_verdict is ReviewVerdict.PASS
-    assert draft.filter_hits == ["R8: link not live yet [LNK-GUIDE-GLP-1-WEIGHT-LOSS]"]
+    assert "R8: link not live yet [LNK-GUIDE-GLP-1-WEIGHT-LOSS]" in draft.filter_hits
+    assert all(h.startswith(("R8:", "R42: FINALIZE")) for h in draft.filter_hits), draft.filter_hits
     assert draft.link["id"] == "LNK-GUIDE-GLP-1-WEIGHT-LOSS"
     assert draft.link["utm_content"] == f"m{mention_id}" and draft.link["utm_term"] == "tirzepatidecompound"
     assert draft.link["url"] in draft.text
@@ -375,7 +411,12 @@ def test_approval_is_blocked_while_the_link_is_not_live(tmp_path, monkeypatch):
     draft = run(state.get_latest_draft(mention_id))
 
     blockers = review.approval_blockers(MentionStatus.IN_REVIEW, draft, "reddit", PulseConfig())
-    assert len(blockers) == 1 and "not live yet" in blockers[0] and "LNK-GUIDE-GLP-1-WEIGHT-LOSS" in blockers[0]
+    live = [b for b in blockers if "not live yet" in b]
+    assert len(live) == 1 and "LNK-GUIDE-GLP-1-WEIGHT-LOSS" in live[0]
+    # The guide's gated-download disclosure is a FINALIZE item too (Protocol §8, §13).
+    # ... so that claim is not publishable yet either.
+    assert all("not live yet" in b or b.startswith("FINALIZE") or b.endswith(": CLM-EDU-GUIDE-GLP-1-WEIGHT-LOSS")
+               for b in blockers), blockers
     with pytest.raises(review.ReviewError) as err:
         run(review.approve(state, mention_id, "reviewer@pulse.test", PulseConfig()))
     assert err.value.status == 409 and "not live yet" in err.value.detail
@@ -386,7 +427,7 @@ def test_approval_is_blocked_while_the_link_is_not_live(tmp_path, monkeypatch):
 
 
 def test_approval_goes_through_once_the_link_is_live(tmp_path, monkeypatch):
-    _config_copy(tmp_path, monkeypatch, approve=GOOD_IDS, live=True)
+    _config_copy(tmp_path, monkeypatch, approve=GOOD_IDS, live=True, finalize=("gated_download_disclosure",))
     state, mention_id, _ = _pipeline(tmp_path)
 
     run(review.approve(state, mention_id, "reviewer@pulse.test", PulseConfig()))
@@ -415,7 +456,7 @@ def test_migration_v7_adds_drafts_link_json(tmp_path):
     with sqlite3.connect(path) as db:
         columns = {r[1] for r in db.execute("PRAGMA table_info(drafts)")}
         assert "link_json" in columns
-        assert db.execute("PRAGMA user_version").fetchone()[0] == len(MIGRATIONS) == 7
+        assert db.execute("PRAGMA user_version").fetchone()[0] == len(MIGRATIONS) >= 7
 
 
 def test_postgres_0003_is_idempotent_and_bumps_to_7():

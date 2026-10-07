@@ -1,0 +1,861 @@
+# Generated: 2026-10-06 for the rules of engagement; protocol added 2026-10-07.
+# Do not add internal costs, prices, real people's details or private contacts here.
+# Source: WellPeps community engagement guidelines (originals in
+#   C:\dev\W\docs\community-engagement-agent\Community Engagement-20261007T043724Z-1-001.zip
+#   -> "Community Engagement/<file>"):
+#   [AMG] WellPeps_Approved_Messaging_and_Response_Guide.docx (v1.0, Aug 2026) - primary
+#   [LR]  WellPeps_Approved_Messaging_Live_Reference_v1.0.docx
+#   [CT]  WellPeps_Community_Engagement_Compliance_Training.docx
+#   [OM]  WellPeps_Comprehensive_Community_Engagement_Operations_Training_Manual.docx (v2.0)
+#   [CG]  WellPeps Community Groups and Forums.docx (owner's principles)
+#   [PL]  WellPeps_Pre-LegitScript_Marketing_Community_Strategy.pdf
+#   [CP]  WellPeps_AI_Competitor_Mentions_and_Provider_Switching_Protocol_V1.pdf
+#         (Oct 6, 2026; C:\dev\W\docs\community-engagement-agent\) - controls
+#         competitor mentions, dissatisfaction, provider switching and opportunity
+#         scoring; later approved legal/clinical/privacy/compliance directives
+#         control over it.
+# Priority (user instruction, 2026-10-07): [CP] for its domain, then the other
+# guideline documents above, then earlier Pulse rules only where these are
+# silent (docs/RULES-OF-ENGAGEMENT.md "Superseded earlier rules").
+#
+# The machine part of WellPeps' rules of engagement. docs/RULES-OF-ENGAGEMENT.md
+# is the human-readable, authoritative version; keep the two in step.
+#
+# situations: checked IN ORDER; the first whose match fits the triage
+# (category, subtype, subject, protocol decision, protocol route) wins.
+# subject "wellpeps" = triage subject_type wellpeps; "other" = anything else.
+# decisions: the competitor / switching protocol classification
+# (harvey/protocol.py; "" = outside its scope); routes: its escalation route.
+# The last one must match everything. reply:
+#   draft          the drafter (a model) writes a reply in the template's shape,
+#                  only when triage says a reply is appropriate
+#   boundary_only  Pulse drafts the approved response verbatim (disclosure +
+#                  approved_response), no model call, whatever reply_appropriate says
+#   stop           no reply: Pulse files an empty "needs a human" draft with the reason
+#   no_reply       nothing is drafted (escalated categories stay with their owner)
+# escalate: the escalation kind harvey/escalation.py opens for it (tested to agree).
+# clinical_approval: only a clinical or admin user may approve the reply.
+
+engagement:
+  # official_account (default) or identified_employee ([CG] Option 1: "Hi, I'm
+  # Derek. I help with wellness education at WellPeps..."). There is no anonymous
+  # persona ([CG] Option 5; [AMG] §4; [OM] §3.5).
+  persona: official_account
+  display_name: ""
+
+templates:
+  - id: A
+    name: General Education
+    structure: "I work with WellPeps. In general, [approved educational answer]. [Optional relevant educational resource]."
+    source: "[AMG] §25 Template A"
+    pulse_use: "General wellness, telehealth and WellPeps-process questions (model draft from approved claims)."
+  - id: B
+    name: Individual Medical Question
+    structure: "That requires evaluation by a licensed healthcare provider based on your individual medical history. I can provide general educational information, but I can't recommend a treatment for you personally."
+    source: "[AMG] §25 Template B"
+    pulse_use: "Which treatment / dose / labs / stop or change: the approved boundary, verbatim, no recommendation."
+  - id: C
+    name: Complaint
+    structure: "I'm sorry to hear you have a concern. I'm part of the WellPeps team and can help route this appropriately. For your privacy, please don't post medical or account details here. [approved support direction]."
+    source: "[AMG] §25 Template C"
+    pulse_use: "Complaints, billing and angry comments about WellPeps: disclosure + the approved complaint response; not approvable until the support channel is set (FINALIZE support_channel)."
+  - id: D
+    name: Misinformation
+    structure: "I work with WellPeps. Just to clarify, [approved factual correction]. [approved resource if useful]."
+    source: "[AMG] §25 Template D; §21 four-part formula"
+    pulse_use: "Incorrect information about WellPeps: model draft; the correction must be an approved claim."
+  - id: E
+    name: Influencer Redirect
+    structure: "I partner with WellPeps, but I can't advise you on which treatment is right for you. A licensed healthcare provider would need to evaluate that."
+    source: "[AMG] §25 Template E; §16"
+    pulse_use: "Documentation only: Pulse drafts as the official account or an identified employee, never as an influencer."
+
+situations:
+  # --- Competitor / switching protocol: no public draft ([CP] §4) --------------
+  # In the protocol's scope (a named competitor, a switching / comparison /
+  # venting intent, a clinic recommendation) its classification decides first.
+  # Safety is still routed internally (escalation_kind uses the protocol route).
+  - id: protocol_do_not_engage
+    label: "Protocol: DO NOT ENGAGE"
+    match: {decisions: [do_not_engage]}
+    reply: no_reply
+    link_policy: none
+    notes: "Prohibited community or untrusted / deceptive request. Record the reason; no public reply, no DM, no channel workaround."
+    sources: ["[CP] §4 step 1, §4 table, Examples 15, 24", "[CT] Module 9", "[OM] §5.3"]
+  - id: protocol_hold
+    label: "Protocol: HOLD"
+    match: {decisions: [hold]}
+    reply: no_reply
+    link_policy: none
+    notes: "Unknown community rules, an ambiguous post, or a WellPeps fact that is not approved. Nothing is drafted until a human resolves the blocker."
+    sources: ["[CP] §2, §4 steps 1 and 5, Examples 14, 19, 21"]
+  - id: protocol_monitor_only
+    label: "Protocol: MONITOR ONLY"
+    match: {decisions: [monitor_only]}
+    reply: no_reply
+    link_policy: none
+    notes: "Venting only, or no useful answer. Monitor without joining the complaint; never manufacture a switching opportunity."
+    sources: ["[CP] §4 step 4, Examples 2, 13"]
+  # --- Emergencies and safety (always escalate) -------------------------------
+  - id: emergency
+    label: "Medical emergency"
+    match: {subtypes: [emergency]}
+    reply: boundary_only
+    approved_response: CLM-AMG-11-EMERGENCY
+    escalate: adverse_event
+    clinical_approval: true
+    link_policy: none
+    notes: "Direct to immediate emergency care only; never diagnose, troubleshoot or give treatment instructions."
+    sources: ["[AMG] §11, §24", "[OM] §14.1, §25", "[LR] §14", "[CT] Module 8"]
+  - id: self_harm
+    label: "Possible self-harm"
+    match: {subtypes: [self_harm]}
+    reply: no_reply
+    escalate: adverse_event
+    clinical_approval: true
+    link_policy: none
+    notes: "No approved wording exists for self-harm; the clinical owner decides. Pulse drafts nothing; any reply a human writes needs a clinical approver."
+    sources: ["[OM] §14, §15 (credible safety threats)", "[LR] §14 (threat / serious safety concern)"]
+  - id: adverse_event_dose_change
+    label: "Adverse event: asks to skip or change a dose"
+    match: {categories: [adverse_event], subtypes: [medication_change, dose_question]}
+    reply: boundary_only
+    approved_response: CLM-AMG-10-DOSE-CHANGE
+    escalate: adverse_event
+    clinical_approval: true
+    link_policy: none
+    notes: "Boundary + immediate escalation. Never assess causation, dismiss, or troubleshoot treatment publicly."
+    sources: ["[AMG] §10, §24", "[OM] §14.2, §19", "[CT] Module 8"]
+  - id: adverse_event
+    label: "Adverse event / symptom report"
+    match: {categories: [adverse_event]}
+    reply: boundary_only
+    approved_response: CLM-AMG-10-REACTION
+    escalate: adverse_event
+    clinical_approval: true
+    link_policy: none
+    notes: "The guide's public boundary reply, drafted for a clinical approver, plus immediate escalation (clinical owner). Never assess causation, dismiss, troubleshoot treatment publicly, or attach marketing, links or a switching pitch. Applies to competitor-related reports too ([CP] §5, Examples 4, 18): never assume WellPeps has access to the person's care team."
+    sources: ["[AMG] §10, §19, §24", "[OM] §14.2, §19, §25", "[CT] Module 8", "[LR] §14", "[CP] §5, Examples 4, 18"]
+  # --- Media, legal, regulatory, privacy (escalate; no substantive reply) -------
+  - id: media_inquiry
+    label: "Media inquiry"
+    match: {subtypes: [media_inquiry], subject: wellpeps}
+    reply: boundary_only
+    approved_response: CLM-AMG-23-MEDIA
+    disclosure_claim: CLM-AMG-04-WORK-WITH
+    escalate: legal
+    link_policy: none
+    notes: "Only the routing line; never a substantive comment. Routed to the legal owner until a named media contact exists (FINALIZE escalation_contacts)."
+    sources: ["[AMG] §23", "[OM] §15, §25", "[CT] Scenario 8B"]
+  - id: media_other
+    label: "Media inquiry (not to WellPeps)"
+    match: {subtypes: [media_inquiry]}
+    reply: no_reply
+    link_policy: none
+    notes: "A journalist looking for sources in a community is not a WellPeps media inquiry: no reply, no page."
+    sources: ["[AMG] §23", "[OM] §5.3"]
+  - id: legal_regulatory
+    label: "Legal threat or regulator contact"
+    match: {categories: [legal_regulatory]}
+    reply: no_reply
+    escalate: legal
+    link_policy: none
+    notes: "Do not provide a substantive response. Preserve the communication and route it immediately."
+    sources: ["[AMG] §23", "[OM] §15, §25", "[LR] §14"]
+  - id: legal_subtype
+    label: "Legal threat or regulator contact"
+    match: {subtypes: [legal_threat, regulatory_contact]}
+    reply: no_reply
+    escalate: legal
+    link_policy: none
+    sources: ["[AMG] §23", "[OM] §15"]
+  - id: privacy_concern
+    label: "Privacy / HIPAA concern"
+    match: {categories: [privacy]}
+    reply: no_reply
+    escalate: privacy
+    link_policy: none
+    notes: "Minimize public discussion, do not confirm patient status or repeat private information. The guide gives no approved wording, so the privacy owner writes any minimal reply."
+    sources: ["[AMG] §23", "[OM] §10, §25", "[CT] Module 5", "[LR] §14"]
+  # --- Stop responding -------------------------------------------------------------
+  - id: abusive
+    label: "Abusive or threatening thread"
+    match: {subtypes: [abusive]}
+    reply: stop
+    link_policy: none
+    notes: "Stop responding; use platform moderation / escalation. No reply is drafted."
+    sources: ["[AMG] §22", "[OM] §13.3"]
+  # --- Competitor / switching protocol: ESCALATE not caught above ([CP] §4-§5) -----
+  - id: protocol_escalate_harm_dose
+    label: "Protocol ESCALATE: health concern with a dose question"
+    match: {decisions: [escalate], routes: [adverse_event], subtypes: [medication_change, dose_question]}
+    reply: boundary_only
+    approved_response: CLM-AMG-10-DOSE-CHANGE
+    escalate: adverse_event
+    clinical_approval: true
+    link_policy: none
+    notes: "Possible safety concern plus an individualized dose request: safety review immediately; suppress switching."
+    sources: ["[CP] §5, Example 5", "[AMG] §10"]
+  - id: protocol_escalate_harm
+    label: "Protocol ESCALATE: possible serious harm"
+    match: {decisions: [escalate], routes: [adverse_event]}
+    reply: boundary_only
+    approved_response: CLM-AMG-10-REACTION
+    escalate: adverse_event
+    clinical_approval: true
+    link_policy: none
+    notes: "Approved safety wording only; never marketing, links, discounts or a switching pitch; queue placement never depends on conversion value."
+    sources: ["[CP] §5, Examples 4, 23", "[AMG] §10"]
+  - id: protocol_escalate_legal
+    label: "Protocol ESCALATE: legal, regulatory or media"
+    match: {decisions: [escalate], routes: [legal]}
+    reply: no_reply
+    escalate: legal
+    link_policy: none
+    notes: "No substantive company position. Preserve the source pointer and route internally."
+    sources: ["[CP] Example 22", "[AMG] §23"]
+  - id: protocol_escalate_privacy
+    label: "Protocol ESCALATE: privacy exposure"
+    match: {decisions: [escalate], routes: [privacy]}
+    reply: boundary_only
+    approved_response: CLM-AMG-08-POSTED-DETAILS
+    escalate: privacy
+    link_policy: none
+    notes: "Privacy review; never copy, quote or interpret the values; never confirm patient status."
+    sources: ["[CP] Example 16", "[AMG] §8", "[CT] Module 5"]
+  - id: protocol_escalate_billing
+    label: "Protocol ESCALATE: WellPeps billing complaint"
+    match: {decisions: [escalate], routes: [billing_fraud]}
+    template: C
+    reply: boundary_only
+    approved_response: CLM-AMG-09-BILLING
+    disclosure_claim: CLM-AMG-04-TEAM
+    escalate: billing_fraud
+    link_policy: none
+    notes: "Own-company complaint to support; no patient-status confirmation; never 'That cannot happen under our policy.'"
+    sources: ["[CP] Example 17", "[AMG] §9"]
+  - id: protocol_escalate_support
+    label: "Protocol ESCALATE: complaint involving WellPeps"
+    match: {decisions: [escalate], routes: [support]}
+    template: C
+    reply: boundary_only
+    approved_response: CLM-AMG-APPX-COMPLAINT
+    disclosure_claim: CLM-AMG-04-TEAM
+    link_policy: none
+    notes: "Support route. There is no support escalation queue yet (FINALIZE support_channel): Pulse cannot page it, so the review desk shows the handoff as not done until a human routes it."
+    sources: ["[CP] §3, §5", "[AMG] §9", "[LR] §10, §14"]
+  # --- Competitor / switching protocol: CLINICAL CAUTION ([CP] §4 step 3) ------------
+  # Approved boundary and provider direction only, whether or not the thread is
+  # WellPeps' own (Examples 3, 8, 11, 12, 25). No resource, no testing promise.
+  - id: protocol_clinical_dose
+    label: "Protocol CLINICAL CAUTION: dose question"
+    match: {decisions: [clinical_caution], subtypes: [dose_question]}
+    template: B
+    reply: boundary_only
+    approved_response: CLM-AMG-06-DOSE
+    link_policy: none
+    sources: ["[CP] §4 step 3", "[AMG] §6"]
+  - id: protocol_clinical_change
+    label: "Protocol CLINICAL CAUTION: stop, skip, change or continue a medication"
+    match: {decisions: [clinical_caution], subtypes: [medication_change]}
+    template: B
+    reply: boundary_only
+    approved_response: CLM-AMG-06-STOP-CHANGE
+    link_policy: none
+    notes: "Never promise that a particular medication or dose would continue after switching ([CP] §6, Example 12)."
+    sources: ["[CP] §4 step 3, §6, Examples 11, 12", "[AMG] §6"]
+  - id: protocol_clinical_labs
+    label: "Protocol CLINICAL CAUTION: labs or testing"
+    match: {decisions: [clinical_caution], subtypes: [lab_question]}
+    template: B
+    reply: boundary_only
+    approved_response: CLM-AMG-06-LABS
+    link_policy: none
+    notes: "Never judge whether another provider should have ordered labs."
+    sources: ["[CP] §4 step 3, Examples 3, 8", "[AMG] §6"]
+  - id: protocol_clinical_qualify
+    label: "Protocol CLINICAL CAUTION: eligibility"
+    match: {decisions: [clinical_caution], subtypes: [qualify_question]}
+    reply: boundary_only
+    approved_response: CLM-AMG-05-QUALIFY
+    link_policy: none
+    sources: ["[CP] §4 step 3", "[AMG] §5"]
+  - id: protocol_clinical_symptom
+    label: "Protocol CLINICAL CAUTION: symptoms"
+    match: {decisions: [clinical_caution], subtypes: [symptom_report]}
+    reply: boundary_only
+    approved_response: CLM-AMG-APPX-SIDE-EFFECT
+    link_policy: none
+    notes: "A health concern overrides any service opportunity; no resource, no testing promise."
+    sources: ["[CP] §4 step 3, Example 3", "[AMG] Appendix A"]
+  - id: protocol_clinical_results
+    label: "Protocol CLINICAL CAUTION: results"
+    match: {decisions: [clinical_caution], subtypes: [results_question]}
+    template: B
+    reply: boundary_only
+    approved_response: CLM-AMG-07-ALWAYS-WORK
+    approved_response_by_program:
+      Weight Loss: CLM-AMG-07-WEIGHT
+      Hair Restoration: CLM-AMG-07-HAIR
+      Sexual Wellness: CLM-AMG-07-SEXUAL
+    link_policy: none
+    sources: ["[CP] §4 step 3", "[AMG] §7"]
+  - id: protocol_clinical_safety
+    label: "Protocol CLINICAL CAUTION: is it safe?"
+    match: {decisions: [clinical_caution], subtypes: [safety_question]}
+    template: B
+    reply: boundary_only
+    approved_response: CLM-AMG-07-SAFE
+    link_policy: none
+    sources: ["[CP] §4 step 3", "[AMG] §7"]
+  - id: protocol_clinical_caution
+    label: "Protocol CLINICAL CAUTION"
+    match: {decisions: [clinical_caution]}
+    template: B
+    reply: boundary_only
+    approved_response: CLM-AMG-25-TEMPLATE-B
+    link_policy: none
+    notes: "Never infer that a competitor failed clinically, should have ordered labs, prescribed incorrectly or caused harm."
+    sources: ["[CP] §1, §4 step 3, Examples 8, 25", "[AMG] §25 Template B"]
+  # --- Complaints (Template C) ---------------------------------------------------
+  - id: billing_complaint
+    label: "Billing or account complaint"
+    match: {categories: [billing_fraud], subject: wellpeps}
+    template: C
+    reply: boundary_only
+    approved_response: CLM-AMG-09-BILLING
+    disclosure_claim: CLM-AMG-04-TEAM
+    escalate: billing_fraud
+    link_policy: none
+    notes: "Acknowledge, protect privacy, route to support. Never argue, never confirm patient status, never ask for account details publicly."
+    sources: ["[AMG] §9, §24, §25 Template C", "[OM] §13", "[CT] Module 7"]
+  - id: billing_other
+    label: "Billing accusation about another company"
+    match: {categories: [billing_fraud]}
+    reply: no_reply
+    escalate: billing_fraud
+    link_policy: none
+    sources: ["[OM] §5.3"]
+  - id: complaint
+    label: "Complaint about WellPeps"
+    match: {categories: [complaint], subject: wellpeps}
+    template: C
+    reply: boundary_only
+    approved_response: CLM-AMG-APPX-COMPLAINT
+    disclosure_claim: CLM-AMG-04-TEAM
+    link_policy: none
+    notes: "Acknowledge without admitting unverifiable facts, do not debate, protect privacy, route support. A viral complaint is also paged (viral_negative)."
+    sources: ["[AMG] §9, §25 Template C, Appendix A", "[OM] §13", "[CT] Module 7"]
+  - id: complaint_other
+    label: "Complaint about another company"
+    match: {categories: [complaint]}
+    reply: no_reply
+    link_policy: none
+    notes: "Not WellPeps' complaint to handle; never pile on a competitor."
+    sources: ["[AMG] §13", "[OM] §5.3"]
+  # --- Privacy of the poster -------------------------------------------------------
+  - id: records_dm_request
+    label: "Wants to send medical records / labs privately"
+    match: {subtypes: [records_dm_request]}
+    reply: boundary_only
+    approved_response: CLM-AMG-08-DM-RECORDS
+    link_policy: none
+    notes: "DMs are not a clinical back door; never collect records, labs or photos."
+    sources: ["[AMG] §8", "[OM] §10.3, §19", "[CT] Module 5"]
+  - id: personal_medical_info
+    label: "Poster shares personal medical details"
+    match: {subtypes: [personal_medical_info]}
+    reply: boundary_only
+    approved_response: CLM-AMG-08-POSTED-DETAILS
+    link_policy: none
+    notes: "Do not repeat, quote, analyze or amplify the information; do not confirm patient status."
+    sources: ["[AMG] §8", "[OM] §10.2", "[CT] Module 5", "[CG] Compliance 3"]
+  # --- Individual medical questions (Template B; boundary only) ------------------
+  # Only when the question is put to WellPeps (subject wellpeps): WellPeps does
+  # not enter third-party threads asking for dosing / diagnosis ([OM] §5.3).
+  - id: dose_question
+    label: "Dose question"
+    match: {subtypes: [dose_question], subject: wellpeps}
+    template: B
+    reply: boundary_only
+    approved_response: CLM-AMG-06-DOSE
+    link_policy: none
+    sources: ["[AMG] §6, §24, Appendix A", "[OM] §9, §19", "[CT] Module 3"]
+  - id: lab_question
+    label: "Lab interpretation request"
+    match: {subtypes: [lab_question], subject: wellpeps}
+    template: B
+    reply: boundary_only
+    approved_response: CLM-AMG-06-LABS
+    link_policy: none
+    sources: ["[AMG] §6, §24", "[OM] §19", "[CT] Scenario 5A"]
+  - id: medication_change
+    label: "Should I stop / skip / change my medication"
+    match: {subtypes: [medication_change], subject: wellpeps}
+    template: B
+    reply: boundary_only
+    approved_response: CLM-AMG-06-STOP-CHANGE
+    link_policy: none
+    sources: ["[AMG] §6, §24", "[CT] Module 3"]
+  - id: individual_treatment
+    label: "Individual medical question"
+    match: {subtypes: [individual_treatment], subject: wellpeps}
+    template: B
+    reply: boundary_only
+    approved_response: CLM-AMG-25-TEMPLATE-B
+    link_policy: none
+    sources: ["[AMG] §6, §25 Template B", "[OM] §9.3", "[CT] Module 3"]
+  - id: results_question
+    label: "Results / expectations question"
+    match: {subtypes: [results_question], subject: wellpeps}
+    template: B
+    reply: boundary_only
+    approved_response: CLM-AMG-07-ALWAYS-WORK
+    approved_response_by_program:
+      Weight Loss: CLM-AMG-07-WEIGHT
+      Hair Restoration: CLM-AMG-07-HAIR
+      Sexual Wellness: CLM-AMG-07-SEXUAL
+    link_policy: none
+    notes: "Never an expected number, never 'typical' results."
+    sources: ["[AMG] §7", "[CT] Module 4", "[LR] §13"]
+  - id: safety_question
+    label: "Is it safe?"
+    match: {subtypes: [safety_question], subject: wellpeps}
+    template: B
+    reply: boundary_only
+    approved_response: CLM-AMG-07-SAFE
+    link_policy: none
+    sources: ["[AMG] §7", "[OM] §19"]
+  - id: qualify_question
+    label: "Do I / does everyone qualify?"
+    match: {subtypes: [qualify_question], subject: wellpeps}
+    reply: boundary_only
+    approved_response: CLM-AMG-05-QUALIFY
+    link_policy: none
+    sources: ["[AMG] §5, Appendix A", "[OM] §19"]
+  - id: individual_third_party
+    label: "Individual medical question in a third-party thread"
+    match: {subtypes: [dose_question, lab_question, medication_change, individual_treatment, results_question, safety_question, qualify_question]}
+    reply: no_reply
+    link_policy: none
+    notes: "Avoid: requests for diagnosis, dosage, medication changes or individualized clinical judgement ([OM] §5.3)."
+    sources: ["[OM] §5.3, §27"]
+  # --- Competitor / switching protocol: routine replies ([CP] §4 step 4, §7) ---------
+  - id: protocol_appropriate_alternative
+    label: "Protocol APPROPRIATE ALTERNATIVE"
+    match: {decisions: [appropriate_alternative]}
+    template: A
+    reply: draft
+    preferred_claims: [CLM-R7-PROVIDER-CHECKLIST, CLM-LR-02-ONGOING-SUPPORT, CLM-AMG-05-HOW-IT-WORKS]
+    notes: "Explicit request for alternatives. Answer the underlying need first (what to ask any provider), then ONE concise, disclosed, factual description of WellPeps ('WellPeps is one option you can evaluate'), no superiority claim, no promise it is right for them. Never repeat or attack the named provider; a complaint is the poster's account, not a fact. 40-90 words."
+    sources: ["[CP] §1, §4, §7, Examples 1, 6", "[AMG] §13, §17"]
+  - id: protocol_educational_only
+    label: "Protocol EDUCATIONAL ONLY"
+    match: {decisions: [educational_only]}
+    template: A
+    reply: draft
+    education_only: true
+    preferred_claims: [CLM-R7-PROVIDER-CHECKLIST, CLM-AMG-13-BETTER, CLM-AMG-APPX-COMPETITOR, CLM-LR-02-ONGOING-SUPPORT]
+    notes: "General useful answer. Describe WellPeps only if the person asked about WellPeps (approved facts only). No comparison, no response-time, lab or price claim that is not approved, no call to action. Never repeat or attack the named provider. 40-90 words."
+    sources: ["[CP] §4 step 4, §7, Examples 7, 9, 10, 20", "[AMG] §13", "[CT] Scenario 4B"]
+  # --- Competitors -------------------------------------------------------------------
+  - id: competitor_comparison_wellpeps
+    label: "Is WellPeps better than a competitor?"
+    match: {subtypes: [competitor_comparison], subject: wellpeps}
+    reply: boundary_only
+    approved_response: CLM-AMG-13-BETTER
+    link_policy: none
+    notes: "Never an unsupported superiority, safety, efficacy or price comparison; never disparage."
+    sources: ["[AMG] §12, §13, Appendix A", "[CT] Scenario 4B", "[OM] §19"]
+  - id: competitor_comparison
+    label: "Competitor comparison"
+    match: {subtypes: [competitor_comparison]}
+    template: A
+    reply: draft
+    preferred_claims: [CLM-AMG-APPX-COMPETITOR, CLM-AMG-26-PROVIDER-CAN-DETERMINE]
+    notes: "Factual WellPeps information only, let the user evaluate it. No comparative claims, no attacks."
+    sources: ["[AMG] §13", "[CT] Module 4"]
+  - id: competitor_praise
+    label: "User praises a competitor"
+    match: {subtypes: [competitor_praise]}
+    template: A
+    reply: draft
+    preferred_claims: [CLM-AMG-26-EXPLAIN-PROCESS]
+    notes: "Do not attack or diminish the competitor. Only if WellPeps is relevant: factual approved information, then let the user evaluate it."
+    sources: ["[AMG] §13"]
+  # --- WellPeps-specific questions --------------------------------------------------
+  - id: misinformation_about_wellpeps
+    label: "Incorrect information about WellPeps"
+    match: {subtypes: [misinformation_about_wellpeps]}
+    template: D
+    reply: draft
+    preferred_claims: [CLM-AMG-21-NOT-AUTOMATIC, CLM-AMG-15-NO-GUARANTEE, CLM-AMG-05-HOW-IT-WORKS]
+    notes: "Disclose, 'Just to clarify...', the approved correction, a resource only if useful. Correct the information, not the person; one clarification at most."
+    sources: ["[AMG] §13, §21, §25 Template D", "[OM] §13.2", "[CT] Module 7"]
+  - id: has_anyone_used_wellpeps
+    label: "Has anyone used WellPeps?"
+    match: {subtypes: [has_anyone_used_wellpeps]}
+    template: A
+    reply: draft
+    preferred_claims: [CLM-AMG-05-HOW-IT-WORKS, CLM-AMG-15-NO-GUARANTEE]
+    notes: "Disclose first, then factual information. Never pretend to be an independent customer."
+    sources: ["[AMG] §18", "[PL] Channel 6"]
+  - id: pricing_question
+    label: "Pricing / fees question"
+    match: {subtypes: [pricing_question]}
+    template: A
+    reply: draft
+    preferred_claims: [CLM-AMG-12-CHEAPER, CLM-PRICE-FOLLOWUP]
+    notes: "Only current approved pricing language; never improvise fees, inclusions, shipping, cancellation or subscription terms."
+    sources: ["[AMG] §12", "[LR] §5-8"]
+  - id: process_question
+    label: "How WellPeps works / how to start"
+    match: {subtypes: [process_question]}
+    template: A
+    reply: draft
+    preferred_claims: [CLM-AMG-05-HOW-IT-WORKS, CLM-AMG-15-NO-GUARANTEE, CLM-AMG-APPX-HOW-IT-WORKS]
+    notes: "Approved company process messaging. No assessment link until FINALIZE assessment_url and LegitScript (R8)."
+    sources: ["[AMG] §5, §15", "[OM] §19"]
+  - id: clinic_recommendation
+    label: "Asks the community to recommend a clinic"
+    match: {subtypes: [clinic_recommendation]}
+    template: A
+    reply: draft
+    preferred_claims: [CLM-AMG-17-TELEHEALTH, CLM-R7-PROVIDER-CHECKLIST]
+    notes: "Only where the community allows business participation: disclose, explain WellPeps factually, no exaggerated sales language. If promotion is prohibited, do not promote WellPeps."
+    sources: ["[AMG] §17", "[CT] Scenario 2A"]
+  - id: general_education
+    label: "General education question"
+    match: {subtypes: [general_education]}
+    template: A
+    reply: draft
+    preferred_claims: [CLM-AMG-17-TELEHEALTH, CLM-AMG-18-ONLINE-CLINICS]
+    notes: "Useful even if WellPeps is never mentioned; mention WellPeps only when relevant."
+    sources: ["[AMG] §17, §18, §25 Template A", "[CG] Reddit", "[OM] §7"]
+  # --- Category defaults -----------------------------------------------------------
+  - id: misinformation
+    label: "Health misinformation"
+    match: {categories: [misinformation]}
+    reply: no_reply
+    link_policy: none
+    notes: "General health misinformation: a human decides whether and how to respond."
+    sources: ["[OM] §13.2", "[CT] Module 7"]
+  - id: question
+    label: "Question"
+    match: {categories: [question, purchase_intent]}
+    template: A
+    reply: draft
+    preferred_claims: [CLM-AMG-17-TELEHEALTH]
+    sources: ["[AMG] §2, §25 Template A", "[OM] §18"]
+  - id: default
+    label: "Other"
+    match: {}
+    template: A
+    reply: draft
+    sources: ["[AMG] §2"]
+
+link_rules:
+  # [AMG] §14 / [OM] §11.3 / [PL] "Don't drop links in every response":
+  # the same registry link in the same community at most max_repeats times
+  # within repeat_window_days (approved or posted replies) -> yellow "repeated link".
+  repeat_window_days: 7
+  max_repeats: 1
+  # [AMG] §14 "provide a useful answer rather than posting a naked link":
+  # a reply with a link needs at least this many words besides the link and
+  # the disclosure sentence, else red.
+  min_words_with_link: 12
+
+eighty_twenty:
+  # [CG] 80/20 rule; [CT] Module 1; [OM] §2.1. A PLANNING metric, not a
+  # per-reply quota or an exception to platform rules ([CP] §1; [OM] §2.1):
+  # Pulse shows it on the review desk (community chip) and the Analytics
+  # "Education vs promotion" card, and never blocks or flags a single reply on
+  # it. Where a community prohibits promotion the permitted share is zero,
+  # which the community rules enforce ([CT] Module 1; [AMG] §17).
+  # A reply is PROMOTIONAL when it carries any link (Pulse's only links are
+  # the email-gated Smart Patient Guide pages, i.e. lead capture), cites a
+  # claim marked promotional (pricing, guides, assessment), mentions a price,
+  # or matches a signal below. Everything else is EDUCATION.
+  window_replies: 10
+  max_promotional_share: 0.2
+  analytics_days: 30
+  promotion_signals:
+    - '\b(?:start|begin|take)\s+(?:your\s+|the\s+|an?\s+)?(?:free\s+|online\s+)?(?:health\s+)?assessment\b'
+    - '\bget\s+started\b'
+    - '\bsign\s+up\b'
+    - '\b(?:book|schedule)\s+(?:a|an|your)\b'
+    - '\benroll(?:ing|ment)?\b'
+    - '\bjoin\s+(?:now|today|us|WellPeps)\b'
+    - '\b(?:start|begin)\s+here\b'
+    - '\bfree\s+(?:guide|e-?book|consult(?:ation)?|trial|assessment)\b'
+    - '\b(?:visit|check\s+out)\s+(?:us|our|WellPeps)\b'
+    - '\blearn\s+more\s+at\b'
+    - '\$\s?\d'
+
+stop_rules:
+  # [AMG] §22 When to Stop Responding; [OM] §13.3; [PL] "Don't have five
+  # employees pile onto the same thread"; [CP] §9 "Deduplicate the same thread
+  # and prevent multiple representatives from replying independently": a
+  # thread with a WellPeps reply already waiting for review gets no second one.
+  max_wellpeps_replies_per_thread: 2
+  # A repeat of one of these after a boundary reply in the same thread by the
+  # same author -> the graceful close (CLM-AMG-22-CLOSE), needs a human.
+  individual_advice_subtypes: [individual_treatment, dose_question, lab_question, medication_change, results_question, safety_question, qualify_question]
+
+# Competitor Mentions and Provider Switching Protocol ([CP]) as Pulse applies
+# it (harvey/protocol.py; docs/RULES-OF-ENGAGEMENT.md "Competitor mentions and
+# provider switching"). The decision labels, scores and output fields are the
+# protocol's proposed implementation rules ([CP] §16), not approved WellPeps
+# policy: approving the module is a go-live blocker (finalize protocol_approval).
+switching_protocol:
+  version: "1.0 (2026-10-06)"
+  source: "WellPeps_AI_Competitor_Mentions_and_Provider_Switching_Protocol_V1"
+  # Scope: a named competitor, or any of these (Protocol title: competitor
+  # mentions, dissatisfaction and provider switching). Instructions inside a
+  # post are always in scope ([CP] §2: DO NOT ENGAGE), and so is a follow-up
+  # in a thread with an earlier clinical concern ([CP] Example 25). A possible
+  # serious harm tag is in scope whatever else the post says, so a serious or
+  # uncertain safety report always reaches human safety review even when triage
+  # picked a non-severe category ([CP] §5, §14 "Expected override").
+  scope_subtypes: [clinic_recommendation, competitor_comparison, competitor_praise]
+  scope_intents: [alternatives_requested, comparison_request, venting_only, deceptive_request, possible_serious_harm]
+  scope_needs: [provider_access, continuity, fulfillment, lab_testing_terms, medication_availability]
+  # [CP] §4 step 3: symptoms, individual testing needs, eligibility, lab
+  # interpretation, dose changes, interactions and medication decisions; plus
+  # the guide's individual results / safety questions ([AMG] §7).
+  clinical_subtypes: [individual_treatment, dose_question, lab_question, medication_change, qualify_question,
+                      symptom_report, results_question, safety_question]
+  # [CP] §9: 6-8 high, 3-5 moderate, 0-2 low (proposed internal prioritization).
+  high_min: 6
+  moderate_min: 3
+  # [CP] §3 underlying needs -> approved claims that speak to them ([CP] §6).
+  # Fit 2 if a direct claim is publishable, 1 if only a partial one, else 0.
+  # Only publishable claims count: CONFIRM / TO BE ESTABLISHED / FINALIZE /
+  # pending items are never facts.
+  needs:
+    provider_access:
+      label: "Provider access and support"
+      focus: "Questions to ask about messaging and follow-up"
+      partial: [CLM-LR-02-ONGOING-SUPPORT]
+      note: "Approved ongoing support never becomes a response-time promise, direct physician access, video visits or 24/7 care ([CP] §6, Example 20)."
+    care_process:
+      label: "Understanding care process"
+      focus: "Provider evaluation and ongoing support"
+      direct: [CLM-AMG-05-HOW-IT-WORKS, CLM-LR-02-PROCESS, CLM-LR-02-ONGOING-SUPPORT]
+    clinical_evaluation:
+      label: "Clinical evaluation and monitoring"
+      focus: "Prescriber determines testing needs"
+      clinical: true
+    price_clarity:
+      label: "Price and cancellation clarity"
+      focus: "Request full terms; approved own facts"
+      direct: [CLM-LR-06-PRICING-PHRASE, CLM-AMG-12-COST]
+      partial: [CLM-LR-08-CANCEL, CLM-LR-02-ONGOING-SUPPORT, CLM-AMG-05-HOW-IT-WORKS]
+      note: "Only current program-specific inclusions, fees, quantity and renewal terms; never 'everything included' ([CP] §6, Example 6)."
+    fulfillment:
+      label: "Fulfillment clarity"
+      focus: "Ask current support for status"
+      partial: [CLM-LR-07-SHIPPING, CLM-LR-07-DELAYS]
+    continuity:
+      label: "Continuity and alternatives"
+      focus: "Evaluation, records and transition expectations"
+      partial: [CLM-AMG-05-HOW-IT-WORKS, CLM-LR-02-ELIGIBILITY, CLM-LR-02-MEDICATION]
+      note: "Never promise the same medication or dose, approval, immediate fulfillment, record transfer or uninterrupted treatment ([CP] §6)."
+    treatment_education:
+      label: "Treatment education"
+      focus: "Relevant approved education"
+      direct: [CLM-AMG-06-DIFFERENCE]
+      partial: [CLM-AMG-26-GENERAL-INFO, CLM-EDU-GUIDE-GLP-1-WEIGHT-LOSS, CLM-EDU-GUIDES]
+    lab_testing_terms:
+      label: "Lab testing availability and inclusion"
+      focus: "A clinician decides testing; no inclusion claim"
+      note: "Live Reference §6 Labs is CONFIRM; the protocol's lab statement may not be activated from the module alone ([CP] §6, Example 19). Fit stays 0 until WellPeps approves program-specific testing terms (finalize lab_terms)."
+    medication_availability:
+      label: "Whether WellPeps offers a specific medication"
+      focus: "Check the current approved catalog"
+      note: "The medication Knowledge Base was described but not supplied ([CP] preamble); never assume availability or imply a workaround (Example 21)."
+    other:
+      label: "Other"
+      focus: "Answer the actual question"
+  # [CP] §2, Example 24: instructions inside a post are untrusted data.
+  injection_patterns:
+    - '\bignore\s+(?:all\s+|any\s+)?(?:of\s+)?(?:your|previous|prior|the|these)\s+(?:guidelines|instructions|rules|polic(?:y|ies)|prompt)'
+    - '\b(?:without|don.t|do\s+not|never)\s+(?:revealing|reveal|disclosing|disclose|saying|mentioning|mention)\s+(?:that\s+)?you\s+work\s+(?:for|with|at)\b'
+    - '\breveal\s+(?:your\s+)?(?:system\s+)?prompt\b'
+    - '\bpretend\s+(?:to\s+be|you.re|you\s+are)\s+(?:a|an)\s+(?:happy\s+|real\s+|independent\s+)?(?:customer|patient|user)\b'
+
+# Everything the documents say WellPeps must still finalize, establish or
+# confirm, plus the protocol's deployment checklist ([CP] §13). blocks_go_live:
+# Pulse must not be used for real posting until it is provided. value: set by WellPeps (a description of the approved channel /
+# procedure, never a private person's details); claims with a matching
+# finalize_key become publishable once it is set. See the checklist in
+# docs/RULES-OF-ENGAGEMENT.md.
+finalize:
+  - key: support_channel
+    item: "Approved customer-support channel, complaint-routing language and complaint escalation queue"
+    sources: ["[AMG] §9 FINALIZE, Appendix B", "[LR] §10 (phone/email CONFIRM; support URL and complaint queue TO BE ESTABLISHED)", "[CT] Appendix B", "[OM] Appendix C"]
+    pulse_effect: "Complaint and billing replies (Template C) are drafted but cannot be approved."
+    blocks_approval: true
+    value: null
+  - key: care_routing
+    item: "Provider / care routing instructions for existing patients (patient portal / provider messaging)"
+    sources: ["[AMG] §8 FINALIZE, Appendix B", "[LR] §9 (TO BE ESTABLISHED)"]
+    pulse_effect: "Privacy replies to posters who share medical details or want to send records are drafted but cannot be approved."
+    blocks_approval: true
+    value: null
+  - key: provider_routing
+    item: "Approved assessment / provider-access link or routing instruction ('Can I talk to a provider?')"
+    sources: ["[AMG] §5 FINALIZE"]
+    pulse_effect: "CLM-AMG-05-TALK-TO-PROVIDER cannot be approved."
+    blocks_approval: true
+    value: null
+  - key: assessment_url
+    item: "Production Start Free Assessment URL and any required assessment disclosure"
+    sources: ["[AMG] §15 FINALIZE, Appendix B", "[LR] §9, Appendix B"]
+    pulse_effect: "Assessment-link responses keep their [slot] and cannot be approved; R8 also holds assessment links until LegitScript certification."
+    blocks_approval: true
+    value: null
+  - key: learning_center_links
+    item: "Wellness Learning Center link library by topic (production article URLs)"
+    sources: ["[AMG] §14 FINALIZE, Appendix B", "[LR] §11 (TO BE ESTABLISHED)", "[OM] Appendix C"]
+    pulse_effect: "Pulse links only to config/links.yaml (Smart Patient Guides, not live yet); article links need registry entries first."
+    blocks_approval: true
+    value: null
+  - key: pricing
+    item: "Current approved pricing table and exact all-inclusive pricing / inclusion language (shipping, labs, supplies, cancellation and refund wording, peptide and sexual-wellness launch prices)"
+    sources: ["[AMG] §12 FINALIZE, Appendix B", "[LR] §5-8 CONFIRM items, Appendix A"]
+    pulse_effect: "CLM-AMG-12-COST, CLM-LR-06-PRICING-PHRASE and CLM-PRICE-* cannot be approved; prices in replies are yellow; a price need fits the protocol only partly (capability fit 1)."
+    blocks_approval: true
+    value: null
+  - key: program_descriptions
+    item: "Approved program and treatment-category descriptions (Hormone Optimization and Mental Wellness status; final sexual-wellness catalog)"
+    sources: ["[AMG] Appendix B", "[LR] §3-4 CONFIRM"]
+    pulse_effect: "No program-description claims exist in Pulse; medication names in replies are yellow for review (R38 blanket ban superseded)."
+    value: null
+  - key: adverse_event_contact
+    item: "Named adverse-event / clinical safety contact and reporting procedure"
+    sources: ["[AMG] §10 FINALIZE, Appendix B", "[LR] §9 clinical escalation route, §14", "[CT] Appendix B", "[OM] §14, Appendix C"]
+    pulse_effect: "Adverse-event pages go to escalation.clinical_owner in harvey.yaml ('UNASSIGNED' until set)."
+    blocks_go_live: true
+    value: null
+  - key: emergency_procedure
+    item: "Approved emergency escalation procedure and any required emergency wording"
+    sources: ["[AMG] §11 FINALIZE, Appendix B", "[LR] §14", "[OM] Appendix C"]
+    pulse_effect: "Emergency replies use the guide's current wording and escalate as adverse_event."
+    blocks_go_live: true
+    value: null
+  - key: escalation_contacts
+    item: "Named privacy/compliance, legal, regulatory and media (PR / authorized spokesperson) contacts"
+    sources: ["[AMG] §23 FINALIZE, Appendix B", "[LR] §14, Appendix B", "[CT] Appendix B", "[OM] Appendix C"]
+    pulse_effect: "Media, legal and regulatory escalations share the 'legal' owner in harvey.yaml; privacy uses the 'privacy' owner."
+    blocks_go_live: true
+    value: null
+  - key: after_hours
+    item: "After-hours escalation procedure and response-time standards (SLAs) for support and escalations"
+    sources: ["[AMG] Appendix B", "[LR] §14, Appendix B", "[CT] Appendix B", "[OM] Appendix C"]
+    pulse_effect: "Escalations page around the clock with escalation.sla_minutes; quiet hours never apply to them."
+    blocks_go_live: true
+    value: null
+  - key: authorization_matrix
+    item: "Final authorization matrix: which routine responses trained personnel may post without case-by-case approval; official-account owners and approval thresholds"
+    sources: ["[AMG] Appendix B", "[LR] §15", "[CT] Module 10, Appendix B", "[OM] Appendix C"]
+    pulse_effect: "None: every Pulse reply needs an explicit human approval anyway (hard rule 3)."
+    blocks_go_live: true
+    value: null
+  - key: influencer_disclosures
+    item: "Approved influencer / Brand Ambassador disclosure examples by platform"
+    sources: ["[AMG] Appendix B", "[LR] §12 CONFIRM"]
+    pulse_effect: "Pulse never drafts as an influencer; ambassador/partner forms in a draft are yellow (R47)."
+    value: null
+  - key: fda_disclaimer
+    item: "Where the wellness-therapy FDA disclaimer is required and its final exact language"
+    sources: ["[LR] §13.3 CONFIRM"]
+    pulse_effect: "No disclaimer claim exists; disclaimers never rescue a claim (R26)."
+    value: null
+  - key: engagement_log
+    item: "Designated community engagement logging system"
+    sources: ["[LR] Appendix B", "[OM] §22, Appendix C"]
+    pulse_effect: "Pulse's audit log records every draft, approval and posting; confirm it is the designated log."
+    blocks_go_live: true
+    value: null
+  - key: program_owner
+    item: "Named owner of the Community Engagement Program and document owner / approver of the Live Reference"
+    sources: ["[OM] Appendix C", "[LR] §16, Appendix B"]
+    pulse_effect: "None."
+    blocks_go_live: true
+    value: null
+  - key: account_access
+    item: "Platform / account access and moderation permissions; which official accounts exist"
+    sources: ["[OM] Appendix C", "[LR] §15"]
+    pulse_effect: "Pulse drafts only; a human posts from the account."
+    blocks_go_live: true
+    value: null
+  - key: community_rules
+    item: "Each community's rules: brand participation, links, admin permission (config/communities.yaml)"
+    sources: ["[PL] Channel 3 ('maintain a database of each community's rules')", "[CT] Module 9", "[OM] §5.2, §12"]
+    pulse_effect: "Every community starts 'unknown': competitor / switching posts HOLD (no draft); other drafts are yellow 'community rules unverified' and may carry no link."
+    blocks_go_live: true
+    value: null
+  - key: protocol_approval
+    item: "Approve the Competitor Mentions and Provider Switching Protocol module; appoint an owner for versions and changes; identify authorized account roles and human publication approvals (approvers: compliance lead, clinical safety lead, community operations lead)"
+    sources: ["[CP] §13, §16 (owner: to be assigned; effective upon approval)"]
+    pulse_effect: "Pulse applies the protocol's decision sequence and scoring as written, but its labels, scores and record fields are proposed rules, not approved policy."
+    blocks_go_live: true
+    value: null
+  - key: knowledge_base
+    item: "Connect the current medication Knowledge Base (described but not supplied), the Live Reference and the resource catalog; resolve source conflicts and establish freshness checks"
+    sources: ["[CP] preamble, §6, §13", "[LR] §1 change control"]
+    pulse_effect: "Company facts come only from config/claims.yaml; questions that turn on medication availability always HOLD."
+    blocks_go_live: true
+    value: null
+  - key: listening_access
+    item: "Approve the listening access method for each platform and community; define rule verification, unknown-rule handling and moderation permissions"
+    sources: ["[CP] §2, §13", "[PL] Channel 3"]
+    pulse_effect: "Collectors read public data only; unknown community rules HOLD competitor / switching drafts and keep every other draft link-free and yellow."
+    blocks_go_live: true
+    value: null
+  - key: failed_handoff_fallback
+    item: "Monitored review queues, response expectations and the approved fallback contact method when an escalation handoff fails"
+    sources: ["[CP] §5, §13"]
+    pulse_effect: "A failed page stays visibly unresolved (the escalation sweep re-pages and marks breaches); Pulse never reports 'escalated' unless the page went out."
+    blocks_go_live: true
+    value: null
+  - key: lab_terms
+    item: "Testing availability and terms, confirmed separately for each program, before any lab-related company claim is activated"
+    sources: ["[CP] §6, §13, Example 19", "[LR] §6 Labs (CONFIRM)"]
+    pulse_effect: "No lab claim exists; lab-inclusion wording ('labs included', 'free labs') is red; lab questions about WellPeps HOLD."
+    blocks_approval: true
+    value: null
+  - key: gated_download_disclosure
+    item: "Validated resource links and gated-download disclosures (the Smart Patient Guides need an email: say so when offering one)"
+    sources: ["[CP] §8, §13", "[PL] Channel 1, Channel 9"]
+    pulse_effect: "Links not marked live in config/links.yaml block approval; 'free' must match the access terms."
+    blocks_approval: true
+    value: null
+  - key: data_retention
+    item: "Minimum-data storage, restricted incident access, retention, deletion and audit-log configuration; collected health data never sent to unapproved systems"
+    sources: ["[CP] §2, §13", "[OM] §22.2"]
+    pulse_effect: "Pulse keeps minimal author data and a permalink; the protocol record holds no post text; Slack carries link + category only."
+    blocks_go_live: true
+    value: null
+  - key: regression_run
+    item: "Run the protocol's example set and additional real-world tests (sensitive data removed); resolve unsafe outputs before live use; re-run after any prompt, model, retrieval or source change"
+    sources: ["[CP] §13, §14"]
+    pulse_effect: "tests/test_protocol_eval.py runs the 25 examples' deterministic decision, score and wording checks; the model-dependent parts and real-world tests are WellPeps' to run and sign off."
+    blocks_go_live: true
+    value: null
+  - key: no_autonomous_publishing
+    item: "Autonomous publishing and unsolicited messaging disabled; an authorized reviewer approves every final reply"
+    sources: ["[CP] §13", "[PL] Channel 3"]
+    pulse_effect: "Satisfied by design: Pulse has no publishing or messaging capability and every reply needs a recorded human approval (hard rule 3)."
+    value: "Satisfied by design: Pulse cannot publish, send messages or enroll anyone; approval is recorded in the audit log."
+  - key: influencer_escalation
+    item: "Influencer / Brand Ambassador escalation contact and acknowledgement process"
+    sources: ["[OM] §24.3, Appendix C", "[AMG] §16"]
+    pulse_effect: "None: Pulse never drafts as an influencer."
+    value: null
+  - key: training_pass_score
+    item: "Whether the recommended 80% Knowledge Check pass score is adopted or changed"
+    sources: ["[CT] Completion Standard, Appendix B"]
+    pulse_effect: "None (people training, not Pulse)."
+    value: null

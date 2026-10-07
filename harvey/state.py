@@ -46,13 +46,28 @@ from harvey.urls import normalize_url
 # How long (seconds) a connection waits on a locked database before failing.
 BUSY_TIMEOUT_SECONDS = 30.0
 
-# Triage categories that go to a named owner, never to the reply queue
-# (mirrors harvey.agents.triager.SEVERE_CATEGORIES; tested).
+# Triage categories that go to a named owner (mirrors
+# harvey.agents.triager.SEVERE_CATEGORIES; tested). Since the rules of
+# engagement (docs/RULES-OF-ENGAGEMENT.md) some of them still get the guide's
+# approved boundary reply drafted next to the escalation, so which mentions
+# are drafted is decided by config/engagement_guide.yaml, not by this list.
 NO_DRAFT_CATEGORIES = ("adverse_event", "legal_regulatory", "privacy", "billing_fraud")
-_DRAFTABLE_WHERE = (
-    "m.status = 'triaged' AND t.relevant = TRUE AND t.reply_appropriate = TRUE "
-    f"AND t.category NOT IN ({', '.join(repr(c) for c in NO_DRAFT_CATEGORIES)})"
-)
+
+
+def _protocol_blob(triage: Triage) -> dict:
+    """What triage.protocol_json stores: the model's protocol inputs and the
+    computed record (harvey/protocol.py). Never post text."""
+    return {
+        "inputs": {"intents": list(triage.intents), "unmet_need": triage.unmet_need,
+                   "need_clarity": triage.need_clarity, "useful_contribution": triage.useful_contribution},
+        "record": dict(triage.protocol or {}),
+    }
+
+
+def _draftable_where() -> tuple[str, tuple]:
+    from harvey import engagement  # late: engagement imports compliance and knowledge
+
+    return engagement.draftable_where()
 
 # Allowed mention status transitions. Anything not listed raises ValueError.
 # Terminal states (rejected, posted, dropped) have no outgoing edges.
@@ -475,6 +490,22 @@ MIGRATIONS: list[str] = [
     """
     ALTER TABLE drafts ADD COLUMN link_json TEXT;
     """,
+    # ── v8: rules of engagement and the competitor / switching protocol ──
+    # subtype: the situation inside a category that decides how Pulse engages
+    # (harvey.models.mention.TRIAGE_SUBTYPES; config/engagement_guide.yaml;
+    # docs/RULES-OF-ENGAGEMENT.md), "" when none.
+    # protocol_decision / protocol_route / opportunity_score / protocol_json:
+    # the Competitor Mentions and Provider Switching Protocol's classification,
+    # escalation route, opportunity score (NULL when gated) and structured
+    # record (harvey/protocol.py; no post text). "" / NULL / '{}' outside the
+    # protocol's scope.
+    """
+    ALTER TABLE triage ADD COLUMN subtype TEXT NOT NULL DEFAULT '';
+    ALTER TABLE triage ADD COLUMN protocol_decision TEXT NOT NULL DEFAULT '';
+    ALTER TABLE triage ADD COLUMN protocol_route TEXT NOT NULL DEFAULT '';
+    ALTER TABLE triage ADD COLUMN opportunity_score INTEGER;
+    ALTER TABLE triage ADD COLUMN protocol_json TEXT NOT NULL DEFAULT '{}';
+    """,
 ]
 
 
@@ -801,22 +832,26 @@ class StateManager:
         return [self._mention_from_row(r) for r in rows]
 
     async def list_draftable_mentions(self, limit: int = 10) -> list[Mention]:
-        """Triaged, reply-appropriate, non-severe mentions, oldest first."""
+        """Mentions the draft batch takes, oldest first: triaged and relevant,
+        and a situation in config/engagement_guide.yaml that drafts (see
+        ``harvey.engagement.draftable_where``)."""
+        where, params = _draftable_where()
         async with self._connect() as db:
             async with db.execute(
                 f"SELECT m.* FROM mentions m JOIN triage t ON t.mention_id = m.id "
-                f"WHERE {_DRAFTABLE_WHERE} "
+                f"WHERE {where} "
                 f"ORDER BY m.collected_at ASC, m.id ASC LIMIT ?",
-                (max(int(limit), 0),),
+                (*params, max(int(limit), 0)),
             ) as cursor:
                 rows = await cursor.fetchall()
         return [self._mention_from_row(r) for r in rows]
 
     async def count_draftable(self) -> int:
+        where, params = _draftable_where()
         async with self._connect() as db:
             async with db.execute(
                 f"SELECT COUNT(*) FROM mentions m JOIN triage t ON t.mention_id = m.id "
-                f"WHERE {_DRAFTABLE_WHERE}"
+                f"WHERE {where}", params,
             ) as cursor:
                 (count,) = await cursor.fetchone()
         return count
@@ -853,8 +888,9 @@ class StateManager:
 
     _TRIAGE_COLUMNS = (
         "relevant", "subject_type", "subject", "competitor", "product", "drug",
-        "category", "sentiment", "sentiment_score", "urgency", "urgency_reason",
+        "category", "subtype", "sentiment", "sentiment_score", "urgency", "urgency_reason",
         "reply_appropriate", "phrases_json", "model", "created_at",
+        "protocol_decision", "protocol_route", "opportunity_score", "protocol_json",
     )
 
     async def save_triage(self, triage: Triage):
@@ -868,16 +904,21 @@ class StateManager:
             await db.execute(
                 f"""INSERT INTO triage
                    (mention_id, {", ".join(self._TRIAGE_COLUMNS)})
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                   VALUES ({", ".join("?" for _ in range(len(self._TRIAGE_COLUMNS) + 1))})
                    ON CONFLICT(mention_id) DO UPDATE SET {updates}""",
                 (
                     triage.mention_id, bool(triage.relevant),
                     triage.subject_type, triage.subject, triage.competitor,
-                    triage.product, triage.drug, triage.category.value, triage.sentiment,
+                    triage.product, triage.drug, triage.category.value, triage.subtype or "",
+                    triage.sentiment,
                     float(triage.sentiment_score), triage.urgency.value, triage.urgency_reason,
                     bool(triage.reply_appropriate),
                     json.dumps(triage.phrases), triage.model,
                     _ts(triage.created_at),
+                    triage.protocol_decision or "",
+                    triage.protocol_route or "",
+                    triage.opportunity_score,
+                    json.dumps(_protocol_blob(triage)),
                 ),
             )
             await db.commit()
@@ -896,6 +937,15 @@ class StateManager:
         d["reply_appropriate"] = bool(d["reply_appropriate"])
         d["sentiment_score"] = float(d.get("sentiment_score") or 0.0)
         d["drug"] = d.get("drug") or ""
+        d["subtype"] = d.get("subtype") or ""
+        blob = _loads(d.pop("protocol_json", None), {})
+        blob = blob if isinstance(blob, dict) else {}
+        inputs = blob.get("inputs") if isinstance(blob.get("inputs"), dict) else {}
+        d.update({k: inputs.get(k) for k in ("intents", "unmet_need", "need_clarity", "useful_contribution")
+                  if inputs.get(k) is not None})
+        d["protocol"] = blob.get("record") if isinstance(blob.get("record"), dict) else {}
+        d["protocol_decision"] = d.get("protocol_decision") or ""
+        d["protocol_route"] = d.get("protocol_route") or ""
         return Triage(**d)
 
     # ── Drafts ──

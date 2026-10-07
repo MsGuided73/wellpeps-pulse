@@ -83,3 +83,20 @@ def test_seed_spreads_enough_for_the_analytics_charts(tmp_path):
     stats = asyncio.run(analytics.chart(state, "escalations", p))
     assert stats["acked"] >= 5 and stats["median_ack_minutes"] is not None
     assert 0 < stats["breached_pct"] < 100
+
+
+def test_demo_triage_supplies_protocol_inputs():
+    """DEMO only: keyword guesses stand in for the model's protocol inputs, so a
+    seeded demo shows the competitor / switching protocol's decisions and scores."""
+    import importlib.util
+
+    from harvey.paths import PROJECT_ROOT
+
+    spec = importlib.util.spec_from_file_location("seed_demo_mod", PROJECT_ROOT / "scripts" / "seed_demo.py")
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    answer = mod._triage_answer("Switching from Henry Meds because they stopped responding. Suggestions?")
+    assert "alternatives_requested" in answer["intents"] and answer["unmet_need"] == "provider_access"
+    assert answer["useful_contribution"] == 2
+    vent = mod._triage_answer("Hims is so frustrating. Just needed to vent.")
+    assert vent["intents"] == ["venting_only"] and vent["useful_contribution"] == 0

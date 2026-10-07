@@ -238,7 +238,8 @@ async def test_prompt_injected_praise_is_caught_and_escalated(state):
     report = await triage_batch(state, Triager(brain), escalate=hook, screen=SafetyScreen(brain))
 
     assert report.escalated == 1
-    assert (await state.get_mention(mid)).status is MentionStatus.ESCALATED
+    # About WellPeps: paged, and kept triaged for the approved boundary reply.
+    assert (await state.get_mention(mid)).status is MentionStatus.TRIAGED
     assert (await state.get_open_escalation(mid)).kind == "adverse_event"
     saved = await state.get_triage(mid)
     assert saved.urgency_reason.startswith("safety_screen:adverse_event")

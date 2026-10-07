@@ -29,7 +29,7 @@ from typing import Awaitable, Callable, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
-from harvey import knowledge
+from harvey import knowledge, protocol
 from harvey.agents import prompting
 from harvey.agents.safety_screen import ScreenResult, apply_screen, mentions_health_term
 from harvey.escalation import SEVERE_KINDS, escalation_kind
@@ -42,6 +42,7 @@ from harvey.models import (
     Triage,
     Urgency,
 )
+from harvey.models.mention import PROTOCOL_INTENTS, PROTOCOL_NEEDS, TRIAGE_SUBTYPES, normalize_subtype
 
 logger = logging.getLogger("harvey.agents.triager")
 
@@ -75,6 +76,15 @@ class TriageAnswer(BaseModel):
     product: str | None = None
     drug: str | None = None
     category: Category
+    # The situation inside the category (rules of engagement). Optional and
+    # forgiving: an unknown value becomes "" (see normalize_subtype).
+    subtype: str | None = None
+    # Competitor / switching protocol inputs (harvey/protocol.py). Optional
+    # and forgiving: unknown tags are dropped, scores clamped to 0-2.
+    intents: list | None = None
+    unmet_need: str | None = None
+    need_clarity: int | float | None = None
+    useful_contribution: int | float | None = None
     sentiment: float = Field(ge=-1.0, le=1.0)
     sentiment_label: Literal["positive", "neutral", "negative", "mixed"]
     urgency: Urgency
@@ -94,6 +104,9 @@ def _name_lists() -> dict[str, str]:
         "products": ", ".join(p.name for p in prods.products),
         "product_categories": ", ".join(c.name for c in prods.categories),
         "categories": ", ".join(f"`{c.value}`" for c in Category),
+        "subtypes": ", ".join(f"`{s}`" for s in TRIAGE_SUBTYPES),
+        "intents": ", ".join(f"`{s}`" for s in PROTOCOL_INTENTS),
+        "needs": ", ".join(f"`{s}`" for s in PROTOCOL_NEEDS),
     }
 
 
@@ -220,6 +233,11 @@ def _to_triage(answer: TriageAnswer, mention: Mention, model: str) -> Triage:
                  if _about_wellpeps(answer, mention) else ""),
         drug=_drug(answer.drug, _post_text(mention)),
         category=answer.category,
+        subtype=normalize_subtype(answer.subtype),
+        intents=answer.intents or [],
+        unmet_need=answer.unmet_need or "",
+        need_clarity=answer.need_clarity,
+        useful_contribution=answer.useful_contribution,
         sentiment=answer.sentiment_label,
         sentiment_score=answer.sentiment,
         urgency=answer.urgency,
@@ -305,7 +323,7 @@ class TriageReport:
     processed: int = 0
     triaged: int = 0
     dropped: int = 0
-    escalated: int = 0
+    escalated: int = 0         # severe escalations opened (status escalated, or triaged for a boundary reply)
     fallbacks: int = 0
     errors: int = 0
     paged: int = 0             # escalations whose Slack page went out
@@ -314,19 +332,28 @@ class TriageReport:
 
 
 def route_status(triage: Triage) -> MentionStatus:
-    """Status after triage. ``escalation_kind`` is the single source of truth:
-    a severe kind leaves the reply queue; a viral negative is paged but stays
-    ``triaged`` (a reply may still be drafted for it)."""
+    """Status after triage. ``escalation_kind`` is the single source of truth
+    for paging: a severe kind leaves the reply queue (``escalated``) unless
+    the rules of engagement give it an approved boundary reply (an adverse
+    event about WellPeps, an emergency, a media inquiry, a billing complaint:
+    config/engagement_guide.yaml ``reply: boundary_only``). Those are paged
+    AND stay ``triaged`` so the guide's approved public reply is drafted for a
+    human (clinical, for adverse events) to approve. A viral negative is paged
+    but stays ``triaged`` too."""
+    from harvey import engagement  # late: engagement imports compliance -> knowledge
+
     if not triage.relevant:
         return MentionStatus.DROPPED
-    if escalation_kind(triage) in SEVERE_KINDS:
+    if escalation_kind(triage) in SEVERE_KINDS and engagement.reply_mode(triage) != "boundary_only":
         return MentionStatus.ESCALATED
     return MentionStatus.TRIAGED
 
 
 def needs_screen(triage: Triage, text: str) -> bool:
-    """Run the safety screen on health-related mentions not already escalated."""
-    return route_status(triage) is not MentionStatus.ESCALATED and mentions_health_term(text)
+    """Run the safety screen on health-related mentions not already escalated
+    (a severe kind is escalated even when it stays ``triaged`` for its
+    approved boundary reply)."""
+    return escalation_kind(triage) not in SEVERE_KINDS and mentions_health_term(text)
 
 
 async def _within_budget(hook: BudgetHook | None) -> bool:
@@ -342,6 +369,10 @@ def _verdict(triage: Triage, screen: ScreenResult | None = None) -> dict:
     verdict = {
         "relevant": triage.relevant,
         "category": triage.category.value,
+        "subtype": triage.subtype,
+        "protocol_decision": triage.protocol_decision,
+        "protocol_route": triage.protocol_route,
+        "opportunity_score": triage.opportunity_score,
         "urgency": triage.urgency.value,
         "urgency_reason": triage.urgency_reason,
         "reply_appropriate": triage.reply_appropriate,
@@ -371,7 +402,7 @@ async def _record(
     escalation = None
     if escalate is not None and status is not MentionStatus.DROPPED and escalation_kind(triage):
         escalation = await escalate(mention, triage)
-    elif status is MentionStatus.ESCALATED:
+    elif status is MentionStatus.ESCALATED or escalation_kind(triage) in SEVERE_KINDS:
         # No escalation hook (tests, one-off tools): the status and this
         # audit event are the whole escalation.
         await state.append_audit(AuditEvent(
@@ -421,6 +452,10 @@ async def triage_batch(
                 screened = await screen.screen(mention)
                 triage = apply_screen(triage, screened)
                 report.screened += 1
+            # The competitor / switching protocol's decision sequence (pure
+            # Python, after every model call): its ESCALATE route feeds
+            # escalation_kind, its classification the situation match.
+            triage = await protocol.apply(state, mention, triage)
             status, escalation = await _record(state, mention, triage, escalate, screened)
         except Exception as exc:
             report.errors += 1
@@ -431,7 +466,9 @@ async def triage_batch(
         report.paged += int(getattr(escalation, "notified_at", None) is not None)
         if status is MentionStatus.DROPPED:
             report.dropped += 1
-        elif status is MentionStatus.ESCALATED:
+        elif status is MentionStatus.ESCALATED or escalation_kind(triage) in SEVERE_KINDS:
+            # Severe escalations, including those kept ``triaged`` for the
+            # guide's approved boundary reply (they are paged all the same).
             report.escalated += 1
         else:
             report.triaged += 1

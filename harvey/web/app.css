@@ -770,3 +770,7 @@ body.pw-forced nav, body.pw-forced main, body.pw-forced .header-controls { displ
 .rp-tables { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; }
 .tracked-link { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 .tracked-link p { flex-basis: 100%; margin: 4px 0 0; }
+
+/* Rules of engagement block on the review desk (app.js engagementHtml). */
+.protocol { margin-top: 8px; padding-top: 8px; border-top: 1px dashed var(--border); }
+.protocol .hit-list { margin-top: 6px; }

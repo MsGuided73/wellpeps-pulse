@@ -14,7 +14,27 @@
 # Fields: id, text, products (product names from products.yaml, or ["*"]),
 # tier (green|yellow per R10), approved_by, approved_at, expires, source, and
 # optional link_id (an id from config/links.yaml: the one link a draft citing
-# this claim may carry).
+# this claim may carry). Since 2026-10-06 also: guide (verbatim from the
+# Approved Messaging & Response Guide), finalize / finalize_missing /
+# finalize_key (the guide marks something this wording needs as FINALIZE),
+# influencer_only (Brand Ambassador / partner wording; never offered to the
+# drafter), promotional (counts toward the 20 of the 80/20 rule) and note.
+#
+# Guide-sourced claims (ids CLM-AMG-<section>-<slug>): wording copied verbatim
+# (typographic quotes and apostrophes normalised to ASCII) from
+#   C:\dev\W\docs\community-engagement-agent\Community Engagement-20261007T043724Z-1-001.zip
+#   -> "Community Engagement/WellPeps_Approved_Messaging_and_Response_Guide.docx"
+# The guide is WellPeps' approved messaging, so those claims carry
+# approved_by "Approved Messaging & Response Guide v1.0 (Aug 2026)" and are
+# publishable while claims_policy.trust_approved_messaging_guide is true.
+# Set it to false to make every guide-sourced claim pending again. A claim
+# with a bracketed slot ("[approved link]") or an open FINALIZE item is never
+# publishable (finalize: true); finalize_key names the item in
+# config/engagement_guide.yaml whose value resolves it. See
+# docs/RULES-OF-ENGAGEMENT.md.
+
+claims_policy:
+  trust_approved_messaging_guide: true
 
 claims:
   - id: CLM-R3-DISCLOSURE
@@ -25,6 +45,7 @@ claims:
     approved_at: null
     expires: null
     source: "reply-compliance-rules.md R3 ([PB] §04-05)"
+    note: "Same affiliation as the guide's primary form CLM-AMG-04-WORK-WITH (Guide §4), which the drafter now uses by default. This longer form stays allowed: it is in the first sentence, so the disclosure is not buried."
 
   - id: CLM-R3-BIO
     text: "Helping answer general questions about telehealth and patient education. I work with WellPeps. Not individual medical advice."
@@ -51,6 +72,7 @@ claims:
     approved_by: PENDING
     approved_at: null
     expires: null
+    promotional: true
     source: "reply-compliance-rules.md R8 ([PB] §05-06)"
 
   - id: CLM-R15-COMPOUNDED-DISCLOSURE
@@ -88,6 +110,7 @@ claims:
     approved_at: null
     expires: null
     source: "reply-compliance-rules.md R22 ([CS] Rule 2-3)"
+    note: "Near-duplicate of the guide's preferred alternative CLM-AMG-26-PROVIDER-CAN-DETERMINE (Guide §26)."
 
   - id: CLM-R28-LAB-PROCESSING
     text: "Processed by a CLIA-certified, CAP-accredited laboratory."
@@ -134,6 +157,7 @@ claims:
     approved_at: null
     expires: null
     source: "reply-compliance-rules.md R17 ([CS] Rule 5); never rescues a claim (R26)"
+    note: "Same meaning as the guide's preferred alternative CLM-AMG-26-RESULTS-VARY (Guide §26)."
 
   # --- Conversion playbook (2026-10-06). Facts confirmed by the client on
   # 2026-10-06; wording from the WellPeps website source (read-only copy at
@@ -146,7 +170,12 @@ claims:
     approved_by: PENDING
     approved_at: null
     expires: null
+    promotional: true
     source: "Client confirmation 2026-10-06 (every program); C:/dev/W/wellpeps-site/src/config.ts PRICE_NOTE. Pricing-structure claim: yellow per R10/R11"
+    finalize: true
+    finalize_key: "pricing"
+    finalize_missing: "Guide §12 FINALIZE pricing language; 'one monthly price' is the Live Reference §6 phrase that needs operational verification, and the Protocol §6 allows only current program-specific inclusions"
+    note: "Superseded for drafting (2026-10-07) by the Live Reference's approved CLM-LR-02-ONGOING-SUPPORT; see docs/RULES-OF-ENGAGEMENT.md."
 
   - id: CLM-PRICE-ALLIN
     text: "One monthly price covers the licensed clinician's review, follow-up care, the medication if prescribed, messaging with the care team, and standard shipping."
@@ -155,7 +184,11 @@ claims:
     approved_by: PENDING
     approved_at: null
     expires: null
+    promotional: true
     source: "C:/dev/W/wellpeps-site/src/config.ts PRICE_NOTE (first sentence; 'your' -> 'the' because R31 blocks 'your care team'; the lab-billing and pay-nothing-unless-prescribed sentences are left out). CHECK: config/products.yaml membership.shipping_note says shipping is shown at checkout"
+    finalize: true
+    finalize_key: "pricing"
+    finalize_missing: "Live Reference §6-7: standard shipping inclusion is CONFIRM and 'One Simple Price. Everything Included.' needs operational verification (Protocol §6: never assume 'everything included')"
 
   - id: CLM-EDU-GUIDES
     text: "WellPeps offers free Smart Patient's Guides, including questions to ask before choosing a provider."
@@ -165,7 +198,11 @@ claims:
     approved_by: PENDING
     approved_at: null
     expires: null
+    promotional: true
     source: "C:/dev/W/wellpeps-site/src/data/ebooks.ts (EBOOKS) and src/data/guide-pages.ts (series intro: 'know what questions to ask'; LAST_POINT). Only the GLP-1 guide lists a checklist, so the series claim says 'questions to ask'"
+    finalize: true
+    finalize_key: "gated_download_disclosure"
+    finalize_missing: "Protocol §8, §13: validate the link and the gated-download disclosure (the guide asks for an email; say so when offering it, and 'free' must match the access terms)"
 
   - id: CLM-EDU-GUIDE-GLP-1-WEIGHT-LOSS
     text: "Free guide: The Smart Patient's Guide to GLP-1 Weight Loss — What you should know before choosing a GLP-1 weight loss program. It includes questions to ask before choosing a provider and a checklist."
@@ -175,7 +212,11 @@ claims:
     approved_by: PENDING
     approved_at: null
     expires: null
+    promotional: true
     source: "C:/dev/W/wellpeps-site/src/data/ebooks.ts (slug glp-1-weight-loss: title, subtitle); src/data/guide-pages.ts inside: 'Questions to ask before choosing a provider', 'The Smart Patient's GLP-1 checklist'"
+    finalize: true
+    finalize_key: "gated_download_disclosure"
+    finalize_missing: "Protocol §8, §13: validate the link and the gated-download disclosure (the guide asks for an email; say so when offering it, and 'free' must match the access terms)"
 
   - id: CLM-EDU-GUIDE-SEXUAL-WELLNESS
     text: "Free guide: The Smart Patient's Guide to Sexual Wellness — Understanding today's treatment options and finding the right care. It includes questions to ask before choosing care."
@@ -185,7 +226,11 @@ claims:
     approved_by: PENDING
     approved_at: null
     expires: null
+    promotional: true
     source: "C:/dev/W/wellpeps-site/src/data/ebooks.ts (slug sexual-wellness); src/data/guide-pages.ts ('the questions worth asking before choosing care', LAST_POINT). No checklist listed"
+    finalize: true
+    finalize_key: "gated_download_disclosure"
+    finalize_missing: "Protocol §8, §13: validate the link and the gated-download disclosure (the guide asks for an email; say so when offering it, and 'free' must match the access terms)"
 
   - id: CLM-EDU-GUIDE-HAIR-RESTORATION
     text: "Free guide: The Smart Patient's Guide to Hair Restoration — Understanding hair loss, today's treatment options, and what to realistically expect. It includes questions to ask before choosing a treatment program."
@@ -195,7 +240,11 @@ claims:
     approved_by: PENDING
     approved_at: null
     expires: null
+    promotional: true
     source: "C:/dev/W/wellpeps-site/src/data/ebooks.ts (slug hair-restoration); src/data/guide-pages.ts ('the questions worth asking before choosing a treatment program', LAST_POINT). No checklist listed. Hair Restoration is coming_soon (R21: say only 'on the way')"
+    finalize: true
+    finalize_key: "gated_download_disclosure"
+    finalize_missing: "Protocol §8, §13: validate the link and the gated-download disclosure (the guide asks for an email; say so when offering it, and 'free' must match the access terms)"
 
   - id: CLM-EDU-GUIDE-HEALTHY-AGING-VITALITY
     text: "Free guide: The Smart Patient's Guide to Healthy Aging & Vitality — What to know about supporting energy, strength, sleep, recovery and cognitive wellness as you age. It includes questions to ask before choosing a treatment program."
@@ -205,7 +254,11 @@ claims:
     approved_by: PENDING
     approved_at: null
     expires: null
+    promotional: true
     source: "C:/dev/W/wellpeps-site/src/data/ebooks.ts (slug healthy-aging-vitality); src/data/guide-pages.ts (PROGRAM_BAND_COPY healthy-aging, LAST_POINT). No checklist listed. Wellness-outcome wording in the subtitle: yellow (R13/R18)"
+    finalize: true
+    finalize_key: "gated_download_disclosure"
+    finalize_missing: "Protocol §8, §13: validate the link and the gated-download disclosure (the guide asks for an email; say so when offering it, and 'free' must match the access terms)"
 
   - id: CLM-EDU-GUIDE-NAD-THERAPY
     text: "Free guide: The Smart Patient's Guide to NAD+ Therapy — What it is, what we know, and questions to ask before treatment."
@@ -215,4 +268,829 @@ claims:
     approved_by: PENDING
     approved_at: null
     expires: null
+    promotional: true
     source: "C:/dev/W/wellpeps-site/src/data/ebooks.ts (slug nad-therapy: title, subtitle). Names a molecule, so blocked while the R38 toggle is on (the drafter then offers the Healthy Aging guide)"
+    finalize: true
+    finalize_key: "gated_download_disclosure"
+    finalize_missing: "Protocol §8, §13: validate the link and the gated-download disclosure (the guide asks for an email; say so when offering it, and 'free' must match the access terms)"
+
+  # --- Approved Messaging & Response Guide v1.0 (Aug 2026), sections 4-26 and
+  # Appendix A. Verbatim wording; see the header for the policy. Patterns that
+  # are instructions rather than wording live in config/engagement_guide.yaml.
+  # An Appendix A answer identical to a section answer ("How much will I
+  # lose?" = CLM-AMG-07-WEIGHT) is not repeated. ----------------------------
+  - id: CLM-AMG-04-WORK-WITH
+    text: "I work with WellPeps."
+    products: ["*"]
+    tier: green
+    approved_by: "Approved Messaging & Response Guide v1.0 (Aug 2026)"
+    approved_at: null
+    expires: null
+    source: "Approved Messaging & Response Guide v1.0 §4"
+    guide: true
+
+  - id: CLM-AMG-04-TEAM
+    text: "I'm part of the WellPeps team."
+    products: ["*"]
+    tier: green
+    approved_by: "Approved Messaging & Response Guide v1.0 (Aug 2026)"
+    approved_at: null
+    expires: null
+    source: "Approved Messaging & Response Guide v1.0 §4"
+    guide: true
+
+  - id: CLM-AMG-04-AMBASSADOR
+    text: "I'm a WellPeps Brand Ambassador."
+    products: ["*"]
+    tier: green
+    approved_by: "Approved Messaging & Response Guide v1.0 (Aug 2026)"
+    approved_at: null
+    expires: null
+    source: "Approved Messaging & Response Guide v1.0 §4"
+    guide: true
+    influencer_only: true
+
+  - id: CLM-AMG-04-PARTNER
+    text: "I partner with WellPeps."
+    products: ["*"]
+    tier: green
+    approved_by: "Approved Messaging & Response Guide v1.0 (Aug 2026)"
+    approved_at: null
+    expires: null
+    source: "Approved Messaging & Response Guide v1.0 §4"
+    guide: true
+    influencer_only: true
+
+  - id: CLM-AMG-05-HOW-IT-WORKS
+    text: "WellPeps uses an online telehealth process. You complete a health assessment, and a licensed healthcare provider reviews your information to determine whether treatment is medically appropriate. If treatment is prescribed, ongoing support is part of the process."
+    products: ["*"]
+    tier: green
+    approved_by: "Approved Messaging & Response Guide v1.0 (Aug 2026)"
+    approved_at: null
+    expires: null
+    source: "Approved Messaging & Response Guide v1.0 §5"
+    guide: true
+
+  - id: CLM-AMG-05-QUALIFY
+    text: "No. Only a licensed healthcare provider can determine whether treatment is medically appropriate after reviewing the individual's health information."
+    products: ["*"]
+    tier: yellow
+    approved_by: "Approved Messaging & Response Guide v1.0 (Aug 2026)"
+    approved_at: null
+    expires: null
+    source: "Approved Messaging & Response Guide v1.0 §5"
+    guide: true
+
+  - id: CLM-AMG-05-WHAT-TREATMENT
+    text: "I can provide general information about treatment categories and explain how the WellPeps process works, but only a licensed healthcare provider can determine which treatment, if any, is appropriate for you personally."
+    products: ["*"]
+    tier: yellow
+    approved_by: "Approved Messaging & Response Guide v1.0 (Aug 2026)"
+    approved_at: null
+    expires: null
+    source: "Approved Messaging & Response Guide v1.0 §5"
+    guide: true
+
+  - id: CLM-AMG-05-TALK-TO-PROVIDER
+    text: "Treatment decisions are made by licensed healthcare providers through the WellPeps telehealth process. I can explain the process and direct you to the appropriate approved next step."
+    products: ["*"]
+    tier: yellow
+    approved_by: "Approved Messaging & Response Guide v1.0 (Aug 2026)"
+    approved_at: null
+    expires: null
+    source: "Approved Messaging & Response Guide v1.0 §5"
+    guide: true
+    promotional: true
+    finalize: true
+    finalize_key: "provider_routing"
+    finalize_missing: "Guide §5 FINALIZE: the approved assessment/provider-access link or routing instruction"
+
+  - id: CLM-AMG-06-DIFFERENCE
+    text: "There are general differences between the treatment options, and I'm happy to share approved educational information about them. Which one is appropriate for a particular person depends on their medical history and requires evaluation by a licensed healthcare provider."
+    products: ["*"]
+    tier: yellow
+    approved_by: "Approved Messaging & Response Guide v1.0 (Aug 2026)"
+    approved_at: null
+    expires: null
+    source: "Approved Messaging & Response Guide v1.0 §6"
+    guide: true
+
+  - id: CLM-AMG-06-WHICH-MEDICATION
+    text: "Only a licensed healthcare provider can determine the most appropriate treatment based on your individual medical history. I can provide general educational information, but I can't recommend a medication for you personally."
+    products: ["*"]
+    tier: yellow
+    approved_by: "Approved Messaging & Response Guide v1.0 (Aug 2026)"
+    approved_at: null
+    expires: null
+    source: "Approved Messaging & Response Guide v1.0 §6"
+    guide: true
+
+  - id: CLM-AMG-06-DOSE
+    text: "Dosing decisions need to be made by the prescribing healthcare provider. I can't recommend a dose through social media or community messaging."
+    products: ["*"]
+    tier: yellow
+    approved_by: "Approved Messaging & Response Guide v1.0 (Aug 2026)"
+    approved_at: null
+    expires: null
+    source: "Approved Messaging & Response Guide v1.0 §6"
+    guide: true
+
+  - id: CLM-AMG-06-STOP-CHANGE
+    text: "I can't advise you to start, stop or change a medication. Please contact your prescribing healthcare provider through the appropriate care channel."
+    products: ["*"]
+    tier: yellow
+    approved_by: "Approved Messaging & Response Guide v1.0 (Aug 2026)"
+    approved_at: null
+    expires: null
+    source: "Approved Messaging & Response Guide v1.0 §6"
+    guide: true
+
+  - id: CLM-AMG-06-LABS
+    text: "I can't interpret laboratory results. A licensed healthcare provider should review them with you through the appropriate care channel."
+    products: ["*"]
+    tier: yellow
+    approved_by: "Approved Messaging & Response Guide v1.0 (Aug 2026)"
+    approved_at: null
+    expires: null
+    source: "Approved Messaging & Response Guide v1.0 §6"
+    guide: true
+
+  - id: CLM-AMG-07-WEIGHT
+    text: "Results vary by individual, and no specific amount of weight loss can be guaranteed."
+    products: ["Compounded Semaglutide", "Compounded Tirzepatide", "Oral Semaglutide", "Oral Tirzepatide"]
+    tier: yellow
+    approved_by: "Approved Messaging & Response Guide v1.0 (Aug 2026)"
+    approved_at: null
+    expires: null
+    source: "Approved Messaging & Response Guide v1.0 §7"
+    guide: true
+
+  - id: CLM-AMG-07-HAIR
+    text: "Individual results vary, and hair-restoration results can't be guaranteed. A licensed provider can determine whether a treatment may be appropriate after evaluating your individual circumstances."
+    products: ["Topical Treatments", "Oral Treatments", "Combination Therapy", "Advanced Liposomal Formulas"]
+    tier: yellow
+    approved_by: "Approved Messaging & Response Guide v1.0 (Aug 2026)"
+    approved_at: null
+    expires: null
+    source: "Approved Messaging & Response Guide v1.0 §7"
+    guide: true
+
+  - id: CLM-AMG-07-SEXUAL
+    text: "Results vary by individual, and no specific outcome can be guaranteed. Treatment decisions require an individualized evaluation by a licensed healthcare provider."
+    products: ["Tadalafil Daily", "Tadalafil As Needed", "Sildenafil As Needed"]
+    tier: yellow
+    approved_by: "Approved Messaging & Response Guide v1.0 (Aug 2026)"
+    approved_at: null
+    expires: null
+    source: "Approved Messaging & Response Guide v1.0 §7"
+    guide: true
+
+  - id: CLM-AMG-07-SAFE
+    text: "All medications can have potential risks and benefits. Whether a treatment is appropriate for a particular person requires evaluation by a licensed healthcare provider."
+    products: ["*"]
+    tier: yellow
+    approved_by: "Approved Messaging & Response Guide v1.0 (Aug 2026)"
+    approved_at: null
+    expires: null
+    source: "Approved Messaging & Response Guide v1.0 §7"
+    guide: true
+
+  - id: CLM-AMG-07-ALWAYS-WORK
+    text: "No treatment outcome can be guaranteed. Individual response can vary."
+    products: ["*"]
+    tier: yellow
+    approved_by: "Approved Messaging & Response Guide v1.0 (Aug 2026)"
+    approved_at: null
+    expires: null
+    source: "Approved Messaging & Response Guide v1.0 §7"
+    guide: true
+
+  - id: CLM-AMG-08-MEDICAL-HISTORY
+    text: "For your privacy, it's best not to discuss personal medical details in a public forum. I can explain the general WellPeps process, but individual medical questions should be addressed through the appropriate provider channel."
+    products: ["*"]
+    tier: green
+    approved_by: "Approved Messaging & Response Guide v1.0 (Aug 2026)"
+    approved_at: null
+    expires: null
+    source: "Approved Messaging & Response Guide v1.0 §8"
+    guide: true
+    finalize: true
+    finalize_key: "care_routing"
+    finalize_missing: "Guide §8 FINALIZE: approved care/support routing instructions"
+
+  - id: CLM-AMG-08-POSTED-DETAILS
+    text: "For your privacy, please don't post personal medical information here. I can help direct you to the appropriate WellPeps support or provider channel, but I can't review or interpret medical information through community messaging."
+    products: ["*"]
+    tier: green
+    approved_by: "Approved Messaging & Response Guide v1.0 (Aug 2026)"
+    approved_at: null
+    expires: null
+    source: "Approved Messaging & Response Guide v1.0 §8"
+    guide: true
+    finalize: true
+    finalize_key: "care_routing"
+    finalize_missing: "Guide §8 FINALIZE: approved care/support routing instructions"
+
+  - id: CLM-AMG-08-DM-RECORDS
+    text: "Please don't send medical records to me through community messaging. Medical information should be submitted only through the appropriate approved care channel."
+    products: ["*"]
+    tier: green
+    approved_by: "Approved Messaging & Response Guide v1.0 (Aug 2026)"
+    approved_at: null
+    expires: null
+    source: "Approved Messaging & Response Guide v1.0 §8"
+    guide: true
+    finalize: true
+    finalize_key: "care_routing"
+    finalize_missing: "Guide §8 FINALIZE: approved care/support routing instructions"
+
+  - id: CLM-AMG-09-COMPLAINT
+    text: "I'm sorry to hear you have a concern. I'm part of the WellPeps team and would like to help get this to the right person. For your privacy, please don't post medical or account details here. Please use our approved support channel, and we'll route the matter appropriately."
+    products: ["*"]
+    tier: yellow
+    approved_by: "Approved Messaging & Response Guide v1.0 (Aug 2026)"
+    approved_at: null
+    expires: null
+    source: "Approved Messaging & Response Guide v1.0 §9"
+    guide: true
+    finalize: true
+    finalize_key: "support_channel"
+    finalize_missing: "Guide §9 FINALIZE: the approved customer-support channel and complaint escalation process"
+    note: "Its disclosure is in the second sentence; Pulse drafts complaints from CLM-AMG-04-TEAM + CLM-AMG-APPX-COMPLAINT so the disclosure comes first."
+
+  - id: CLM-AMG-09-BILLING
+    text: "I'm sorry you're having an issue. I can help direct this to the appropriate support team. Please don't post account or medical information publicly."
+    products: ["*"]
+    tier: yellow
+    approved_by: "Approved Messaging & Response Guide v1.0 (Aug 2026)"
+    approved_at: null
+    expires: null
+    source: "Approved Messaging & Response Guide v1.0 §9"
+    guide: true
+    finalize: true
+    finalize_key: "support_channel"
+    finalize_missing: "Guide §9 FINALIZE: the approved customer-support channel and complaint escalation process"
+
+  - id: CLM-AMG-09-ANGRY
+    text: "I understand you have a concern. I'm part of the WellPeps team and can help route it to the appropriate person. I don't want to ask for private account or medical details in a public thread."
+    products: ["*"]
+    tier: yellow
+    approved_by: "Approved Messaging & Response Guide v1.0 (Aug 2026)"
+    approved_at: null
+    expires: null
+    source: "Approved Messaging & Response Guide v1.0 §9"
+    guide: true
+    finalize: true
+    finalize_key: "support_channel"
+    finalize_missing: "Guide §9 FINALIZE: the approved customer-support channel and complaint escalation process"
+
+  - id: CLM-AMG-10-REACTION
+    text: "I'm sorry you're dealing with that. I can't assess symptoms or determine the cause here. Please contact your healthcare provider promptly. If you believe you may be experiencing a medical emergency, seek immediate emergency medical care."
+    products: ["*"]
+    tier: yellow
+    approved_by: "Approved Messaging & Response Guide v1.0 (Aug 2026)"
+    approved_at: null
+    expires: null
+    source: "Approved Messaging & Response Guide v1.0 §10"
+    guide: true
+
+  - id: CLM-AMG-10-DOSE-CHANGE
+    text: "I can't advise you to change your medication or dosing. Please contact your prescribing healthcare provider through the appropriate care channel. If you believe this is a medical emergency, seek immediate emergency medical care."
+    products: ["*"]
+    tier: yellow
+    approved_by: "Approved Messaging & Response Guide v1.0 (Aug 2026)"
+    approved_at: null
+    expires: null
+    source: "Approved Messaging & Response Guide v1.0 §10"
+    guide: true
+
+  - id: CLM-AMG-11-EMERGENCY
+    text: "If you believe you are experiencing a medical emergency, please seek immediate emergency medical care."
+    products: ["*"]
+    tier: green
+    approved_by: "Approved Messaging & Response Guide v1.0 (Aug 2026)"
+    approved_at: null
+    expires: null
+    source: "Approved Messaging & Response Guide v1.0 §11"
+    guide: true
+
+  - id: CLM-AMG-12-COST
+    text: "I work with WellPeps. I'm happy to share our current approved pricing and explain what is included."
+    products: ["*"]
+    tier: yellow
+    approved_by: "Approved Messaging & Response Guide v1.0 (Aug 2026)"
+    approved_at: null
+    expires: null
+    source: "Approved Messaging & Response Guide v1.0 §12"
+    guide: true
+    promotional: true
+    finalize: true
+    finalize_key: "pricing"
+    finalize_missing: "Guide §12 FINALIZE: current approved pricing table and exact all-inclusive pricing language"
+
+  - id: CLM-AMG-12-CHEAPER
+    text: "I can explain our current WellPeps pricing and what is included. I wouldn't want to make a comparison unless we have current, verified information about the other service."
+    products: ["*"]
+    tier: yellow
+    approved_by: "Approved Messaging & Response Guide v1.0 (Aug 2026)"
+    approved_at: null
+    expires: null
+    source: "Approved Messaging & Response Guide v1.0 §12"
+    guide: true
+    promotional: true
+
+  - id: CLM-AMG-12-MORE-EXPENSIVE
+    text: "I can explain the current WellPeps price and what the service includes. I don't want to make assumptions about another company's pricing or services."
+    products: ["*"]
+    tier: yellow
+    approved_by: "Approved Messaging & Response Guide v1.0 (Aug 2026)"
+    approved_at: null
+    expires: null
+    source: "Approved Messaging & Response Guide v1.0 §12"
+    guide: true
+    promotional: true
+
+  - id: CLM-AMG-13-BETTER
+    text: "I work with WellPeps, so I want to be transparent about that. I can explain how WellPeps works and what our service includes, but I wouldn't make an unsupported claim that one service is better for everyone."
+    products: ["*"]
+    tier: yellow
+    approved_by: "Approved Messaging & Response Guide v1.0 (Aug 2026)"
+    approved_at: null
+    expires: null
+    source: "Approved Messaging & Response Guide v1.0 §13"
+    guide: true
+
+  - id: CLM-AMG-13-MISINFO
+    text: "I work with WellPeps. Just to clarify, [insert current approved factual correction]. Here is the relevant approved WellPeps resource if helpful: [approved link]."
+    products: ["*"]
+    tier: yellow
+    approved_by: "Approved Messaging & Response Guide v1.0 (Aug 2026)"
+    approved_at: null
+    expires: null
+    source: "Approved Messaging & Response Guide v1.0 §13"
+    guide: true
+    finalize: true
+    finalize_missing: "A human must fill the [factual correction] and [approved link] slots (Guide §13)"
+
+  - id: CLM-AMG-14-ARTICLE
+    text: "I work with WellPeps. We have an educational article on that topic that may be useful: [approved link]. In general, [brief useful answer]."
+    products: ["*"]
+    tier: green
+    approved_by: "Approved Messaging & Response Guide v1.0 (Aug 2026)"
+    approved_at: null
+    expires: null
+    source: "Approved Messaging & Response Guide v1.0 §14"
+    guide: true
+    promotional: true
+    finalize: true
+    finalize_missing: "Guide §14 FINALIZE: the Wellness Learning Center link library by topic; a human must fill the [approved link] and [brief useful answer] slots"
+
+  - id: CLM-AMG-15-GET-STARTED
+    text: "The first step is the WellPeps online health assessment. A licensed healthcare provider reviews the information to determine whether treatment is medically appropriate. You can start here: [approved assessment link]."
+    products: ["*"]
+    tier: yellow
+    approved_by: "Approved Messaging & Response Guide v1.0 (Aug 2026)"
+    approved_at: null
+    expires: null
+    source: "Approved Messaging & Response Guide v1.0 §15"
+    guide: true
+    promotional: true
+    finalize: true
+    finalize_missing: "Guide §15 FINALIZE: current approved assessment URL and any required assessment disclosure (R8 also holds assessment links until LegitScript certification)"
+
+  - id: CLM-AMG-15-NO-GUARANTEE
+    text: "No. Completing an assessment does not guarantee treatment. A licensed healthcare provider determines whether treatment is medically appropriate."
+    products: ["*"]
+    tier: yellow
+    approved_by: "Approved Messaging & Response Guide v1.0 (Aug 2026)"
+    approved_at: null
+    expires: null
+    source: "Approved Messaging & Response Guide v1.0 §15"
+    guide: true
+
+  - id: CLM-AMG-16-WHICH-MEDICATION
+    text: "I partner with WellPeps, but I can't advise you on which medication or treatment is right for you. A licensed healthcare provider would need to evaluate that."
+    products: ["*"]
+    tier: yellow
+    approved_by: "Approved Messaging & Response Guide v1.0 (Aug 2026)"
+    approved_at: null
+    expires: null
+    source: "Approved Messaging & Response Guide v1.0 §16"
+    guide: true
+    influencer_only: true
+
+  - id: CLM-AMG-16-SAME-RESULT
+    text: "Everyone's experience can be different, so I can't tell you what result you would have. A licensed provider can determine whether treatment may be appropriate for you."
+    products: ["*"]
+    tier: yellow
+    approved_by: "Approved Messaging & Response Guide v1.0 (Aug 2026)"
+    approved_at: null
+    expires: null
+    source: "Approved Messaging & Response Guide v1.0 §16"
+    guide: true
+    influencer_only: true
+
+  - id: CLM-AMG-16-SIDE-EFFECTS
+    text: "I'm sorry you're dealing with that. I'm not able to assess symptoms or give medical advice. Please contact your healthcare provider, and if you believe this is a medical emergency, seek immediate emergency medical care."
+    products: ["*"]
+    tier: yellow
+    approved_by: "Approved Messaging & Response Guide v1.0 (Aug 2026)"
+    approved_at: null
+    expires: null
+    source: "Approved Messaging & Response Guide v1.0 §16"
+    guide: true
+    influencer_only: true
+
+  - id: CLM-AMG-17-TELEHEALTH
+    text: "I work with WellPeps. In general, telehealth programs use licensed healthcare providers to review a person's health information and determine whether treatment is appropriate. Regardless of the company, it's important that treatment decisions are made by a licensed clinician."
+    products: ["*"]
+    tier: green
+    approved_by: "Approved Messaging & Response Guide v1.0 (Aug 2026)"
+    approved_at: null
+    expires: null
+    source: "Approved Messaging & Response Guide v1.0 §17"
+    guide: true
+
+  - id: CLM-AMG-18-ONLINE-CLINICS
+    text: "I work with WellPeps. In general, telehealth clinics operate by having a licensed provider review your health information before deciding whether treatment is appropriate. Regardless of the company, it's important that the evaluation is conducted by a licensed clinician."
+    products: ["*"]
+    tier: green
+    approved_by: "Approved Messaging & Response Guide v1.0 (Aug 2026)"
+    approved_at: null
+    expires: null
+    source: "Approved Messaging & Response Guide v1.0 §18"
+    guide: true
+
+  - id: CLM-AMG-19-WHAT-TO-TAKE
+    text: "A licensed healthcare provider would need to determine what, if any, treatment is appropriate for you. We can provide general information, but we can't recommend a medication through comments."
+    products: ["*"]
+    tier: yellow
+    approved_by: "Approved Messaging & Response Guide v1.0 (Aug 2026)"
+    approved_at: null
+    expires: null
+    source: "Approved Messaging & Response Guide v1.0 §19"
+    guide: true
+
+  - id: CLM-AMG-19-HOW-TO-START
+    text: "You can begin with the WellPeps online health assessment here: [approved link]. A licensed provider reviews your information to determine whether treatment is medically appropriate."
+    products: ["*"]
+    tier: yellow
+    approved_by: "Approved Messaging & Response Guide v1.0 (Aug 2026)"
+    approved_at: null
+    expires: null
+    source: "Approved Messaging & Response Guide v1.0 §19"
+    guide: true
+    promotional: true
+    finalize: true
+    finalize_missing: "Guide §15/§19 FINALIZE: the approved assessment URL (R8 also holds assessment links until LegitScript certification)"
+
+  - id: CLM-AMG-19-SIDE-EFFECTS
+    text: "I'm sorry you're dealing with that. We can't assess symptoms through comments. Please contact your healthcare provider, and if you believe this is a medical emergency, seek immediate emergency medical care."
+    products: ["*"]
+    tier: yellow
+    approved_by: "Approved Messaging & Response Guide v1.0 (Aug 2026)"
+    approved_at: null
+    expires: null
+    source: "Approved Messaging & Response Guide v1.0 §19"
+    guide: true
+
+  - id: CLM-AMG-21-NOT-AUTOMATIC
+    text: "I work with WellPeps. Just to clarify, treatment isn't automatically provided after someone completes an assessment. A licensed healthcare provider reviews the individual's information and determines whether treatment is medically appropriate."
+    products: ["*"]
+    tier: yellow
+    approved_by: "Approved Messaging & Response Guide v1.0 (Aug 2026)"
+    approved_at: null
+    expires: null
+    source: "Approved Messaging & Response Guide v1.0 §21"
+    guide: true
+
+  - id: CLM-AMG-22-CLOSE
+    text: "I don't want to speculate or give you information that may not be appropriate for your individual situation. The best next step is to speak with a licensed healthcare provider through the appropriate care channel."
+    products: ["*"]
+    tier: green
+    approved_by: "Approved Messaging & Response Guide v1.0 (Aug 2026)"
+    approved_at: null
+    expires: null
+    source: "Approved Messaging & Response Guide v1.0 §22"
+    guide: true
+
+  - id: CLM-AMG-23-MEDIA
+    text: "Thanks for reaching out. I'm not an authorized spokesperson for media inquiries, but I'll route your request to the appropriate WellPeps contact."
+    products: ["*"]
+    tier: green
+    approved_by: "Approved Messaging & Response Guide v1.0 (Aug 2026)"
+    approved_at: null
+    expires: null
+    source: "Approved Messaging & Response Guide v1.0 §23"
+    guide: true
+
+  - id: CLM-AMG-25-TEMPLATE-B
+    text: "That requires evaluation by a licensed healthcare provider based on your individual medical history. I can provide general educational information, but I can't recommend a treatment for you personally."
+    products: ["*"]
+    tier: yellow
+    approved_by: "Approved Messaging & Response Guide v1.0 (Aug 2026)"
+    approved_at: null
+    expires: null
+    source: "Approved Messaging & Response Guide v1.0 §25"
+    guide: true
+
+  - id: CLM-AMG-25-TEMPLATE-E
+    text: "I partner with WellPeps, but I can't advise you on which treatment is right for you. A licensed healthcare provider would need to evaluate that."
+    products: ["*"]
+    tier: yellow
+    approved_by: "Approved Messaging & Response Guide v1.0 (Aug 2026)"
+    approved_at: null
+    expires: null
+    source: "Approved Messaging & Response Guide v1.0 §25"
+    guide: true
+    influencer_only: true
+
+  - id: CLM-AMG-26-RESULTS-VARY
+    text: "Results vary by individual."
+    products: ["*"]
+    tier: yellow
+    approved_by: "Approved Messaging & Response Guide v1.0 (Aug 2026)"
+    approved_at: null
+    expires: null
+    source: "Approved Messaging & Response Guide v1.0 §26"
+    guide: true
+
+  - id: CLM-AMG-26-NO-GUARANTEE
+    text: "No specific outcome can be guaranteed."
+    products: ["*"]
+    tier: yellow
+    approved_by: "Approved Messaging & Response Guide v1.0 (Aug 2026)"
+    approved_at: null
+    expires: null
+    source: "Approved Messaging & Response Guide v1.0 §26"
+    guide: true
+
+  - id: CLM-AMG-26-PROVIDER-CAN-DETERMINE
+    text: "A licensed healthcare provider can determine whether treatment is appropriate."
+    products: ["*"]
+    tier: green
+    approved_by: "Approved Messaging & Response Guide v1.0 (Aug 2026)"
+    approved_at: null
+    expires: null
+    source: "Approved Messaging & Response Guide v1.0 §26"
+    guide: true
+
+  - id: CLM-AMG-26-GENERAL-INFO
+    text: "I can provide general educational information."
+    products: ["*"]
+    tier: green
+    approved_by: "Approved Messaging & Response Guide v1.0 (Aug 2026)"
+    approved_at: null
+    expires: null
+    source: "Approved Messaging & Response Guide v1.0 §26"
+    guide: true
+
+  - id: CLM-AMG-26-NO-SPECULATE
+    text: "I don't want to speculate."
+    products: ["*"]
+    tier: green
+    approved_by: "Approved Messaging & Response Guide v1.0 (Aug 2026)"
+    approved_at: null
+    expires: null
+    source: "Approved Messaging & Response Guide v1.0 §26"
+    guide: true
+
+  - id: CLM-AMG-26-EXPLAIN-PROCESS
+    text: "I can explain the WellPeps process."
+    products: ["*"]
+    tier: green
+    approved_by: "Approved Messaging & Response Guide v1.0 (Aug 2026)"
+    approved_at: null
+    expires: null
+    source: "Approved Messaging & Response Guide v1.0 §26"
+    guide: true
+
+  - id: CLM-AMG-26-PRIVACY
+    text: "For your privacy, please don't post personal medical information here."
+    products: ["*"]
+    tier: green
+    approved_by: "Approved Messaging & Response Guide v1.0 (Aug 2026)"
+    approved_at: null
+    expires: null
+    source: "Approved Messaging & Response Guide v1.0 §26"
+    guide: true
+
+  - id: CLM-AMG-APPX-HOW-IT-WORKS
+    text: "You complete an online health assessment, and a licensed healthcare provider reviews your information to determine whether treatment is medically appropriate."
+    products: ["*"]
+    tier: green
+    approved_by: "Approved Messaging & Response Guide v1.0 (Aug 2026)"
+    approved_at: null
+    expires: null
+    source: "Approved Messaging & Response Guide v1.0 Appendix A"
+    guide: true
+
+  - id: CLM-AMG-APPX-QUALIFY
+    text: "Only a licensed healthcare provider can determine whether treatment is appropriate after reviewing your health information."
+    products: ["*"]
+    tier: yellow
+    approved_by: "Approved Messaging & Response Guide v1.0 (Aug 2026)"
+    approved_at: null
+    expires: null
+    source: "Approved Messaging & Response Guide v1.0 Appendix A"
+    guide: true
+
+  - id: CLM-AMG-APPX-WHICH-MEDICATION
+    text: "I can provide general information, but only a licensed healthcare provider can determine which treatment is appropriate for you personally."
+    products: ["*"]
+    tier: yellow
+    approved_by: "Approved Messaging & Response Guide v1.0 (Aug 2026)"
+    approved_at: null
+    expires: null
+    source: "Approved Messaging & Response Guide v1.0 Appendix A"
+    guide: true
+
+  - id: CLM-AMG-APPX-DOSE
+    text: "Dosing decisions need to be made by the prescribing healthcare provider."
+    products: ["*"]
+    tier: yellow
+    approved_by: "Approved Messaging & Response Guide v1.0 (Aug 2026)"
+    approved_at: null
+    expires: null
+    source: "Approved Messaging & Response Guide v1.0 Appendix A"
+    guide: true
+
+  - id: CLM-AMG-APPX-SAFE
+    text: "All medications can have potential risks and benefits. Whether treatment is appropriate requires an individualized provider evaluation."
+    products: ["*"]
+    tier: yellow
+    approved_by: "Approved Messaging & Response Guide v1.0 (Aug 2026)"
+    approved_at: null
+    expires: null
+    source: "Approved Messaging & Response Guide v1.0 Appendix A"
+    guide: true
+
+  - id: CLM-AMG-APPX-LABS
+    text: "I can't interpret laboratory results. A licensed healthcare provider should review them with you."
+    products: ["*"]
+    tier: yellow
+    approved_by: "Approved Messaging & Response Guide v1.0 (Aug 2026)"
+    approved_at: null
+    expires: null
+    source: "Approved Messaging & Response Guide v1.0 Appendix A"
+    guide: true
+
+  - id: CLM-AMG-APPX-COMPLAINT
+    text: "I'm sorry to hear you have a concern. Please don't post medical or account details publicly; I can help route this to the appropriate support channel."
+    products: ["*"]
+    tier: yellow
+    approved_by: "Approved Messaging & Response Guide v1.0 (Aug 2026)"
+    approved_at: null
+    expires: null
+    source: "Approved Messaging & Response Guide v1.0 Appendix A"
+    guide: true
+    finalize: true
+    finalize_key: "support_channel"
+    finalize_missing: "Guide §9 FINALIZE: the approved customer-support channel and complaint escalation process"
+
+  - id: CLM-AMG-APPX-SIDE-EFFECT
+    text: "I can't assess symptoms here. Please contact your healthcare provider, and if you believe this is a medical emergency, seek immediate emergency medical care."
+    products: ["*"]
+    tier: yellow
+    approved_by: "Approved Messaging & Response Guide v1.0 (Aug 2026)"
+    approved_at: null
+    expires: null
+    source: "Approved Messaging & Response Guide v1.0 Appendix A"
+    guide: true
+
+  - id: CLM-AMG-APPX-COMPETITOR
+    text: "I can explain WellPeps' current service and pricing, but I wouldn't make claims about another service unless the information is current, verified and approved."
+    products: ["*"]
+    tier: yellow
+    approved_by: "Approved Messaging & Response Guide v1.0 (Aug 2026)"
+    approved_at: null
+    expires: null
+    source: "Approved Messaging & Response Guide v1.0 Appendix A"
+    guide: true
+
+  # --- Approved Messaging Live Reference v1.0 (Aug 2026): items marked
+  # APPROVED only (CONFIRM / TO BE ESTABLISHED items are never claims; the
+  # Competitor Mentions and Provider Switching Protocol §6: "CONFIRM, TO BE
+  # ESTABLISHED, expired, conflicting or missing items cannot be stated as
+  # facts"). Verbatim (typographic quotes normalised to ASCII) from
+  #   C:\dev\W\docs\community-engagement-agent\Community Engagement-20261007T043724Z-1-001.zip
+  #   -> "Community Engagement/WellPeps_Approved_Messaging_Live_Reference_v1.0.docx"
+  # Publishable under the same claims_policy toggle as the guide ("May be used
+  # as written, subject to current company approval controls", LR §1).
+  # No prices: the protocol (§6) forbids treating the Live Reference figures
+  # as current public facts, and the Guide §12 pricing table is FINALIZE. ----
+  - id: CLM-LR-02-ROLE
+    text: "WellPeps is a platform that connects patients with licensed healthcare providers and pharmacy partners. Medical services are provided by independent providers. WellPeps does not provide medical advice, diagnosis, or treatment."
+    products: ["*"]
+    tier: green
+    approved_by: "Approved Messaging Live Reference v1.0 (Aug 2026), status APPROVED"
+    approved_at: null
+    expires: null
+    source: "Approved Messaging Live Reference v1.0 §2 (WellPeps role), §13.2"
+    guide: true
+
+  - id: CLM-LR-02-PROCESS
+    text: "The first step is an online health assessment. A licensed healthcare provider reviews the information to determine whether treatment is medically appropriate."
+    products: ["*"]
+    tier: green
+    approved_by: "Approved Messaging Live Reference v1.0 (Aug 2026), status APPROVED"
+    approved_at: null
+    expires: null
+    source: "Approved Messaging Live Reference v1.0 §2 (How the process begins)"
+    guide: true
+
+  - id: CLM-LR-02-ELIGIBILITY
+    text: "Completing an assessment does not guarantee treatment. Only a licensed healthcare provider can determine whether treatment is medically appropriate."
+    products: ["*"]
+    tier: green
+    approved_by: "Approved Messaging Live Reference v1.0 (Aug 2026), status APPROVED"
+    approved_at: null
+    expires: null
+    source: "Approved Messaging Live Reference v1.0 §2 (Eligibility)"
+    guide: true
+
+  - id: CLM-LR-02-MEDICATION
+    text: "Medication is prescribed only if a licensed healthcare provider determines it is medically appropriate."
+    products: ["*"]
+    tier: green
+    approved_by: "Approved Messaging Live Reference v1.0 (Aug 2026), status APPROVED"
+    approved_at: null
+    expires: null
+    source: "Approved Messaging Live Reference v1.0 §2 (Medication)"
+    guide: true
+
+  - id: CLM-LR-02-ONGOING-SUPPORT
+    text: "If treatment is prescribed, ongoing support is part of the WellPeps process."
+    products: ["*"]
+    tier: green
+    approved_by: "Approved Messaging Live Reference v1.0 (Aug 2026), status APPROVED"
+    approved_at: null
+    expires: null
+    source: "Approved Messaging Live Reference v1.0 §2 (Ongoing support)"
+    guide: true
+    note: "Protocol §6: supports only this fact; never a response-time guarantee, direct physician access, video visits or 24/7 care."
+
+  - id: CLM-LR-06-PRICING-PHRASE
+    text: "Medication (if prescribed), provider evaluation and ongoing support included. No membership fees."
+    products: ["*"]
+    tier: yellow
+    approved_by: "Approved Messaging Live Reference v1.0 (Aug 2026), status APPROVED"
+    approved_at: null
+    expires: null
+    source: "Approved Messaging Live Reference v1.0 §6 (Approved Pricing Phrase)"
+    guide: true
+    promotional: true
+    finalize: true
+    finalize_key: "pricing"
+    finalize_missing: "Guide §12 FINALIZE: the current approved pricing table and exact program-specific inclusion language (Protocol §6: use only current program-specific inclusions, fees, quantity and renewal terms)"
+
+  - id: CLM-LR-07-SHIPPING
+    text: "Prescription medications ship after the healthcare provider approves treatment, the prescription is processed, and the pharmacy prepares the order. Delivery times may vary."
+    products: ["*"]
+    tier: green
+    approved_by: "Approved Messaging Live Reference v1.0 (Aug 2026), status APPROVED"
+    approved_at: null
+    expires: null
+    source: "Approved Messaging Live Reference v1.0 §7 (When medication ships)"
+    guide: true
+
+  - id: CLM-LR-07-DELAYS
+    text: "Shipping delays may occur because of weather, carrier issues, holidays, or other factors."
+    products: ["*"]
+    tier: green
+    approved_by: "Approved Messaging Live Reference v1.0 (Aug 2026), status APPROVED"
+    approved_at: null
+    expires: null
+    source: "Approved Messaging Live Reference v1.0 §7 (Delayed shipment)"
+    guide: true
+
+  - id: CLM-LR-08-CANCEL
+    text: "Patients may cancel at any time."
+    products: ["*"]
+    tier: yellow
+    approved_by: "Approved Messaging Live Reference v1.0 (Aug 2026), status APPROVED"
+    approved_at: null
+    expires: null
+    source: "Approved Messaging Live Reference v1.0 §8 (Cancellation principle)"
+    guide: true
+    note: "The exact site-wide cancellation sentence and refund policy are CONFIRM (LR §8): never add refund terms."
+
+  - id: CLM-LR-13-COMPOUNDED
+    text: "Some WellPeps therapies use compounded medications prepared by licensed compounding pharmacies when appropriate."
+    products: ["*"]
+    tier: yellow
+    approved_by: "Approved Messaging Live Reference v1.0 (Aug 2026), status APPROVED"
+    approved_at: null
+    expires: null
+    source: "Approved Messaging Live Reference v1.0 §13.1"
+    guide: true
+
+  - id: CLM-LR-13-NOT-FDA-APPROVED
+    text: "Compounded medications are not FDA-approved as finished drug products."
+    products: ["*"]
+    tier: green
+    approved_by: "Approved Messaging Live Reference v1.0 (Aug 2026), status APPROVED"
+    approved_at: null
+    expires: null
+    source: "Approved Messaging Live Reference v1.0 §13.1"
+    guide: true

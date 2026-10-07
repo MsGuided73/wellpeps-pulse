@@ -58,8 +58,10 @@ MAX_TRACKED_KEYS = 10000   # prune expired limiter keys past this many
 PERMISSIONS: dict[str, frozenset[str]] = {
     "viewer": frozenset({"view"}),
     "reviewer": frozenset({"view", "review", "ack"}),
-    "clinical": frozenset({"view", "ack_adverse"}),
-    "admin": frozenset({"view", "review", "ack", "ack_adverse", "admin"}),
+    # approve_clinical: approve a reply the rules of engagement reserve for a
+    # clinical approver (adverse events, emergencies; docs/RULES-OF-ENGAGEMENT.md).
+    "clinical": frozenset({"view", "ack_adverse", "approve_clinical"}),
+    "admin": frozenset({"view", "review", "ack", "ack_adverse", "approve_clinical", "admin"}),
 }
 ADVERSE_KIND = "adverse_event"
 

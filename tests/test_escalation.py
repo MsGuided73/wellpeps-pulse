@@ -466,7 +466,8 @@ async def test_triage_batch_escalates_through_the_hook(state):
     assert report.paged == 2
     kinds = sorted(e.kind for e in await state.list_open_escalations())
     assert kinds == ["adverse_event", "viral_negative"]
-    assert (await state.get_mention(adverse)).status is MentionStatus.ESCALATED
+    # Paged, and kept triaged for the guide's approved boundary reply (rules of engagement).
+    assert (await state.get_mention(adverse)).status is MentionStatus.TRIAGED
     assert (await state.get_mention(viral)).status is MentionStatus.TRIAGED
     assert (await state.get_mention(praise)).status is MentionStatus.TRIAGED
     assert len(spy.payloads) == 2
