@@ -71,7 +71,10 @@ async def state(tmp_path):
     yield sm
 
 
-async def _triaged(state, text, n, *, reply=True, category=Category.QUESTION,
+# Pipeline mechanics only: praise is drafted under the catch-all situation,
+# which needs no Smart Patient's Guide reference. Answering situations
+# (questions, purchase intent, ...) require one: tests/test_guides.py.
+async def _triaged(state, text, n, *, reply=True, category=Category.PRAISE,
                    platform=Platform.REDDIT, status=MentionStatus.TRIAGED) -> int:
     mid, _ = await state.upsert_mention(Mention(
         platform=platform, external_id=f"d{n}", url=f"https://www.reddit.com/r/t/comments/d{n}/",

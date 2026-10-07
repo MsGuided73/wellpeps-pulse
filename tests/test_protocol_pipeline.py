@@ -180,8 +180,11 @@ class _Drafter:
     async def draft(self, mention, triage, feedback=None, max_calls=None, guidance=None):
         self.calls.append((mention.id, guidance))
         return DraftProposal(reply="I work with WellPeps. A few things worth checking with any provider are whether "
-                                   "a licensed clinician reviews you and what follow-up is included.",
-                             claim_ids=["CLM-AMG-04-WORK-WITH", "CLM-R7-PROVIDER-CHECKLIST"], model="sonnet")
+                                   "a licensed clinician reviews you and what follow-up is included. If it helps, "
+                                   "our free Smart Patient's Guides on the WellPeps website (it asks for your email) "
+                                   "close with the questions every Smart Patient should know to ask.",
+                             claim_ids=["CLM-AMG-04-WORK-WITH", "CLM-R7-PROVIDER-CHECKLIST", "CLM-EDU-GUIDES"],
+                             model="sonnet")
 
 
 class _Reviewer:
@@ -207,6 +210,8 @@ async def test_protocol_guidance_reaches_the_drafter_and_one_reply_per_thread(st
     assert guidance.protocol_label == "APPROPRIATE ALTERNATIVE"
     assert guidance.brand_mode == "brief_factual_option" and "no superiority" in guidance.brand_limits
     assert guidance.allow_link is False                          # this community allows no links
+    # The guide is still required (user instruction 2026-10-07): named, without a link.
+    assert guidance.guide_mode == "name" and guidance.guide_claim_id == "CLM-EDU-GUIDES"
     assert report.skipped == 1
     skipped = [e for e in await state.list_audit(b) if e.event is AuditEventType.SKIPPED]
     assert skipped and "one representative per thread" in skipped[0].verdict["reason"]
@@ -231,5 +236,8 @@ def test_reviewer_and_drafter_prompts_carry_the_protocol_checks():
     assert 'rule id "PROTOCOL"' in review_prompt
     assert "WellPeps presence affiliation only (identity disclosure is not a sales pitch)" in review_prompt
     block = drafter_mod.engagement_block(guidance)
-    assert "Questions to ask about messaging and follow-up" in block and "40 to 90 words" in block
+    assert "Questions to ask about messaging and follow-up" in block and "40 to 110 words" in block
+    # EDUCATIONAL ONLY now requires the guide reference (user-directed override of [CP] §8).
+    assert "Smart Patient's Guide (REQUIRED by WellPeps)" in block and "no guide or assessment offer" not in block
+    assert "REQUIRED (WellPeps instruction)" in review_prompt
     assert "never name, repeat or attack the other provider" in block

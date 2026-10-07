@@ -176,6 +176,42 @@ is open).
   otherwise the reply is the verbatim template. Never on the emergency line or on approved
   responses that carry their own disclosure. Clinical approval still applies.
 
+### Smart Patient's Guide in every answering reply (binding user instruction, 2026-10-07)
+
+> "We must refer to a relevant guide and point to how the guide can help."
+
+- **Where**: every drafted reply in an answering situation (`guide: required` in
+  `config/engagement_guide.yaml`): general questions and education, process / eligibility /
+  availability questions, purchase intent, pricing, competitor comparison, clinic
+  recommendations, "has anyone used WellPeps?", and the protocol's APPROPRIATE ALTERNATIVE and
+  EDUCATIONAL ONLY decisions. A correction of misinformation about WellPeps carries one only when
+  a program guide covers the topic (`guide: if_specific`).
+- **Which guide**: the single most relevant Smart Patient's Guide (`config/guides.yaml`, from the
+  site's `ebooks.ts` / `guide-pages.ts`; `harvey/guides.py`): program / product / drug / post
+  words; NAD+ posts get the NAD+ guide; the series index only when no single guide fits.
+- **How**: answer first, then ONE sentence naming the guide and how it helps with THIS question,
+  naming the chapter that answers it (e.g. GLP-1 guide -> "What's actually included in the price"
+  for a follow-up / pricing question; Hair Restoration guide -> "What does a good result actually
+  look like?" or "Oral vs. topical: what actually changes?"), then the provider-determines line.
+  Help, not a pitch. Always "free, it asks for your email". The tracked registry link where the
+  community allows links; otherwise the guide by name ("our free GLP-1 Weight Loss guide on the
+  WellPeps website": no URL or domain, which would count as a link). Reddit up to ~110 words.
+- **Never**: adverse events, emergencies, self-harm, legal / regulatory, privacy, media,
+  complaint or billing escalations, individual clinical questions (all boundary or no-reply
+  situations), a possible minor (safety screen, or "I'm 16" in the post), or a community that
+  prohibits promotion / has not granted permission (then no guide at all).
+- **Enforced**: the compliance filter (`GUIDE`): required but missing -> yellow "missing guide
+  reference", one automatic redraft with that feedback, still missing -> `needs_human`; a guide
+  in an excluded situation -> red; a guide link without the email-gate disclosure -> yellow. The
+  reviewer checks relevance (wrong program -> reject) and specificity (generic -> needs_human).
+  The review desk shows "Guide: <Title> -> <chapter>".
+- **Approval**: the user's instruction counts as WellPeps' approval of the gated-download
+  disclosure: FINALIZE `gated_download_disclosure` resolved 2026-10-07 (value recorded in
+  `engagement_guide.yaml`), and the guide claims (`CLM-EDU-GUIDE*`) carry `approved_by: "WellPeps
+  via user instruction (2026-10-07) ..."`. The guide links stay `live: false` in the real
+  `config/links.yaml` until the site pages deploy, so a reply carrying one still cannot be
+  approved (link not live).
+
 ## 5. Competitor mentions and provider switching ([CP])
 
 ### Scope
@@ -351,7 +387,8 @@ with no patient-specific discussion.
   [OM] §11.1).
 - At most one link, only from `config/links.yaml` through a cited claim
   (R6), only when it directly answers the question and the community allows
-  links ([AMG] §14; [CP] §8).
+  links ([AMG] §14; [CP] §8). In answering situations the relevant Smart
+  Patient's Guide link is required (user instruction 2026-10-07, section 4).
 - Never in safety, emergency or individual clinical replies ([CP] §8).
 - No verified link (`live: false`): yellow and approval blocked; never a
   generic homepage or invented slug ([CP] §8).
@@ -469,6 +506,7 @@ information here."
 | R38: no medication or drug-brand names in replies (`forbid_medication_names_in_replies: true`) | Names allowed for general treatment-category education (yellow for review); never an individual recommendation or dose; compounded-equivalence stays red (retained R15/R16) | [CT] Module 3 (general-to-individual boundary: "the difference between semaglutide and tirzepatide" can be answered generally); [CG] Official Account; [OM] §9.1; [PL] "Review first: medication names" |
 | Conversion playbook step 3: ONE WellPeps fact in every purchase-intent / question reply | WellPeps facts only when the person asks about WellPeps or explicitly asks for alternatives in a community that allows it; otherwise the disclosure only | [CP] §1, §7 (brand modes); [OM] §12.2 ("If a WellPeps mention is not necessary... consider leaving it out"); [AMG] §2 |
 | Conversion playbook: the program's guide claim pushed right after the disclosure, "one CTA (the guide)", guide link on purchase intent | A resource is optional, only when it directly answers and the community allows links, never in safety / clinical replies, email gate stated; the guide claim is offered after the fixed claims | [CP] §8; [AMG] §14; [OM] §11.1; [PL] Channel 1 step 6 ("Not every comment gets a link") |
+| [CP] §8 / the row above: "a resource is optional", protocol record `resource` "none" unless a live link fits, EDUCATIONAL ONLY "no guide offer" | **User-directed override (2026-10-07)**: every answering reply (incl. APPROPRIATE ALTERNATIVE and EDUCATIONAL ONLY) points to the most relevant Smart Patient's Guide and says how it helps, naming a chapter; the protocol record's `resource` is that guide link where the community allows links and promotion. Safety, clinical, legal, privacy, media, complaint / billing, minors and no-promotion communities stay excluded | Binding user instruction 2026-10-07 ("We must refer to a relevant guide and point to how the guide can help"); section 4 |
 | Default disclosure "Disclosure: I work with WellPeps, so I am not neutral." (CLM-R3-DISCLOSURE) | Default "I work with WellPeps." (old form still accepted) | [AMG] §4; [CP] §7 |
 | CLM-PRICE-FOLLOWUP "...included in the one monthly price" as a fixed playbook claim | Not offered first; FINALIZE `pricing`; the Live Reference's approved ongoing-support fact is used instead | [CP] §6; [LR] §6 ("One Simple Price. Everything Included." needs verification); [AMG] §12 FINALIZE |
 | CLM-PRICE-ALLIN (includes "standard shipping") | FINALIZE `pricing` | [LR] §6-7 (shipping CONFIRM); [CP] §6 |
@@ -519,7 +557,7 @@ until it is provided.
 | `learning_center_links` | Wellness Learning Center link library by topic | yes | — | Only `config/links.yaml` links (not live yet) |
 | `pricing` | Current pricing table and exact program-specific inclusion language (shipping, labs, supplies, cancellation / refund, peptide, sexual-wellness, NextGen, Biotin prices) | yes | — | No price claim is approvable; prices in replies are yellow |
 | `lab_terms` | Testing availability and terms per program | yes | — | Lab-inclusion wording red; WellPeps lab questions HOLD |
-| `gated_download_disclosure` | Validated guide links and the gated-download disclosure | yes | — | Guide claims not approvable; links not live |
+| `gated_download_disclosure` | Validated guide links and the gated-download disclosure | yes | — | **Resolved 2026-10-07 by user instruction** (WellPeps' approval: "free, it asks for your email"); links still `live: false` until the pages deploy, which blocks approval |
 | `program_descriptions` | Program and treatment-category descriptions; Hormone Optimization / Mental Wellness status; sexual-wellness catalog | — | — | Program-status claims only: Weight / Sexual Wellness / Peptides from [LR] §3 APPROVED; Hair (site Coming Soon vs [LR] §3), Hormone and Mental Wellness ([LR] CONFIRM) stay PENDING |
 | `adverse_event_contact` | Named adverse-event / clinical safety contact and reporting procedure | — | yes | Pages go to `escalation.clinical_owner` |
 | `emergency_procedure` | Emergency escalation procedure and any required wording | — | yes | Guide wording; paged as adverse_event |

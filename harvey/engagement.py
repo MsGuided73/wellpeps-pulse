@@ -426,10 +426,50 @@ class DraftGuidance:
     brand_mode: str = ""
     brand_limits: str = ""
     need_focus: str = ""
+    # Smart Patient's Guide (harvey/guides.py; binding user instruction 2026-10-07):
+    # link | name | forbidden | none, and the picked guide + chapter(s).
+    guide_mode: str = "none"
+    guide_claim_id: str = ""
+    guide_title: str = ""
+    guide_short: str = ""
+    guide_chapters: tuple[str, ...] = ()
+    guide_all_chapters: str = ""
+    guide_specific: bool = True
+    guide_why: str = ""
+
+    @property
+    def guide_required(self) -> bool:
+        return self.guide_mode in ("link", "name") and bool(self.guide_claim_id)
+
+    def guide_requirement(self):
+        """The harvey.guides.GuideRequirement this guidance was built from."""
+        from harvey import guides
+
+        if not self.guide_required:
+            return guides.GuideRequirement(self.guide_mode if self.guide_mode == "forbidden" else "none",
+                                           None, self.guide_why)
+        guide = guides.by_claim_id(self.guide_claim_id)
+        return guides.GuideRequirement(self.guide_mode, guides.GuidePick(guide, self.guide_chapters,
+                                                                         self.guide_specific), self.guide_why)
+
+
+def _guide_fields(requirement) -> dict:
+    from harvey import guides
+
+    pick = requirement.pick
+    if pick is None:
+        return {"guide_mode": requirement.mode, "guide_why": requirement.why}
+    return {"guide_mode": requirement.mode, "guide_claim_id": pick.guide.claim_id, "guide_title": pick.guide.title,
+            "guide_short": pick.guide.short, "guide_chapters": tuple(pick.chapters),
+            "guide_all_chapters": guides.chapter_line(pick.guide), "guide_specific": pick.specific,
+            "guide_why": requirement.why}
 
 
 def guidance_for(situation: Situation, context: ReplyContext | None = None, triage: Triage | None = None,
-                 ) -> DraftGuidance:
+                 mention: Mention | None = None) -> DraftGuidance:
+    """``mention``: the post (its words pick the guide chapter); None = no text."""
+    from harvey import guides
+
     context = context or ReplyContext()
     template = next((t for t in knowledge.engagement_guide().templates if t.id == situation.template), None)
     record = (triage.protocol if triage is not None else None) or {}
@@ -448,6 +488,7 @@ def guidance_for(situation: Situation, context: ReplyContext | None = None, tria
         repeated_link_ids=tuple(sorted(context.repeated_link_ids)),
         protocol_label=str(record.get("label") or ""), brand_mode=str(record.get("brand_mode") or ""),
         brand_limits=str(record.get("brand_limits") or ""), need_focus=str(record.get("need_focus") or ""),
+        **_guide_fields(guides.requirement_for(situation, context, triage, mention)),
     )
 
 
@@ -490,7 +531,26 @@ async def engagement_info(state, mention: Mention, triage: Triage | None, draft=
                      for cid, missing in knowledge.unresolved_finalize(claim_ids)],
         "persona": {"persona": persona.persona, "display_name": persona.display_name},
         "repeated_link_ids": sorted(repeated_links(records, status.id, exclude=mention.id)),
+        "guide": guide_view(situation, context_from(mention, records), triage, mention, text, claim_ids),
     }
+
+
+def guide_view(situation: Situation, context: ReplyContext, triage: Triage | None, mention: Mention,
+               text: str = "", claim_ids=()) -> dict | None:
+    """The review desk's guide chip: which guide / chapter this reply should
+    point to, and whether the draft does (None when no guide applies)."""
+    from harvey import guides
+
+    if triage is None:
+        return None
+    requirement = guides.requirement_for(situation, context, triage, mention)
+    if requirement.mode == "none":
+        return None
+    view = requirement.as_dict()
+    view["referenced"] = bool(text) and guides.references_guide(text, claim_ids)
+    view["satisfied"] = bool(text) and guides.satisfied(text, requirement)
+    view["drafted"] = bool(text)
+    return view
 
 
 def protocol_view(triage: Triage | None) -> dict | None:

@@ -591,6 +591,13 @@ function engagementHtml(d) {
   const chips = [];
   chips.push(tag('Situation', sit.label));
   if (sit.template) chips.push(tag('Template', sit.template + (sit.template_name ? ' — ' + sit.template_name : '')));
+  const g = e.guide;
+  if (g && (g.mode === 'link' || g.mode === 'name') && g.title) {
+    chips.push(tag('Guide', g.title + ' → ' + (g.chapter || '') + (g.mode === 'name' ? ' (named, no link)' : '')));
+    if (g.drafted && !g.satisfied) {
+      chips.push(toneBadge('Guide reference missing', 'bad'));
+    }
+  }
   if (e.persona) chips.push(tag('Speaking as', e.persona.persona === 'identified_employee'
     ? 'identified employee (' + e.persona.display_name + ')' : 'official account'));
   const c = e.community || {};

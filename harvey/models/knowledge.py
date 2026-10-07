@@ -349,6 +349,45 @@ class ReplyExamplesFile(_Strict):
     examples: list[ReplyExample] = Field(default_factory=list)
 
 
+# --- guides.yaml ---------------------------------------------------------------
+# The Smart Patient's Guides catalog (harvey/guides.py picks one per mention).
+
+
+class GuideChapter(_Strict):
+    title: str                                    # verbatim from the site source
+    keywords: list[str] = Field(default_factory=list)
+    subtypes: list[str] = Field(default_factory=list)
+    needs: list[str] = Field(default_factory=list)
+
+
+class Guide(_Strict):
+    slug: Annotated[str, Field(pattern=r"^[a-z0-9-]+$")]
+    title: str
+    short: str
+    subtitle: str
+    claim_id: str
+    link_id: str
+    programs: list[str] = Field(default_factory=list)
+    pages: int = Field(default=0, ge=0)
+    keywords: list[str] = Field(default_factory=list)
+    prefer_keywords: list[str] = Field(default_factory=list)
+    chapters: list[GuideChapter] = Field(default_factory=list)   # ebooks.ts `inside`
+    landing: list[GuideChapter] = Field(default_factory=list)    # guide-pages.ts `inside` extras
+    default_chapter: str
+
+    @model_validator(mode="after")
+    def _default_is_listed(self) -> "Guide":
+        titles = [c.title for c in (*self.chapters, *self.landing)]
+        if self.default_chapter not in titles:
+            raise ValueError(f"guide {self.slug}: default_chapter is not one of its chapters / landing topics")
+        return self
+
+
+class GuidesFile(_Strict):
+    guides: list[Guide]
+    series: Guide
+
+
 # --- engagement_guide.yaml ----------------------------------------------------
 # WellPeps' community engagement guidelines as Pulse enforces them. The human
 # readable version is docs/RULES-OF-ENGAGEMENT.md (the source of truth); this
@@ -421,11 +460,18 @@ class Situation(_Strict):
     # Education only: no promotion of any kind (no call to action, price,
     # guide or assessment offer). Protocol EDUCATIONAL ONLY replies.
     education_only: bool = False
+    # Smart Patient's Guide reference (binding user instruction 2026-10-07):
+    # required = every draft must point to the most relevant guide and say how
+    # it helps; if_specific = only when a program-specific guide fits (never
+    # the series index); none = not required.
+    guide: Literal["required", "if_specific", "none"] = "none"
     notes: str = ""
     sources: list[str] = Field(default_factory=list)
 
     @model_validator(mode="after")
     def _shape(self) -> "Situation":
+        if self.guide != "none" and self.reply != "draft":
+            raise ValueError(f"situation {self.id}: a guide reference is only for reply: draft")
         if self.reply == "boundary_only" and not (self.approved_response or self.approved_response_by_program):
             raise ValueError(f"situation {self.id}: boundary_only needs approved_response")
         if self.reply != "boundary_only" and (self.approved_response or self.approved_response_by_program):

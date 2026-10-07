@@ -228,15 +228,9 @@ def test_backed_live_registry_link_is_clean(tmp_path, monkeypatch):
         for link in data["links"]:
             link["live"] = True
     target = _config_copy(tmp_path, monkeypatch, edit_links=edit)
-    # The guide claims also wait on the gated-download disclosure (FINALIZE, R42 yellow).
-    result = compliance_filter(f"{DISCLOSURE} {ANSWER} Guide: {GLP1}", "reddit", GUIDE_CLAIMS)
-    assert [h.rule_id for h in result.hits] == ["R42"], result.hits
-    guide = yaml.safe_load((target / "engagement_guide.yaml").read_text(encoding="utf-8"))
-    for item in guide["finalize"]:
-        if item["key"] == "gated_download_disclosure":
-            item["value"] = "Fixture: provided"
-    (target / "engagement_guide.yaml").write_text(yaml.safe_dump(guide, sort_keys=False), encoding="utf-8")
-    knowledge.reload()
+    # The gated-download disclosure FINALIZE is resolved (user instruction
+    # 2026-10-07), so a live, backed guide link is clean.
+    assert target.is_dir()
     result = compliance_filter(f"{DISCLOSURE} {ANSWER} Guide: {GLP1}", "reddit", GUIDE_CLAIMS)
     assert result.tier == "green", result.hits
 

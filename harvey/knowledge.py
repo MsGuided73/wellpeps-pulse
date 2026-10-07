@@ -36,6 +36,7 @@ from harvey.models.knowledge import (
     CommunityEntry,
     CompetitorsFile,
     EngagementGuideFile,
+    GuidesFile,
     ComplianceRulesFile,
     KeywordsFile,
     LinksFile,
@@ -318,6 +319,39 @@ def _engagement_guide(directory: Path) -> EngagementGuideFile:
 
 
 @lru_cache(maxsize=None)
+def _guides(directory: Path) -> GuidesFile:
+    data = _load(directory, "guides.yaml", GuidesFile)
+    claims = {c.id: c for c in _claims(directory)}
+    link_ids = {link.id for link in _links(directory).links}
+    programs = {c.name for c in _products(directory).categories}
+    slugs = [g.slug for g in (*data.guides, data.series)]
+    if len(slugs) != len(set(slugs)):
+        raise KnowledgeError("guides.yaml: duplicate slugs")
+    for guide in (*data.guides, data.series):
+        where = f"guides.yaml {guide.slug}"
+        if guide.claim_id not in claims:
+            raise KnowledgeError(f"{where}: claim_id {guide.claim_id} not in claims.yaml")
+        if claims[guide.claim_id].link_id != guide.link_id:
+            raise KnowledgeError(f"{where}: link_id must equal the claim's link_id")
+        if guide.link_id not in link_ids:
+            raise KnowledgeError(f"{where}: link_id {guide.link_id} not in links.yaml")
+        unknown = sorted(set(guide.programs) - programs)
+        if unknown:
+            raise KnowledgeError(f"{where}: unknown programs {unknown}")
+        for chapter in (*guide.chapters, *guide.landing):
+            bad = sorted(set(chapter.subtypes) - set(TRIAGE_SUBTYPES)) + sorted(set(chapter.needs)
+                                                                              - set(PROTOCOL_NEEDS))
+            if bad:
+                raise KnowledgeError(f"{where} '{chapter.title}': unknown subtypes/needs {bad}")
+    for guide in data.guides:
+        if not guide.programs or not guide.chapters:
+            raise KnowledgeError(f"guides.yaml {guide.slug}: a guide needs programs and its chapters")
+    if data.series.programs:
+        raise KnowledgeError("guides.yaml series: the series index has no programs")
+    return data
+
+
+@lru_cache(maxsize=None)
 def _communities(directory: Path) -> tuple[CommunityEntry, ...]:
     data = _load(directory, "communities.yaml", CommunitiesFile)
     ids = [c.id for c in data.communities]
@@ -334,7 +368,7 @@ def _communities(directory: Path) -> tuple[CommunityEntry, ...]:
 
 _CACHED = (
     _competitors, _products, _keywords, _compliance_rules, _claims_file, _claims, _links, _reply_examples,
-    _engagement_guide, _communities,
+    _engagement_guide, _communities, _guides,
     _competitor_lookup, _product_lookup, _urgent_patterns, _drug_lookup,
     _wellpeps_rx,
 )
@@ -423,6 +457,11 @@ def links() -> tuple[PublicLink, ...]:
 def reply_examples() -> ReplyExamplesFile:
     """Few-shot style examples for the drafter (status PENDING: guidance only)."""
     return _reply_examples(config_dir())
+
+
+def guides() -> GuidesFile:
+    """The Smart Patient's Guides catalog (config/guides.yaml)."""
+    return _guides(config_dir())
 
 
 def links_by_id() -> dict[str, PublicLink]:

@@ -145,6 +145,15 @@ deterministic compliance filter (`harvey/compliance.py`) exist.
   --claude` (`run_demo.ps1 -Seed -Claude`): real Claude for the hand-written demo posts and
   briefs (<= 3 calls at a time, fallback to the fake per call), `--review-sheet`.
 
+- Smart Patient's Guide in every answering reply (2026-10-07, binding user instruction):
+  `config/guides.yaml` (guides, verbatim chapters from the site's ebooks.ts / guide-pages.ts),
+  `harvey/guides.py` (`best_guide` / `requirement_for`: link | name | forbidden | none;
+  `reference_hits` in the compliance filter as rule `GUIDE`), situation `guide:` in
+  engagement_guide.yaml, `DraftGuidance.guide_*`, drafter "how it helps" instruction, missing ->
+  one redraft then needs_human (drafting.py), reviewer GUIDE check, review desk "Guide" chip,
+  protocol `resource` = the guide link. FINALIZE gated_download_disclosure resolved by the user's
+  instruction; links stay `live: false` until the site deploys.
+
 Later phases add everything else. Don't build ahead of the phase you've
 been asked to do.
 

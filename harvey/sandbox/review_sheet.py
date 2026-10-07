@@ -2,8 +2,9 @@
 
 ``scripts/seed_demo.py --review-sheet PATH`` (and the ``--claude`` run) writes a
 Markdown sheet with, per post: the post (trimmed), triage category / subtype,
-the situation and reply mode, the protocol decision, the final reply, its
-filter tier, the reviewer verdict and the model that wrote it. DEMO tooling
+the situation and reply mode, the protocol decision, the Smart Patient's Guide
+it should point to (title -> chapter, and whether the reply does), the final
+reply, its filter tier, the reviewer verdict and the model that wrote it. DEMO tooling
 only: it reads the throwaway demo database and the active (DEMO) config.
 """
 
@@ -45,6 +46,7 @@ def _decision(status: str, triage, situation) -> str:
 async def entries(state, posts: list[str]) -> list[dict]:
     """One dict per hand-written post (in the given order)."""
     out = []
+    records = await engagement.recent_replies(state)
     for post, mid in await _mention_ids(state, posts):
         if mid is None:
             out.append({"post": _trim(post), "missing": True})
@@ -54,7 +56,12 @@ async def entries(state, posts: list[str]) -> list[dict]:
         draft = await state.get_latest_draft(mid)
         situation = engagement.situation_of(triage) if triage is not None else None
         status = getattr(mention.status, "value", mention.status)
+        guide = None
+        if triage is not None and situation is not None:
+            guide = engagement.guide_view(situation, engagement.context_from(mention, records), triage, mention,
+                                          draft.text if draft else "", list(draft.claim_ids) if draft else [])
         out.append({
+            "guide": _guide_cell(guide),
             "id": mid, "platform": getattr(mention.platform, "value", mention.platform), "post": _trim(post),
             "category": (f"{getattr(triage.category, 'value', triage.category)}"
                          f"{' / ' + triage.subtype if triage.subtype else ''}") if triage else "-",
@@ -70,6 +77,16 @@ async def entries(state, posts: list[str]) -> list[dict]:
     return out
 
 
+def _guide_cell(view: dict | None) -> str:
+    if not view:
+        return "-"
+    if view["mode"] == "forbidden":
+        return f"none (excluded: {view.get('why') or 'excluded situation'})"
+    how = "linked" if view["mode"] == "link" else "named, no link"
+    done = "referenced" if view.get("satisfied") else ("MISSING" if view.get("drafted") else "no reply text")
+    return f"{view['title']} -> {view['chapter']} ({how}; {done})"
+
+
 def render(rows: list[dict], title: str = "DEMO review sheet") -> str:
     lines = [f"# {title}", "", f"{len(rows)} hand-written demo post(s).", ""]
     for n, row in enumerate(rows, 1):
@@ -83,6 +100,7 @@ def render(rows: list[dict], title: str = "DEMO review sheet") -> str:
             f"- Category: {row['category']}",
             f"- Situation: {row['situation']}",
             f"- Decision: {row['decision']}",
+            f"- Guide: {row.get('guide', '-')}",
             f"- Tier: {row['tier']} | Reviewer verdict: {row['verdict']} | Model: {row['model']}",
             f"- Final reply: {row['reply']}",
         ]

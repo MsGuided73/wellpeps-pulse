@@ -28,6 +28,13 @@
 # boundary / disclaimer wording only where the question needs it, never as the
 # opener; one useful next step.
 
+# Smart Patient's Guide (binding user instruction 2026-10-07: "We must refer to a
+# relevant guide and point to how the guide can help"): every answering reply
+# ends its answer with ONE sentence naming the most relevant guide and the
+# chapter (config/guides.yaml) that helps with THIS question, says it is free
+# and asks for an email, then carries the tracked link where links are allowed
+# (EX-NO-LINK-COMMUNITY: named without a link). Up to ~110 words with it.
+
 status: PENDING
 usage: style guidance only
 
@@ -37,29 +44,37 @@ examples:
     platform: reddit
     program: Weight Loss
     post: "anyone tried compounded tirzepatide via telehealth? Trying to figure out which providers include the follow-up visits in the price."
-    reply: "I work with WellPeps. It varies by provider, so ask each one exactly what follow-up with a licensed clinician is included and how dose adjustments are handled. WellPeps is one option you can evaluate: if treatment is prescribed, ongoing support is part of the WellPeps process. Our free guide (it asks for your email) lists questions to ask before choosing a provider: https://wellpeps.com/smart-patient-guides/glp-1-weight-loss."
-    claim_ids: [CLM-AMG-04-WORK-WITH, CLM-R7-PROVIDER-CHECKLIST, CLM-LR-02-ONGOING-SUPPORT, CLM-EDU-GUIDE-GLP-1-WEIGHT-LOSS]
+    reply: "I work with WellPeps. It varies by provider, so ask each one exactly what follow-up with a licensed clinician is included and how dose adjustments are handled. Since you're comparing what's included, our free GLP-1 Weight Loss guide (it asks for your email) has a chapter, \"What's actually included in the price\", that walks through what to check before you choose: https://wellpeps.com/smart-patient-guides/glp-1-weight-loss. A licensed healthcare provider determines whether treatment is appropriate."
+    claim_ids: [CLM-AMG-04-WORK-WITH, CLM-R7-PROVIDER-CHECKLIST, CLM-EDU-GUIDE-GLP-1-WEIGHT-LOSS, CLM-R22-PROVIDER-DETERMINES]
 
   - id: EX-AVAILABILITY-HAIR
     category: question
     platform: reddit
     program: Hair Restoration
     post: "Thinking about oral minoxidil through a telehealth service. Is WellPeps hair restoration live yet or still a waitlist?"
-    reply: "I work with WellPeps. Not live yet: WellPeps' Hair Restoration program is coming soon and isn't open yet; there's a list you can join to hear when assessments open. Meanwhile, if you compare telehealth services, ask whether a licensed clinician actually reviews you and what follow-up is included. A licensed healthcare provider determines whether treatment is appropriate."
-    claim_ids: [CLM-AMG-04-WORK-WITH, CLM-STATUS-HAIR, CLM-R7-PROVIDER-CHECKLIST, CLM-R22-PROVIDER-DETERMINES]
+    reply: "I work with WellPeps. Not live yet: WellPeps' Hair Restoration program is coming soon and isn't open yet; there's a list you can join to hear when assessments open. Since you're weighing an oral option, our free Hair Restoration guide (it asks for your email) has a chapter, \"Oral vs. topical: what actually changes?\", plus the questions to ask before choosing a program: https://wellpeps.com/smart-patient-guides/hair-restoration. A licensed healthcare provider determines whether treatment is appropriate."
+    claim_ids: [CLM-AMG-04-WORK-WITH, CLM-STATUS-HAIR, CLM-EDU-GUIDE-HAIR-RESTORATION, CLM-R22-PROVIDER-DETERMINES]
 
   - id: EX-QUESTION-ONLINE-CLINIC
     category: question
     platform: reddit
     program: Sexual Wellness
     post: "How do you tell if an online ED clinic is legit? So many ads lately."
-    reply: "I work with WellPeps. A few things worth checking with any online clinic are whether you are actually reviewed by a licensed clinician, what follow-up is included, how dose adjustments are handled, and which pharmacy dispenses the medication. A licensed healthcare provider determines whether treatment is appropriate."
-    claim_ids: [CLM-AMG-04-WORK-WITH, CLM-R7-PROVIDER-CHECKLIST, CLM-R22-PROVIDER-DETERMINES]
+    reply: "I work with WellPeps. A few things worth checking with any online clinic are whether you are actually reviewed by a licensed clinician, what follow-up is included, and which pharmacy dispenses the medication. For sorting through the ads, our free Sexual Wellness guide (it asks for your email) closes with \"The questions every Smart Patient should know to ask\", a list you can take to any clinic: https://wellpeps.com/smart-patient-guides/sexual-wellness. A licensed healthcare provider determines whether treatment is appropriate."
+    claim_ids: [CLM-AMG-04-WORK-WITH, CLM-R7-PROVIDER-CHECKLIST, CLM-EDU-GUIDE-SEXUAL-WELLNESS, CLM-R22-PROVIDER-DETERMINES]
 
   - id: EX-QUESTION-WHAT-TO-ASK
     category: question
     platform: facebook
     program: Healthy Aging & Vitality
     post: "Thinking about peptide therapy through an online clinic. What should I ask first?"
-    reply: "I work with WellPeps. Good things to ask up front: whether you are actually reviewed by a licensed clinician, what follow-up is included, and which pharmacy dispenses the medication. Our free guide (it asks for your email) covers questions to ask before choosing a treatment program: https://wellpeps.com/smart-patient-guides/healthy-aging-vitality. A licensed healthcare provider determines whether treatment is appropriate."
+    reply: "I work with WellPeps. Good things to ask up front: whether you are actually reviewed by a licensed clinician, what follow-up is included, and which pharmacy dispenses the medication. Before you ask, our free Healthy Aging & Vitality guide (it asks for your email) has a chapter, \"Where do wellness therapies fit?\", that helps you frame those questions: https://wellpeps.com/smart-patient-guides/healthy-aging-vitality. A licensed healthcare provider determines whether treatment is appropriate."
     claim_ids: [CLM-AMG-04-WORK-WITH, CLM-R7-PROVIDER-CHECKLIST, CLM-EDU-GUIDE-HEALTHY-AGING-VITALITY, CLM-R22-PROVIDER-DETERMINES]
+
+  - id: EX-NO-LINK-COMMUNITY
+    category: question
+    platform: facebook
+    program: Weight Loss
+    post: "Is the oral GLP-1 as good as the shots? Group rules say no links please."
+    reply: "I work with WellPeps. In general, how a form compares depends on the person, and a licensed clinician is the one to weigh that with you. If it helps, our free GLP-1 Weight Loss guide on the WellPeps website (it asks for your email) has a chapter, \"Injections, oral tablets and additives\", that explains the differences in plain terms. A licensed healthcare provider determines whether treatment is appropriate."
+    claim_ids: [CLM-AMG-04-WORK-WITH, CLM-EDU-GUIDE-GLP-1-WEIGHT-LOSS, CLM-R22-PROVIDER-DETERMINES]

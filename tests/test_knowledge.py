@@ -12,7 +12,12 @@ from harvey.paths import PROJECT_ROOT
 
 CONFIG_DIR = PROJECT_ROOT / "config"
 YAML_FILES = ["competitors.yaml", "products.yaml", "keywords.yaml", "compliance_rules.yaml", "claims.yaml",
-              "links.yaml", "reply_examples.yaml", "engagement_guide.yaml", "communities.yaml"]
+              "links.yaml", "reply_examples.yaml", "engagement_guide.yaml", "communities.yaml", "guides.yaml"]
+# Smart Patient's Guide claims approved by WellPeps through the user's
+# instruction (2026-10-07; FINALIZE gated_download_disclosure resolved).
+USER_APPROVED_GUIDE_CLAIMS = {"CLM-EDU-GUIDES", "CLM-EDU-GUIDE-GLP-1-WEIGHT-LOSS", "CLM-EDU-GUIDE-SEXUAL-WELLNESS",
+                              "CLM-EDU-GUIDE-HAIR-RESTORATION", "CLM-EDU-GUIDE-HEALTHY-AGING-VITALITY",
+                              "CLM-EDU-GUIDE-NAD-THERAPY"}
 
 # --- Leak guard ------------------------------------------------------------
 # products.md in the registry holds internal cost data from the pricing
@@ -355,8 +360,13 @@ def test_claims_seeded_pending_except_verbatim_guide_wording():
     guide = [c for c in claims if c.guide]
     others = [c for c in claims if not c.guide]
     assert guide and others
-    # Our own wording stays PENDING until compliance signs it off.
-    assert all(c.approved_by == "PENDING" and c.approved_at is None for c in others)
+    # Our own wording stays PENDING until compliance signs it off, except the
+    # Smart Patient's Guide claims WellPeps approved through the user (2026-10-07).
+    user = [c for c in others if c.id in USER_APPROVED_GUIDE_CLAIMS]
+    assert {c.id for c in user} == USER_APPROVED_GUIDE_CLAIMS
+    assert all(c.approved_by.startswith("WellPeps via user instruction (2026-10-07)")
+               and str(c.approved_at) == "2026-10-07" for c in user)
+    assert all(c.approved_by == "PENDING" and c.approved_at is None for c in others if c not in user)
     # ... or a Live Reference item still marked CONFIRM (never approved wording).
     assert all(c.source.startswith("reply-compliance-rules.md R") or "wellpeps-site/src/" in c.source
                or (c.source.startswith("Approved Messaging Live Reference v1.0 §") and "CONFIRM" in c.source)
@@ -374,7 +384,7 @@ def test_claims_seeded_pending_except_verbatim_guide_wording():
 
 
 def _guide_publishable() -> set[str]:
-    return {c.id for c in knowledge.claims() if c.guide and not c.finalize}
+    return {c.id for c in knowledge.claims() if c.guide and not c.finalize} | USER_APPROVED_GUIDE_CLAIMS
 
 
 def test_publishable_claim_ids_are_the_finalized_guide_claims_while_trusted():
@@ -399,7 +409,8 @@ def _copy_config(tmp_path, monkeypatch, edit) -> None:
 def test_trust_toggle_off_makes_every_guide_claim_pending(tmp_path, monkeypatch):
     _copy_config(tmp_path, monkeypatch,
                  lambda d: d["claims_policy"].update(trust_approved_messaging_guide=False))
-    assert knowledge.publishable_claim_ids() == set()
+    # Only the user-approved Smart Patient's Guide claims (not guide wording) remain.
+    assert knowledge.publishable_claim_ids() == USER_APPROVED_GUIDE_CLAIMS
 
 
 def test_a_finalize_value_makes_its_guide_claims_publishable(tmp_path, monkeypatch):

@@ -20,6 +20,13 @@
 # influencer_only (Brand Ambassador / partner wording; never offered to the
 # drafter), promotional (counts toward the 20 of the 80/20 rule) and note.
 #
+# Smart Patient's Guide claims (CLM-EDU-GUIDE*): approved 2026-10-07 by WellPeps through the
+# user's instruction "We must refer to a relevant guide and point to how the guide can help",
+# which also resolves FINALIZE gated_download_disclosure (engagement_guide.yaml finalize value;
+# docs/RULES-OF-ENGAGEMENT.md). Offer them as free and say the download asks for an email.
+# Their links stay live: false in links.yaml until the site pages deploy, so a reply carrying
+# one still cannot be approved. Chapters each guide covers: config/guides.yaml.
+#
 # Guide-sourced claims (ids CLM-AMG-<section>-<slug>): wording copied verbatim
 # (typographic quotes and apostrophes normalised to ASCII) from
 #   C:\dev\W\docs\community-engagement-agent\Community Engagement-20261007T043724Z-1-001.zip
@@ -195,8 +202,8 @@ claims:
     products: ["*"]
     tier: green
     link_id: LNK-GUIDES
-    approved_by: PENDING
-    approved_at: null
+    approved_by: "WellPeps via user instruction (2026-10-07): guide references and gated-download disclosure"
+    approved_at: 2026-10-07
     expires: null
     promotional: true
     source: "C:/dev/W/wellpeps-site/src/data/ebooks.ts (EBOOKS) and src/data/guide-pages.ts (series intro: 'know what questions to ask'; LAST_POINT). Only the GLP-1 guide lists a checklist, so the series claim says 'questions to ask'"
@@ -209,8 +216,8 @@ claims:
     products: [Compounded Semaglutide, Compounded Tirzepatide, Oral Semaglutide, Oral Tirzepatide]
     tier: green
     link_id: LNK-GUIDE-GLP-1-WEIGHT-LOSS
-    approved_by: PENDING
-    approved_at: null
+    approved_by: "WellPeps via user instruction (2026-10-07): guide references and gated-download disclosure"
+    approved_at: 2026-10-07
     expires: null
     promotional: true
     source: "C:/dev/W/wellpeps-site/src/data/ebooks.ts (slug glp-1-weight-loss: title, subtitle); src/data/guide-pages.ts inside: 'Questions to ask before choosing a provider', 'The Smart Patient's GLP-1 checklist'"
@@ -223,8 +230,8 @@ claims:
     products: [Tadalafil Daily, Tadalafil As Needed, Sildenafil As Needed]
     tier: green
     link_id: LNK-GUIDE-SEXUAL-WELLNESS
-    approved_by: PENDING
-    approved_at: null
+    approved_by: "WellPeps via user instruction (2026-10-07): guide references and gated-download disclosure"
+    approved_at: 2026-10-07
     expires: null
     promotional: true
     source: "C:/dev/W/wellpeps-site/src/data/ebooks.ts (slug sexual-wellness); src/data/guide-pages.ts ('the questions worth asking before choosing care', LAST_POINT). No checklist listed"
@@ -237,8 +244,8 @@ claims:
     products: [Topical Treatments, Oral Treatments, Combination Therapy, Advanced Liposomal Formulas]
     tier: green
     link_id: LNK-GUIDE-HAIR-RESTORATION
-    approved_by: PENDING
-    approved_at: null
+    approved_by: "WellPeps via user instruction (2026-10-07): guide references and gated-download disclosure"
+    approved_at: 2026-10-07
     expires: null
     promotional: true
     source: "C:/dev/W/wellpeps-site/src/data/ebooks.ts (slug hair-restoration); src/data/guide-pages.ts ('the questions worth asking before choosing a treatment program', LAST_POINT). No checklist listed. Hair Restoration is coming_soon (R21: say only 'on the way')"
@@ -251,8 +258,8 @@ claims:
     products: [Sermorelin, NAD+, Glutathione, MIC + B12, Lipo-C, Methylene Blue]
     tier: yellow
     link_id: LNK-GUIDE-HEALTHY-AGING-VITALITY
-    approved_by: PENDING
-    approved_at: null
+    approved_by: "WellPeps via user instruction (2026-10-07): guide references and gated-download disclosure"
+    approved_at: 2026-10-07
     expires: null
     promotional: true
     source: "C:/dev/W/wellpeps-site/src/data/ebooks.ts (slug healthy-aging-vitality); src/data/guide-pages.ts (PROGRAM_BAND_COPY healthy-aging, LAST_POINT). No checklist listed. Wellness-outcome wording in the subtitle: yellow (R13/R18)"
@@ -265,8 +272,8 @@ claims:
     products: [NAD+]
     tier: yellow
     link_id: LNK-GUIDE-NAD-THERAPY
-    approved_by: PENDING
-    approved_at: null
+    approved_by: "WellPeps via user instruction (2026-10-07): guide references and gated-download disclosure"
+    approved_at: 2026-10-07
     expires: null
     promotional: true
     source: "C:/dev/W/wellpeps-site/src/data/ebooks.ts (slug nad-therapy: title, subtitle). Names a molecule, so blocked while the R38 toggle is on (the drafter then offers the Healthy Aging guide)"

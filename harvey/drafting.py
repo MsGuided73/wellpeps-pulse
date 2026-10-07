@@ -43,6 +43,12 @@ first, before any model call:
 - a thread with another WellPeps reply already waiting for review gets no
   second one (``skipped``; Competitor/Switching Protocol §9).
 The 80/20 share never gates a reply (a planning metric, Protocol §1).
+
+Smart Patient's Guide (binding user instruction 2026-10-07, harvey/guides.py):
+in answering situations the filter also checks the draft points to the
+relevant guide (``guidance.guide_requirement()``). A draft without it gets ONE
+automatic redraft with that feedback (within MAX_DRAFTER_CALLS); still missing
+-> ``needs_human``. A guide in a boundary / excluded reply is red.
 """
 
 import inspect
@@ -50,7 +56,7 @@ import logging
 from dataclasses import dataclass
 from typing import Awaitable, Callable
 
-from harvey import communities, engagement, knowledge, links
+from harvey import communities, engagement, guides, knowledge, links
 from harvey.batching import run_by_thread
 from harvey.agents.acknowledger import SKIP_CATEGORIES as ACK_SKIP_CATEGORIES
 from harvey.agents.acknowledger import SKIP_SITUATIONS as ACK_SKIP_SITUATIONS
@@ -223,9 +229,19 @@ def _count(report: DraftReport, verdict: ReviewVerdict, tier: str | None) -> Non
         report.needs_human += 1
 
 
-def _filter(proposal, mention: Mention, context: ReplyContext | None = None) -> GateResult:
+def _filter(proposal, mention: Mention, context: ReplyContext | None = None, guide=None) -> GateResult:
     return compliance_filter(proposal.reply, mention.platform.value, proposal.claim_ids,
-                             require_publishable=False, context=context)
+                             require_publishable=False, context=context, guide=guide)
+
+
+def _requirement(guidance):
+    method = getattr(guidance, "guide_requirement", None)
+    return method() if callable(method) else None
+
+
+def _needs_redraft(gate: GateResult) -> bool:
+    """Red, or the required Smart Patient's Guide reference is missing."""
+    return gate.tier == "red" or guides.missing(gate)
 
 
 async def _redraft_if_red(drafter, mention, triage, proposal, report: DraftReport,
@@ -237,16 +253,18 @@ async def _redraft_if_red(drafter, mention, triage, proposal, report: DraftRepor
     """
     if not proposal.reply:
         return proposal, None, None
-    gate = _filter(proposal, mention, context)
+    requirement = _requirement(guidance)
+    gate = _filter(proposal, mention, context, requirement)
     used = int(getattr(proposal, "calls", 1) or 1)
-    if gate.tier != "red" or used >= MAX_DRAFTER_CALLS:
+    if not _needs_redraft(gate) or used >= MAX_DRAFTER_CALLS:
         return proposal, gate, None
-    feedback = [_hit_line(h) for h in gate.hits]
-    logger.info(f"draft for mention {mention.id} was red; redrafting once ({len(feedback)} reason(s))")
+    feedback = [_hit_line(h) for h in gate.hits if h in gate.red_hits or h.rule_id == guides.MISSING_RULE]
+    logger.info(f"draft for mention {mention.id} was {'red' if gate.tier == 'red' else 'missing its guide'}; "
+                f"redrafting once ({len(feedback)} reason(s))")
     report.redrafted += 1
     second = await drafter.draft(mention, triage, feedback=feedback, max_calls=MAX_DRAFTER_CALLS - used,
                                  guidance=guidance)
-    return second, (_filter(second, mention, context) if second.reply else None), (proposal, gate)
+    return second, (_filter(second, mention, context, requirement) if second.reply else None), (proposal, gate)
 
 
 @dataclass(frozen=True)
@@ -273,10 +291,10 @@ async def _skip(state, mention: Mention, reason: str, report: DraftReport) -> No
 
 
 async def _record_fixed(state, mention: Mention, fixed: _Fixed, context: ReplyContext,
-                        reasons: list[str], report: DraftReport) -> None:
+                        reasons: list[str], report: DraftReport, guide=None) -> None:
     """An approved response / graceful close: filtered with the community
     context, never sent to the model reviewer, always ``needs_human``."""
-    gate = _filter(fixed, mention, context)
+    gate = _filter(fixed, mention, context, guide)
     raw = [{"rule_id": "ENGAGEMENT", "explanation": r} for r in reasons]
     verdict = ReviewVerdict.REJECT if gate.tier == "red" else ReviewVerdict.NEEDS_HUMAN
     lines = [*reasons, *([_hit_line(h) for h in gate.red_hits] if gate.tier == "red" else [])]
@@ -365,9 +383,10 @@ async def _draft_one(state, drafter, reviewer, mention: Mention, report: DraftRe
         if note:
             reasons.append(note)
         await _record_fixed(state, mention, _Fixed(reply=text, claim_ids=ids, rationale=reasons[0], model=model),
-                            context, reasons, report)
+                            context, reasons, report,
+                            guide=guides.requirement_for(situation, context, triage, mention))
         return
-    guidance = engagement.guidance_for(situation, context, triage)
+    guidance = engagement.guidance_for(situation, context, triage, mention)
     first = await drafter.draft(mention, triage, guidance=guidance)
     proposal, gate, superseded = await _redraft_if_red(drafter, mention, triage, first, report,
                                                        context, guidance)
@@ -379,6 +398,11 @@ async def _draft_one(state, drafter, reviewer, mention: Mention, report: DraftRe
         _count(report, ReviewVerdict.NEEDS_HUMAN, None)
         return
     verdict, lines, label, raw = await _review(reviewer, proposal, mention, gate, guidance)
+    if gate is not None and guides.missing(gate) and verdict is ReviewVerdict.PASS:
+        why = next(_hit_line(h) for h in gate.hits if h.rule_id == guides.MISSING_RULE)
+        verdict, lines, raw = (ReviewVerdict.NEEDS_HUMAN, [*lines, f"still {why} after one redraft"],
+                               [*raw, {"rule_id": guides.MISSING_RULE,
+                                       "explanation": f"still missing the guide reference after one redraft: {why}"}])
     # Nothing is stored until the review is done, so a crash leaves the
     # mention ``triaged`` with no partial drafts; it is retried next cycle.
     if superseded:

@@ -1,0 +1,199 @@
+# Source: C:\dev\W\wellpeps-site\src\data\ebooks.ts (EBOOKS: slug, title,
+#         subtitle, program, pages, `inside` = the four chapter highlights) and
+#         src\data\guide-pages.ts (GUIDE_PAGES[slug].inside: the landing page's
+#         "inside the guide" list, incl. LAST_POINT "The questions every Smart
+#         Patient should know to ask"; the series intro).
+# Generated: 2026-10-07 for "every answering reply points to the relevant
+#            Smart Patient's Guide" (binding user instruction, 2026-10-07).
+# Do not add internal costs, prices or anything not printed in those files.
+#
+# The Smart Patient's Guides catalog. harvey/guides.py picks, per mention, the
+# single most relevant guide (program / product / drug / post words) and the
+# chapter(s) that answer THIS poster's question; the drafter must say how that
+# guide helps, naming the chapter. Chapter titles are verbatim (typographic
+# quotes and apostrophes normalised to ASCII, like claims.yaml).
+#
+# Fields:
+#   slug, title (full printed title), short (how a reply names it), subtitle,
+#   claim_id (claims.yaml: the approved guide claim a draft cites),
+#   link_id (links.yaml), programs (products.yaml categories; [] = series index),
+#   pages, keywords (post words that point to this guide besides its programs),
+#   prefer_keywords (post words that make this guide win over another guide of
+#   the same program, e.g. NAD+), chapters (ebooks.ts `inside`, in order),
+#   landing (guide-pages.ts `inside`, the extra topics the landing page lists),
+#   default_chapter (used when no chapter matches the question).
+# Each chapter / landing topic: title (verbatim), keywords (post words),
+#   subtypes (triage subtypes it answers), needs (protocol unmet needs).
+# Matching is whole-word and case-insensitive; deterministic.
+
+guides:
+  - slug: glp-1-weight-loss
+    title: "The Smart Patient's Guide to GLP-1 Weight Loss"
+    short: "GLP-1 Weight Loss guide"
+    subtitle: "What you should know before choosing a GLP-1 weight loss program."
+    claim_id: CLM-EDU-GUIDE-GLP-1-WEIGHT-LOSS
+    link_id: LNK-GUIDE-GLP-1-WEIGHT-LOSS
+    programs: [Weight Loss]
+    pages: 18
+    keywords: [glp-1, glp1, glp-1s, semaglutide, tirzepatide, ozempic, wegovy, mounjaro, zepbound, weight loss, weight-loss, compounded sema, compounded tirz]
+    chapters:
+      - title: "What are GLP-1 medications?"
+        keywords: [what is glp-1, what are glp-1, how does it work, how do they work, how glp-1 works, new to glp-1, beginner]
+        subtypes: [general_education]
+        needs: [treatment_education]
+      - title: "Semaglutide, tirzepatide and your treatment options"
+        keywords: [semaglutide vs tirzepatide, sema vs tirz, difference between, which is better, sema or tirz, semaglutide or tirzepatide, options]
+        needs: [treatment_education]
+      - title: "Injections, oral tablets and additives"
+        keywords: [oral, pill, pills, tablet, tablets, injection, injections, needle, needles, needle-free, shot, shots, additive, additives, b12]
+      - title: "What's actually included in the price"
+        keywords: [price, prices, pricing, cost, costs, fee, fees, include, includes, included, including, follow-up, follow up, visits, membership, subscription, hidden, cheaper, expensive, afford, per month, monthly]
+        subtypes: [pricing_question]
+        needs: [price_clarity, provider_access, continuity]
+    landing:
+      - title: "Questions to ask before choosing a provider"
+        keywords: [which provider, which telehealth, legit, recommend, recommendation, switch, switching, alternative, alternatives, choose, choosing, compare, comparing, provider, providers, clinic, clinics, company, companies]
+        subtypes: [clinic_recommendation, competitor_comparison, process_question, has_anyone_used_wellpeps]
+        needs: [provider_access, continuity, fulfillment]
+      - title: "What to look for in a good GLP-1 program"
+        keywords: [good program, what to look for, red flags, scam, safe program]
+      - title: "Why medical review matters"
+        keywords: [no doctor, without a doctor, medical review, clinician, prescriber, labs]
+      - title: "What realistic weight-loss expectations look like"
+        keywords: [how much, how fast, realistic, expect, expectations, results]
+    default_chapter: "Questions to ask before choosing a provider"
+
+  - slug: sexual-wellness
+    title: "The Smart Patient's Guide to Sexual Wellness"
+    short: "Sexual Wellness guide"
+    subtitle: "Understanding today's treatment options and finding the right care."
+    claim_id: CLM-EDU-GUIDE-SEXUAL-WELLNESS
+    link_id: LNK-GUIDE-SEXUAL-WELLNESS
+    programs: [Sexual Wellness]
+    pages: 18
+    keywords: [ed, erectile dysfunction, sildenafil, tadalafil, viagra, cialis, sexual health, sexual wellness, pde5]
+    chapters:
+      - title: "How ED medications work"
+        keywords: [how does it work, how do they work, how it works, what is, new to]
+        subtypes: [general_education]
+        needs: [treatment_education]
+      - title: "Sildenafil, tadalafil and daily tadalafil"
+        keywords: [sildenafil vs tadalafil, viagra vs cialis, difference between, which is better, sildenafil or tadalafil]
+        needs: [treatment_education]
+      - title: "Daily or as needed?"
+        keywords: [daily, as needed, as-needed, every day, on demand, before sex]
+      - title: "One interaction every patient should know about"
+        keywords: [interaction, interactions, nitrates, mix with, combine, together with]
+    landing:
+      - title: "The questions every Smart Patient should know to ask"
+        keywords: [which provider, which telehealth, legit, recommend, recommendation, switch, switching, alternative, alternatives, choose, choosing, compare, comparing, provider, providers, clinic, clinics, company, companies, price, cost, fees, ask]
+        subtypes: [clinic_recommendation, competitor_comparison, process_question, pricing_question, has_anyone_used_wellpeps]
+        needs: [provider_access, continuity, price_clarity, fulfillment]
+      - title: "Why medical review matters"
+        keywords: [no doctor, without a doctor, medical review, clinician, prescriber]
+    default_chapter: "The questions every Smart Patient should know to ask"
+
+  - slug: hair-restoration
+    title: "The Smart Patient's Guide to Hair Restoration"
+    short: "Hair Restoration guide"
+    subtitle: "Understanding hair loss, today's treatment options, and what to realistically expect."
+    claim_id: CLM-EDU-GUIDE-HAIR-RESTORATION
+    link_id: LNK-GUIDE-HAIR-RESTORATION
+    programs: [Hair Restoration]
+    pages: 18
+    keywords: [hair, hair loss, hairline, balding, bald, thinning, minoxidil, minox, finasteride, fin, dutasteride]
+    chapters:
+      - title: "Why does hair loss happen?"
+        keywords: [why, cause, causes, causing, genetic, genetics, stress]
+        subtypes: [general_education]
+        needs: [treatment_education]
+      - title: "Finasteride and the role of DHT"
+        keywords: [finasteride, fin, dht, dutasteride]
+        needs: [treatment_education]
+      - title: "Oral vs. topical: what actually changes?"
+        keywords: [oral, topical, pill, pills, foam, spray, liquid, oral minoxidil, topical minoxidil]
+      - title: "What does a good result actually look like?"
+        keywords: [result, results, expect, expectations, realistic, work, works, worth it, regrow, regrowth, how long]
+        subtypes: [results_question]
+    landing:
+      - title: "The questions every Smart Patient should know to ask"
+        keywords: [which provider, which telehealth, legit, recommend, recommendation, switch, switching, alternative, alternatives, choose, choosing, compare, comparing, provider, providers, clinic, clinics, company, companies, service, services, price, cost, fees, waitlist, live, ask]
+        subtypes: [clinic_recommendation, competitor_comparison, process_question, pricing_question, has_anyone_used_wellpeps]
+        needs: [provider_access, continuity, price_clarity, fulfillment, medication_availability]
+      - title: "Why consistency and time matter"
+        keywords: [stop, stopping, shed, shedding, consistency, patience]
+    default_chapter: "The questions every Smart Patient should know to ask"
+
+  - slug: healthy-aging-vitality
+    title: "The Smart Patient's Guide to Healthy Aging & Vitality"
+    short: "Healthy Aging & Vitality guide"
+    subtitle: "What to know about supporting energy, strength, sleep, recovery and cognitive wellness as you age."
+    claim_id: CLM-EDU-GUIDE-HEALTHY-AGING-VITALITY
+    link_id: LNK-GUIDE-HEALTHY-AGING-VITALITY
+    programs: [Healthy Aging & Vitality]
+    pages: 18
+    keywords: [peptide, peptides, peptide therapy, longevity, anti-aging, healthy aging, vitality, sermorelin, glutathione, methylene blue, mic, b12, lipo-c, energy, recovery]
+    chapters:
+      - title: "What does \"healthy aging\" actually mean?"
+        keywords: [healthy aging, longevity, what does, aging]
+        subtypes: [general_education]
+      - title: "Where do wellness therapies fit?"
+        keywords: [peptide, peptides, peptide therapy, therapy, therapies, wellness, worth it]
+        needs: [treatment_education]
+      - title: "Sermorelin, NAD+ and methylene blue explained"
+        keywords: [sermorelin, nad, methylene blue, difference between, what is]
+      - title: "Beware of the anti-aging promise"
+        keywords: [hype, promise, promises, miracle, anti-aging, too good, claims, marketing, scam]
+    landing:
+      - title: "The questions every Smart Patient should know to ask"
+        keywords: [which provider, which telehealth, legit, recommend, recommendation, switch, switching, alternative, alternatives, choose, choosing, compare, comparing, provider, providers, clinic, clinics, company, companies, online clinic, ask, first]
+        subtypes: [clinic_recommendation, competitor_comparison, process_question, pricing_question, has_anyone_used_wellpeps]
+        needs: [provider_access, continuity, price_clarity, fulfillment]
+      - title: "Why individualized, provider-guided care matters"
+        keywords: [no doctor, without a doctor, clinician, prescriber, personalized, individualized]
+    default_chapter: "The questions every Smart Patient should know to ask"
+
+  - slug: nad-therapy
+    title: "The Smart Patient's Guide to NAD+ Therapy"
+    short: "NAD+ Therapy guide"
+    subtitle: "What it is, what we know, and questions to ask before treatment."
+    claim_id: CLM-EDU-GUIDE-NAD-THERAPY
+    link_id: LNK-GUIDE-NAD-THERAPY
+    programs: [Healthy Aging & Vitality]
+    pages: 18
+    keywords: [nad, nad+, nmn, nr, nicotinamide]
+    prefer_keywords: [nad, nad+, nmn, nicotinamide]
+    chapters:
+      - title: "What exactly is NAD+?"
+        keywords: [what is, what exactly, how does it work, new to]
+        subtypes: [general_education]
+        needs: [treatment_education]
+      - title: "NAD+ vs. NR vs. NMN"
+        keywords: [nmn, nr, precursor, precursors, supplement, supplements, vs, versus, difference]
+      - title: "Compounded and FDA-approved aren't the same thing"
+        keywords: [compounded, fda, fda-approved, approved, regulated]
+      - title: "What should you expect from NAD+ therapy?"
+        keywords: [expect, expectations, results, worth it, work, works, energy]
+    landing:
+      - title: "The questions every Smart Patient should know to ask"
+        keywords: [which provider, which telehealth, legit, recommend, recommendation, switch, switching, alternative, alternatives, choose, choosing, compare, comparing, provider, providers, clinic, clinics, company, companies, ask, first]
+        subtypes: [clinic_recommendation, competitor_comparison, process_question, pricing_question, has_anyone_used_wellpeps]
+        needs: [provider_access, continuity, price_clarity, fulfillment]
+    default_chapter: "The questions every Smart Patient should know to ask"
+
+# The series index: used only when no single guide fits (no program found).
+series:
+  slug: smart-patient-guides
+  title: "The Smart Patient's Guides"
+  short: "Smart Patient's Guides"
+  subtitle: "Free guides that break down today's treatments and wellness options so you know what questions to ask."
+  claim_id: CLM-EDU-GUIDES
+  link_id: LNK-GUIDES
+  programs: []
+  pages: 0
+  keywords: []
+  chapters: []
+  landing:
+    - title: "The questions every Smart Patient should know to ask"
+      keywords: []
+  default_chapter: "The questions every Smart Patient should know to ask"

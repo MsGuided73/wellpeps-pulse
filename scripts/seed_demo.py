@@ -272,25 +272,41 @@ def _brief_answer(payload: dict) -> dict:
     }
 
 
-_GUIDE_CLAIM_RE = re.compile(r"^- \[(CLM-[A-Z0-9-]+)\] (.+)\n  Link for this claim: (\S+)$", re.M)
+_REQUIRED_GUIDE_RE = re.compile(r"Smart Patient's Guide \(REQUIRED by WellPeps\).*?\(cite (CLM-[A-Z0-9-]+)\)"
+                                r".*?naming the guide chapter \"([^\"]+)\"", re.S)
 
 
 def _guide_reply(prompt: str) -> dict | None:
-    """DEMO sandbox only: the canned reply plus the first offered guide claim
-    and its tracked link (the conversion playbook), when one is offered."""
-    found = _GUIDE_CLAIM_RE.search(prompt)
+    """The canned reply plus the required Smart Patient's Guide sentence (user
+    instruction 2026-10-07): the guide, the chapter that helps, the email gate,
+    and the tracked link when the prompt shows one (else the guide by name)."""
+    from harvey import guides
+
+    found = _REQUIRED_GUIDE_RE.search(prompt)
     if not found:
         return None
-    claim_id, text, url = found.groups()
-    return {"reply": f"{DEMO_REPLY} {text} {url}", "claim_ids": [*DEMO_CLAIMS, claim_id], "rationale": BANNER,
+    claim_id, chapter = found.groups()
+    guide = guides.by_claim_id(claim_id)
+    if guide is None:
+        return None
+    block = prompt[prompt.find(f"- [{claim_id}]"):]
+    link = re.search(r"\A.*?\n(?:  .*\n)*?  Link for this claim: (\S+)", block)
+    if link and "Put the link shown under" in prompt:
+        sentence = (f"Our free {guide.short} (it asks for your email) has a chapter, \"{chapter}\", "
+                    f"that helps with this: {link.group(1)}")
+    else:
+        sentence = (f"Our free {guide.short} on the WellPeps website (it asks for your email) has a chapter, "
+                    f"\"{chapter}\", that helps with this.")
+    return {"reply": f"{DEMO_REPLY} {sentence}", "claim_ids": [*DEMO_CLAIMS, claim_id], "rationale": BANNER,
             "needs_human_reason": None}
 
 
 class DemoBrain:
     """Deterministic stand-in for harvey.brain.Brain (think_json only).
 
-    ``guide_links``: questions get the guide claim + link too (sandbox demos,
-    where the DEMO config marks every link live)."""
+    Answering situations get the required Smart Patient's Guide sentence
+    (``_guide_reply``). ``guide_links`` is kept for callers; the guide follows
+    the prompt (link where the community allows one, else by name)."""
 
     def __init__(self, guide_links: bool = False):
         self.guide_links = guide_links
@@ -308,7 +324,7 @@ class DemoBrain:
         if agent == "drafter" and task == "acknowledge":
             return {"acknowledgement": ""}  # the fake never writes one: the approved reply stays verbatim
         if agent == "drafter":
-            guided = _guide_reply(prompt) if self.guide_links and "?" in text else None
+            guided = _guide_reply(prompt)
             if guided:
                 return guided
             return {"reply": DEMO_REPLY, "claim_ids": DEMO_CLAIMS, "rationale": BANNER,

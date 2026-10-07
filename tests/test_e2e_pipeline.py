@@ -48,6 +48,13 @@ CLEAN_REPLY = (
     "included, how dose adjustments are handled, and which pharmacy dispenses the medication."
 )
 CLEAN_IDS = ["CLM-R3-DISCLOSURE", "CLM-R7-PROVIDER-CHECKLIST"]
+# A question is an answering situation: it must point to the relevant Smart
+# Patient's Guide (user instruction 2026-10-07). r/Semaglutide's rules are
+# unverified, so the guide is named without a link (the series index: "Is
+# WellPeps legit?" names no program).
+GUIDE_SENTENCE = (" If it helps, our free Smart Patient's Guides on the WellPeps website (it asks for your email) "
+                  "close with the questions every Smart Patient should know to ask.")
+CLEAN_GUIDE_IDS = [*CLEAN_IDS, "CLM-EDU-GUIDES"]
 
 
 def _triage_brain() -> FakeBrain:
@@ -76,12 +83,12 @@ def _triage_brain() -> FakeBrain:
 
 def _drafter_brain() -> FakeBrain:
     return FakeBrain({
-        CLEAN_Q: [{"reply": CLEAN_REPLY, "claim_ids": CLEAN_IDS, "rationale": "education",
+        CLEAN_Q: [{"reply": CLEAN_REPLY + GUIDE_SENTENCE, "claim_ids": CLEAN_GUIDE_IDS, "rationale": "education",
                    "needs_human_reason": None}],
         HYPE_Q: [{"reply": "Compounded options through licensed providers are clinically proven.",
                   "claim_ids": ["CLM-R15-COMPOUNDED-DISCLOSURE"], "rationale": "x",
                   "needs_human_reason": None}],
-        REJECT_Q: [{"reply": CLEAN_REPLY, "claim_ids": CLEAN_IDS, "rationale": "education",
+        REJECT_Q: [{"reply": CLEAN_REPLY + GUIDE_SENTENCE, "claim_ids": CLEAN_GUIDE_IDS, "rationale": "education",
                     "needs_human_reason": None}],
     }, model="sonnet")
 
@@ -187,7 +194,7 @@ async def test_full_pipeline_on_the_sample_fixture(state):
     clean = await state.get_latest_draft(_find(mentions, CLEAN_Q).id)
     # r/Semaglutide's rules are not verified yet (config/communities.yaml), so
     # the only finding is the yellow "community rules unverified" (R44).
-    assert (clean.tier, clean.review_verdict, clean.claim_ids) == ("yellow", ReviewVerdict.PASS, CLEAN_IDS)
+    assert (clean.tier, clean.review_verdict, clean.claim_ids) == ("yellow", ReviewVerdict.PASS, CLEAN_GUIDE_IDS)
     assert all(h.startswith("R44") for h in clean.filter_hits), clean.filter_hits
     hype = await state.get_latest_draft(_find(mentions, HYPE_Q).id)
     assert (hype.tier, hype.review_verdict) == ("red", ReviewVerdict.REJECT)

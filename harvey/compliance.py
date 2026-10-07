@@ -27,6 +27,10 @@ these are checked here in code:
        links_allowed false -> any link red.
 - R47  a Brand Ambassador / partner disclosure form -> yellow (Pulse drafts as
        the official account or an identified employee).
+- GUIDE every answering reply points to the relevant Smart Patient's Guide
+       (binding user instruction 2026-10-07; harvey/guides.py): missing ->
+       yellow (drafting redrafts once, then needs_human); a guide in an
+       excluded situation -> red; no email-gate disclosure -> yellow.
 - R48  the reply names a competitor -> red (Competitor Mentions and Provider
        Switching Protocol §1, §7: respond to the unmet need rather than repeat
        or attack the named provider). R49 (adopting a competitor accusation,
@@ -355,11 +359,16 @@ def compliance_filter(
     *,
     require_publishable: bool = False,
     context: ReplyContext | None = None,
+    guide=None,
 ) -> GateResult:
     """Check a draft reply. Deterministic; no Claude calls.
 
     ``context``: where the reply would be posted (community rules, repeated
     links, 80/20 share); see ``ReplyContext``. None checks the text only.
+    ``guide``: the Smart Patient's Guide requirement for this mention
+    (harvey.guides.GuideRequirement): required but missing -> yellow
+    "missing guide reference"; referenced where excluded -> red; linked
+    without the email-gate disclosure -> yellow. None skips the check.
 
     Pattern scans see at most MAX_MENTION_TEXT_CHARS characters; the length
     limit is checked on the full text (anything that long is red anyway).
@@ -375,6 +384,9 @@ def compliance_filter(
 
     link_red, link_yellow = _link_hits(text, claim_ids)
     context_red, context_yellow = _context_hits(text, claim_ids, context)
+    from harvey import guides as guides_module
+
+    guide_red, guide_yellow = guides_module.reference_hits(text, claim_ids, guide)
     naked = ([Hit("R43", "links", "", "naked link: answer the question in words first; a link alone is not a reply")]
              if naked_link(text, rules.disclosure) else [])
     red = [
@@ -388,14 +400,19 @@ def compliance_filter(
         *context_red,
         *_competitor_hits(scan),
         *_limit_hits(text, platform, length=len(full_text)),
+        *guide_red,
     ]
+    # Approved guide titles / chapter titles are verbatim guide content: the
+    # review-only patterns don't flag them ("GLP-1 Weight Loss", "Oral vs. topical").
+    review_scan = guides_module.mask_guide_wording(scan)
     yellow = [
-        *_pattern_hits(scan, rules.yellow, "yellow", toggles),
-        *([] if forbid_meds else _medication_hits(scan, forbid=False)),
+        *_pattern_hits(review_scan, rules.yellow, "yellow", toggles),
+        *([] if forbid_meds else _medication_hits(review_scan, forbid=False)),
         *link_yellow,
         *_finalize_hits(claim_ids),
         *_influencer_form_hits(scan, rules.disclosure),
         *context_yellow,
+        *guide_yellow,
     ]
     if platform == "tiktok":
         yellow.append(Hit("R34", "platform", "tiktok", "TikTok gets the strictest standard; needs separate approval"))

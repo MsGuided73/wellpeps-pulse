@@ -54,8 +54,35 @@ class ReviewResult:
     model: str = ""
 
 
+def _claim_line(claim: Claim) -> str:
+    from harvey import guides
+
+    line = f"- [{claim.id}] {claim.text}"
+    guide = guides.by_claim_id(claim.id)
+    if guide is not None and (guide.chapters or guide.landing):
+        line += f"\n  Chapters in this guide (approved guide content): {guides.chapter_line(guide)}"
+    return line
+
+
 def _claims_block(claims: list[Claim]) -> str:
-    return "\n".join(f"- [{c.id}] {c.text}" for c in claims) or "(none: the draft cites no claims)"
+    return "\n".join(_claim_line(c) for c in claims) or "(none: the draft cites no claims)"
+
+
+def guide_line(guidance=None) -> str:
+    """What the reviewer checks about the Smart Patient's Guide reference."""
+    mode = getattr(guidance, "guide_mode", "none")
+    if mode == "forbidden":
+        return ("no Smart Patient's Guide may appear in this reply "
+                f"({getattr(guidance, 'guide_why', '') or 'excluded situation'}); a guide here is a violation")
+    if not getattr(guidance, "guide_required", False):
+        return "no guide reference is required here (if one appears, it must fit the post's program)"
+    chapters = " / ".join(f'"{c}"' for c in guidance.guide_chapters) or "a chapter of the guide"
+    how = "with its link" if guidance.guide_mode == "link" else "by name, without any link"
+    return (f"REQUIRED (WellPeps instruction): the reply must point to {guidance.guide_title} {how} and say "
+            f"concretely how it helps with this poster's question, naming a chapter such as {chapters}; "
+            "it must say the guide is free and asks for an email. Its short name (\"our free "
+            f"{guidance.guide_short}\") is enough, and a neutral phrase about the chapter (\"walks through what "
+            "to check\") is not a new fact")
 
 
 def situation_line(guidance=None) -> str:
@@ -78,6 +105,7 @@ def situation_line(guidance=None) -> str:
 def build_prompt(reply: str, platform: str, mention: Mention, claims: list[Claim], guidance=None) -> str:
     return prompting.render(PROMPT_PATH, {
         "situation": situation_line(guidance),
+        "guide": guide_line(guidance),
         "rules": RULES_PATH.read_text(encoding="utf-8").strip(),
         "claims": _claims_block(claims),
         "platform": platform,

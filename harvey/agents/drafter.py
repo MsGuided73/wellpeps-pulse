@@ -19,6 +19,14 @@ Flow for ``Drafter.draft``:
 5. Rewrite any registry link in the reply to this mention's tracked (UTM)
    URL, so the URL a human copies is always the canonical one.
 
+Smart Patient's Guide (binding user instruction, 2026-10-07): in answering
+situations ``guidance`` names the single most relevant guide and the chapter(s)
+that answer this question (harvey/guides.py). Its claim is offered right after
+the disclosure / status claims, with its chapters as approved guide content, and
+the prompt requires one "how it helps" sentence naming the chapter, the
+gated-download disclosure ("free, it asks for your email") and the tracked link
+(or the guide's name without a link where links are not allowed).
+
 Rules of engagement (docs/RULES-OF-ENGAGEMENT.md): ``guidance``
 (harvey.engagement.DraftGuidance) carries the situation, its template (Guide
 §25 A-E), the persona's exact opening disclosure ("I work with WellPeps." by
@@ -37,7 +45,7 @@ from dataclasses import dataclass, field, replace
 from pydantic import BaseModel, ConfigDict, ValidationError
 
 from harvey import knowledge as knowledge_module
-from harvey import links
+from harvey import guides, links
 from harvey.agents import prompting
 from harvey.agents.acknowledger import AGENT as ACK_AGENT
 from harvey.agents.acknowledger import TASK as ACK_TASK
@@ -58,6 +66,8 @@ FAILED_REASON = "draft_failed"
 NO_REPLY_REASON = "drafter returned no reply"
 MAX_RATIONALE_CHARS = 500
 REDDIT_MAX_WORDS = 90
+# Room for the required guide sentence (user instruction 2026-10-07).
+REDDIT_MAX_WORDS_WITH_GUIDE = 110
 PLAYBOOK_CATEGORIES = frozenset({"purchase_intent", "question"})
 # The Approved Messaging & Response Guide §4 primary form ("I work with
 # WellPeps."). The older "Disclosure: I work with WellPeps, so I am not
@@ -160,8 +170,23 @@ def _with_status_first(ordered: list[Claim], status: list[Claim]) -> list[Claim]
     return head + status + rest[len(head):]
 
 
+def _with_guide(ordered: list[Claim], guide_id: str) -> list[Claim]:
+    """The required guide claim right after the disclosure and status claims
+    (never cut by MAX_CLAIMS)."""
+    guide = next((c for c in ordered if c.id == guide_id), None)
+    if guide is None:
+        return ordered
+    rest = [c for c in ordered if c is not guide]
+    lead = 0
+    while lead < len(rest) and (rest[lead].id.startswith(("CLM-AMG-04-", "CLM-R3-DISCLOSURE"))
+                                or rest[lead].program):
+        lead += 1
+    return rest[:lead] + [guide] + rest[lead:]
+
+
 def candidate_claims(product: str, claims=None, *, drug: str = "", category=None,
-                     preferred=(), disclosure: str = DISCLOSURE_CLAIM, programs=()) -> list[Claim]:
+                     preferred=(), disclosure: str = DISCLOSURE_CLAIM, programs=(),
+                     guide_claim_id: str = "") -> list[Claim]:
     """Claims usable for a mention about ``product`` ("" = no product) or
     ``drug``; the playbook claims come first for purchase_intent / question,
     and the situation's ``preferred`` claims (with the ``disclosure`` claim
@@ -184,6 +209,11 @@ def candidate_claims(product: str, claims=None, *, drug: str = "", category=None
         lead = [by_id[cid] for cid in (disclosure, *preferred) if cid in by_id]
         ordered = lead + [c for c in ordered if c not in lead]
     ordered = _with_status_first(ordered, status)
+    if guide_claim_id:
+        by_id = {c.id: c for c in pool}
+        if guide_claim_id in by_id and by_id[guide_claim_id] not in ordered:
+            ordered = [*ordered, by_id[guide_claim_id]]
+        ordered = _with_guide(ordered, guide_claim_id)
     unique: dict[str, Claim] = {}
     for claim in ordered:
         unique.setdefault(claim.id, claim)
@@ -222,6 +252,9 @@ def _feedback_block(feedback: list[str]) -> str:
 
 def _claim_line(claim: Claim, mention: Mention, allow_link: bool = True) -> str:
     line = f"- [{claim.id}] {claim.text}"
+    guide = guides.by_claim_id(claim.id)
+    if guide is not None and (guide.chapters or guide.landing):
+        line += f"\n  Chapters in this guide (approved guide content; you may name them): {guides.chapter_line(guide)}"
     link = knowledge_module.links_by_id().get(claim.link_id or "") if allow_link else None
     if link is not None:
         line += f"\n  Link for this claim: {links.tracked_url_for(link, mention)}"
@@ -230,6 +263,40 @@ def _claim_line(claim: Claim, mention: Mention, allow_link: bool = True) -> str:
 
 def _claims_block(claims: list[Claim], mention: Mention, allow_link: bool = True) -> str:
     return "\n".join(_claim_line(c, mention, allow_link) for c in claims) or "(none)"
+
+
+def guide_lines(guidance) -> list[str]:
+    """The Smart Patient's Guide instruction for this mention (user instruction
+    2026-10-07: refer to the relevant guide and point to how it helps)."""
+    mode = getattr(guidance, "guide_mode", "none")
+    if mode == "forbidden":
+        why = getattr(guidance, "guide_why", "") or "excluded situation"
+        return [f"- No Smart Patient's Guide, resource or link in this reply ({why})."]
+    if not getattr(guidance, "guide_required", False):
+        return []
+    chapters = list(guidance.guide_chapters) or ["questions to ask before choosing a provider"]
+    named = f'"{chapters[0]}"' + (f' (or, if it fits better, "{chapters[1]}")' if len(chapters) > 1 else "")
+    lines = [f"- Smart Patient's Guide (REQUIRED by WellPeps): after the answer, add ONE sentence that points to "
+             f"the single most relevant guide, {guidance.guide_title} (cite {guidance.guide_claim_id}), and says "
+             f"concretely how it helps with THIS poster's question by naming the guide chapter {named}. Tie the "
+             "chapter to what they asked (since you're comparing what's included, its chapter 'What's "
+             "actually included in the price' walks through what to check); never a generic 'check out our "
+             "guide'. Describe the chapter only by its title plus a neutral phrase such as 'walks through "
+             "what to check' or 'explains the differences'; never claim it covers anything else. Write the "
+             f"gate once, exactly: 'our free {guidance.guide_short} (it asks for your email)'. Phrase it as "
+             "help, not a sales pitch; keep answer-first: answer -> guide and how it helps -> the "
+             "provider-determines line."]
+    if guidance.guide_mode == "link":
+        lines.append(f"- Put the link shown under {guidance.guide_claim_id}, copied exactly, at the end of the "
+                     "guide sentence. It is the only link in the reply.")
+    else:
+        lines.append(f"- No link here ({guidance.guide_why}): name it as 'our free {guidance.guide_short} on the "
+                     "WellPeps website' and never write a URL or a domain.")
+    if not guidance.guide_specific:
+        lines.append("- No single program guide fits, so point to the Smart Patient's Guides series: each guide "
+                     "closes with 'The questions every Smart Patient should know to ask' (say 'each guide "
+                     "closes with', not 'has a chapter').")
+    return lines
 
 
 def engagement_block(guidance) -> str:
@@ -253,13 +320,17 @@ def engagement_block(guidance) -> str:
         lines.append("- Prefer these claims for this situation: " + ", ".join(guidance.preferred_claims)
                      + " (only where they answer what was asked; a claim that answers the specific "
                        "question comes first).")
-    if guidance.allow_link:
+    required = getattr(guidance, "guide_required", False)
+    if required and guidance.guide_mode == "link":
+        lines.append("- One link at most: the guide link below.")
+    elif guidance.allow_link:
         lines.append("- A link is allowed only if it directly answers the question; most replies need none.")
     else:
         lines.append(f"- No link in this reply ({guidance.link_note}).")
     if guidance.education_only:
-        lines.append(f"- Education only: no call to action, no pricing, no guide or assessment offer "
-                     f"({guidance.promotion_note}).")
+        offer = ("no assessment offer; the guide sentence below is education, not promotion" if required
+                 else "no guide or assessment offer")
+        lines.append(f"- Education only: no call to action, no pricing, {offer} ({guidance.promotion_note}).")
     if getattr(guidance, "protocol_label", ""):
         lines.append(f"- Competitor / switching protocol: {guidance.protocol_label}. Respond to the unmet need "
                      f"({guidance.need_focus or 'answer the actual question'}); never name, repeat or attack "
@@ -268,7 +339,12 @@ def engagement_block(guidance) -> str:
                      "a smooth transfer.")
         if guidance.brand_limits:
             lines.append(f"- WellPeps presence ({guidance.brand_mode.replace('_', ' ')}): {guidance.brand_limits}.")
-        lines.append("- Aim for 40 to 90 words. A resource is optional and never required to get the answer.")
+        if required:
+            lines.append("- Aim for 40 to 110 words. The guide reference is required here (user-directed "
+                         "override of Protocol §8 'resource optional'); never in safety or clinical replies.")
+        else:
+            lines.append("- Aim for 40 to 90 words. A resource is optional and never required to get the answer.")
+    lines.extend(guide_lines(guidance))
     return "\n".join(lines)
 
 
@@ -283,10 +359,11 @@ def examples_block(examples=None) -> str:
     return "\n\n".join(blocks) or "(none)"
 
 
-def length_rule(platform: str) -> str:
+def length_rule(platform: str, guidance=None) -> str:
     max_chars = knowledge_module.compliance_rules().limits.max_chars_for(platform)
     if platform == "reddit":
-        return f"under {REDDIT_MAX_WORDS} words and at most {max_chars} characters"
+        words = REDDIT_MAX_WORDS_WITH_GUIDE if getattr(guidance, "guide_required", False) else REDDIT_MAX_WORDS
+        return f"under {words} words and at most {max_chars} characters"
     return f"at most {max_chars} characters"
 
 
@@ -300,7 +377,7 @@ def build_prompt(mention: Mention, triage: Triage, claims: list[Claim], nonce: s
         "examples": examples_block(),
         "never_write": _never_write_block(never_write_phrases(knowledge_module.compliance_rules())),
         "rules": RULES_PATH.read_text(encoding="utf-8").strip(),
-        "length_rule": length_rule(platform),
+        "length_rule": length_rule(platform, guidance),
         "platform": platform,
         "category": triage.category.value,
         "product": triage.product or "none",
@@ -389,6 +466,7 @@ class Drafter:
             preferred=tuple(getattr(guidance, "preferred_claims", ()) or ()),
             disclosure=getattr(guidance, "disclosure_claim", DISCLOSURE_CLAIM) or DISCLOSURE_CLAIM,
             programs=programs_for(triage.product, triage.drug, _post_text(mention)),
+            guide_claim_id=(guidance.guide_claim_id if getattr(guidance, "guide_required", False) else ""),
         )
         offered = [c.id for c in claims]
         model = _model_name(self.brain, AGENT, TASK)

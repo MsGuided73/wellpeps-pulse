@@ -14,6 +14,7 @@ from harvey import knowledge, links, reply_analytics, review
 from harvey.agents.drafter import (
     MAX_CLAIMS,
     REDDIT_MAX_WORDS,
+    REDDIT_MAX_WORDS_WITH_GUIDE,
     Drafter,
     build_prompt,
     candidate_claims,
@@ -50,9 +51,9 @@ NOT_LIVE = "link not live yet"
 # offered after them, never pushed second (Protocol §8), and no price claim leads.
 PLAYBOOK_IDS = ["CLM-AMG-04-WORK-WITH", "CLM-R7-PROVIDER-CHECKLIST", "CLM-LR-02-ONGOING-SUPPORT",
                 "CLM-R22-PROVIDER-DETERMINES"]
-# Review notes an example may show besides "link not live yet": the guide
-# claims' gated-download FINALIZE (R42).
-REVIEW_NOTES = ("FINALIZE",)
+# Review notes an example may show besides "link not live yet": none since the
+# gated-download FINALIZE was resolved by the user's instruction (2026-10-07).
+REVIEW_NOTES: tuple[str, ...] = ()
 
 
 @pytest.fixture(autouse=True)
@@ -109,11 +110,15 @@ def _config_copy(tmp_path, monkeypatch, *, live=None, forbid_meds=None, approve=
 
 def test_conversion_claims_exist_pending_and_cite_site_sources():
     by_id = knowledge.claims_by_id()
-    for cid in ("CLM-PRICE-FOLLOWUP", "CLM-PRICE-ALLIN", "CLM-EDU-GUIDES", "CLM-EDU-GUIDE-GLP-1-WEIGHT-LOSS",
-                "CLM-EDU-GUIDE-SEXUAL-WELLNESS", "CLM-EDU-GUIDE-HAIR-RESTORATION",
-                "CLM-EDU-GUIDE-HEALTHY-AGING-VITALITY", "CLM-EDU-GUIDE-NAD-THERAPY"):
+    guide_ids = ("CLM-EDU-GUIDES", "CLM-EDU-GUIDE-GLP-1-WEIGHT-LOSS", "CLM-EDU-GUIDE-SEXUAL-WELLNESS",
+                 "CLM-EDU-GUIDE-HAIR-RESTORATION", "CLM-EDU-GUIDE-HEALTHY-AGING-VITALITY",
+                 "CLM-EDU-GUIDE-NAD-THERAPY")
+    for cid in ("CLM-PRICE-FOLLOWUP", "CLM-PRICE-ALLIN", *guide_ids):
         claim = by_id[cid]
-        assert claim.approved_by == "PENDING" and claim.approved_at is None
+        if cid in guide_ids:   # approved by WellPeps through the user's instruction (2026-10-07)
+            assert claim.approved_by.startswith("WellPeps via user instruction") and claim.approved_at
+        else:
+            assert claim.approved_by == "PENDING" and claim.approved_at is None
         assert "wellpeps-site/src/" in claim.source
         assert leak_hits(claim.text) == []
     assert by_id["CLM-PRICE-FOLLOWUP"].text == (
@@ -158,7 +163,7 @@ def _example_hits(example):
 def test_examples_are_pending_style_guidance():
     data = knowledge.reply_examples()
     assert data.status == "PENDING" and "style guidance" in data.usage
-    assert 3 <= len(data.examples) <= 4
+    assert 3 <= len(data.examples) <= 6
 
 
 @pytest.mark.parametrize("example", knowledge.reply_examples().examples, ids=lambda e: e.id)
@@ -167,7 +172,7 @@ def test_every_example_passes_the_filter_except_link_not_live(example):
     assert result.tier != "red" and other == [], other
     assert has_disclosure(example.reply)
     if example.platform == "reddit":
-        assert len(example.reply.split()) <= REDDIT_MAX_WORDS
+        assert len(example.reply.split()) <= REDDIT_MAX_WORDS_WITH_GUIDE
 
 
 def test_link_examples_show_only_the_not_live_yellow():
@@ -185,7 +190,9 @@ def test_the_real_tirzepatide_scenario_is_an_example():
     example = next(e for e in knowledge.reply_examples().examples if e.post == EXAMPLE_POST)
     assert example.category == "purchase_intent" and example.platform == "reddit"
     assert example.reply.startswith("I work with WellPeps.")
-    assert "WellPeps is one option you can evaluate" in example.reply
+    # Answer, then the GLP-1 guide and how it helps with THIS question (its chapter on price inclusions).
+    assert "It varies by provider" in example.reply
+    assert "What's actually included in the price" in example.reply
     assert "one monthly price" not in example.reply and "CLM-PRICE-FOLLOWUP" not in example.claim_ids
     assert "it asks for your email" in example.reply
     assert links.registry_link(GLP1).id == links.find_links(example.reply)[0].link.id
@@ -194,7 +201,7 @@ def test_the_real_tirzepatide_scenario_is_an_example():
 def test_examples_follow_the_guidelines_not_the_superseded_playbook():
     for example in knowledge.reply_examples().examples:
         assert example.reply.startswith("I work with WellPeps.")             # Guide §4; Protocol §7
-        assert 30 <= len(example.reply.split()) <= 90                         # Protocol §7: 40-90 words
+        assert 30 <= len(example.reply.split()) <= 110                        # 40-90 words, ~110 with the guide
         assert not {"CLM-PRICE-FOLLOWUP", "CLM-PRICE-ALLIN"} & set(example.claim_ids)
         if links.find_links(example.reply):
             assert "asks for your email" in example.reply                     # Protocol §8

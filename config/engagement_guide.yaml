@@ -46,7 +46,7 @@ engagement:
 templates:
   - id: A
     name: General Education
-    structure: "I work with WellPeps. In general, [approved educational answer]. [Optional relevant educational resource]."
+    structure: "I work with WellPeps. In general, [approved educational answer]. [The relevant Smart Patient's Guide and how it helps with this question, naming its chapter (required in answering situations, user instruction 2026-10-07)]."
     source: "[AMG] §25 Template A"
     pulse_use: "General wellness, telehealth and WellPeps-process questions (model draft from approved claims)."
   - id: B
@@ -446,17 +446,19 @@ situations:
     match: {decisions: [appropriate_alternative]}
     template: A
     reply: draft
+    guide: required
     preferred_claims: [CLM-R7-PROVIDER-CHECKLIST, CLM-LR-02-ONGOING-SUPPORT, CLM-AMG-05-HOW-IT-WORKS]
-    notes: "Explicit request for alternatives. Answer the underlying need first (what to ask any provider), then ONE concise, disclosed, factual description of WellPeps ('WellPeps is one option you can evaluate'), no superiority claim, no promise it is right for them. Never repeat or attack the named provider; a complaint is the poster's account, not a fact. 40-90 words."
+    notes: "Explicit request for alternatives. Answer the underlying need first (what to ask any provider), then ONE concise, disclosed, factual description of WellPeps ('WellPeps is one option you can evaluate'), no superiority claim, no promise it is right for them. Never repeat or attack the named provider; a complaint is the poster's account, not a fact. Then the relevant Smart Patient's Guide and how it helps (required, user instruction 2026-10-07). 40-110 words."
     sources: ["[CP] §1, §4, §7, Examples 1, 6", "[AMG] §13, §17"]
   - id: protocol_educational_only
     label: "Protocol EDUCATIONAL ONLY"
     match: {decisions: [educational_only]}
     template: A
     reply: draft
+    guide: required
     education_only: true
     preferred_claims: [CLM-R7-PROVIDER-CHECKLIST, CLM-AMG-13-BETTER, CLM-LR-02-ONGOING-SUPPORT]
-    notes: "General useful answer. Describe WellPeps only if the person asked about WellPeps (approved facts only). No comparison, no response-time, lab or price claim that is not approved, no call to action. Never repeat or attack the named provider. 40-90 words."
+    notes: "General useful answer. Describe WellPeps only if the person asked about WellPeps (approved facts only). No comparison, no response-time, lab or price claim that is not approved, no call to action. Never repeat or attack the named provider. The relevant Smart Patient's Guide and how it helps is education, not promotion, and is required (user instruction 2026-10-07). 40-110 words."
     sources: ["[CP] §4 step 4, §7, Examples 7, 9, 10, 20", "[AMG] §13", "[CT] Scenario 4B"]
   # --- Competitors -------------------------------------------------------------------
   - id: competitor_comparison_wellpeps
@@ -472,6 +474,7 @@ situations:
     match: {subtypes: [competitor_comparison]}
     template: A
     reply: draft
+    guide: required
     preferred_claims: [CLM-AMG-APPX-COMPETITOR, CLM-AMG-26-PROVIDER-CAN-DETERMINE]
     notes: "Factual WellPeps information only, let the user evaluate it. No comparative claims, no attacks."
     sources: ["[AMG] §13", "[CT] Module 4"]
@@ -489,6 +492,7 @@ situations:
     match: {subtypes: [misinformation_about_wellpeps]}
     template: D
     reply: draft
+    guide: if_specific
     preferred_claims: [CLM-AMG-21-NOT-AUTOMATIC, CLM-AMG-15-NO-GUARANTEE, CLM-AMG-05-HOW-IT-WORKS]
     notes: "Disclose, 'Just to clarify...', the approved correction, a resource only if useful. Correct the information, not the person; one clarification at most."
     sources: ["[AMG] §13, §21, §25 Template D", "[OM] §13.2", "[CT] Module 7"]
@@ -497,6 +501,7 @@ situations:
     match: {subtypes: [has_anyone_used_wellpeps]}
     template: A
     reply: draft
+    guide: required
     preferred_claims: [CLM-AMG-05-HOW-IT-WORKS, CLM-AMG-15-NO-GUARANTEE]
     notes: "Disclose first, then factual information. Never pretend to be an independent customer."
     sources: ["[AMG] §18", "[PL] Channel 6"]
@@ -505,6 +510,7 @@ situations:
     match: {subtypes: [pricing_question]}
     template: A
     reply: draft
+    guide: required
     preferred_claims: [CLM-AMG-12-CHEAPER, CLM-PRICE-FOLLOWUP]
     notes: "Only current approved pricing language; never improvise fees, inclusions, shipping, cancellation or subscription terms."
     sources: ["[AMG] §12", "[LR] §5-8"]
@@ -513,6 +519,7 @@ situations:
     match: {subtypes: [process_question]}
     template: A
     reply: draft
+    guide: required
     preferred_claims: [CLM-AMG-05-HOW-IT-WORKS, CLM-AMG-15-NO-GUARANTEE, CLM-AMG-APPX-HOW-IT-WORKS]
     notes: "Approved company process messaging. No assessment link until FINALIZE assessment_url and LegitScript (R8)."
     sources: ["[AMG] §5, §15", "[OM] §19"]
@@ -521,6 +528,7 @@ situations:
     match: {subtypes: [clinic_recommendation]}
     template: A
     reply: draft
+    guide: required
     preferred_claims: [CLM-AMG-17-TELEHEALTH, CLM-R7-PROVIDER-CHECKLIST]
     notes: "Only where the community allows business participation: disclose, explain WellPeps factually, no exaggerated sales language. If promotion is prohibited, do not promote WellPeps."
     sources: ["[AMG] §17", "[CT] Scenario 2A"]
@@ -529,6 +537,7 @@ situations:
     match: {subtypes: [general_education]}
     template: A
     reply: draft
+    guide: required
     preferred_claims: [CLM-AMG-17-TELEHEALTH, CLM-AMG-18-ONLINE-CLINICS]
     notes: "Useful even if WellPeps is never mentioned; mention WellPeps only when relevant."
     sources: ["[AMG] §17, §18, §25 Template A", "[CG] Reddit", "[OM] §7"]
@@ -545,6 +554,7 @@ situations:
     match: {categories: [question, purchase_intent]}
     template: A
     reply: draft
+    guide: required
     preferred_claims: [CLM-AMG-17-TELEHEALTH]
     notes: "Answer the actual question first, in the poster's terms (a program's status claim when they ask whether it is live or a waitlist; what varies and what to ask when they ask which providers include something); boundary or disclaimer wording only where the question needs it, never as the opener; one useful next step ([AMG] §1-§3 writing standard; [CP] §1 respond to the unmet need)."
     sources: ["[AMG] §2, §25 Template A", "[OM] §18"]
@@ -830,9 +840,9 @@ finalize:
   - key: gated_download_disclosure
     item: "Validated resource links and gated-download disclosures (the Smart Patient Guides need an email: say so when offering one)"
     sources: ["[CP] §8, §13", "[PL] Channel 1, Channel 9"]
-    pulse_effect: "Links not marked live in config/links.yaml block approval; 'free' must match the access terms."
+    pulse_effect: "Links not marked live in config/links.yaml still block approval; 'free' must match the access terms (the guides are free and ask for an email)."
     blocks_approval: true
-    value: null
+    value: "Approved 2026-10-07 by WellPeps through the user's instruction ('We must refer to a relevant guide and point to how the guide can help'): offer the Smart Patient's Guides as free, stating that the download asks for an email (\"free, it asks for your email\"). Links stay live: false until the site pages deploy."
   - key: data_retention
     item: "Minimum-data storage, restricted incident access, retention, deletion and audit-log configuration; collected health data never sent to unapproved systems"
     sources: ["[CP] §2, §13", "[OM] §22.2"]

@@ -448,11 +448,21 @@ def decide(inp: ProtocolInput, publishable: set[str] | frozenset[str] | None = N
                                      "([CP] §4 step 4)"], brand_mode=brand, **scored)
 
 
-def resource_for(record: ProtocolRecord, links_allowed: bool | None) -> str:
-    """[CP] §8: resources are optional; no verified (live) link means no link;
-    never in safety or clinical handling. Returns a link id or "none"."""
+def resource_for(record: ProtocolRecord, links_allowed: bool | None, guide_link: str = "",
+                 promotion_ok: bool = True) -> str:
+    """[CP] §8: never in safety or clinical handling. Returns a link id or "none".
+
+    User-directed override (2026-10-07, docs/RULES-OF-ENGAGEMENT.md "Superseded
+    earlier rules"): for the answering decisions (APPROPRIATE ALTERNATIVE,
+    EDUCATIONAL ONLY) the relevant Smart Patient's Guide (``guide_link``, from
+    harvey/guides.py) is required, not optional, wherever the community allows
+    links and promotion; a not-live link is still drafted (yellow) and blocks
+    approval. Without ``guide_link`` the earlier rule applies: optional, and
+    only a verified (live) link."""
     if record.decision not in SCORED_DECISIONS or links_allowed is False:
         return "none"
+    if guide_link:
+        return guide_link if promotion_ok else "none"
     live = {lk.id for lk in knowledge.links() if lk.live}
     spec = config().needs.get(record.unmet_need)
     for cid in (spec.direct + spec.partial) if spec else ():
@@ -523,7 +533,17 @@ def applied(triage, mention, *, prior_clinical: bool = False, publishable=None):
                     text=f"{mention.title}\n{mention.text}")
     record = decide(inp, publishable)
     data = record.as_dict()
-    data["resource"] = resource_for(record, status.links_allowed)
+    guide_link = ""
+    if record.decision in SCORED_DECISIONS:
+        from harvey import guides
+
+        post = " ".join(part for part in (mention.title, mention.text) if part)
+        guide_link = guides.pick_for(triage.product or "", triage.drug or "", post,
+                                     triage.subtype or "", triage.unmet_need or "").guide.link_id
+    participation = getattr(status, "participation", "none") or "none"
+    promotion_ok = participation in PERMITTED or (participation == "with_permission"
+                                                  and bool(getattr(status, "permission_obtained", False)))
+    data["resource"] = resource_for(record, status.links_allowed, guide_link, promotion_ok)
     data["prior_clinical_in_thread"] = bool(prior_clinical)
     return triage.model_copy(update={"protocol_decision": record.decision, "protocol_route": record.route,
                                      "opportunity_score": record.score, "protocol": data})
