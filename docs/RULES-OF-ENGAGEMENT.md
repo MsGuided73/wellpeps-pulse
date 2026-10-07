@@ -154,6 +154,28 @@ is open).
 | Competitor mentions and provider switching | See section 5 | per protocol | per protocol | [CP] |
 | Minors (safety screen) and failed screens | Never any reply, boundary or not | as before | — | retained safeguard R33 |
 
+### Answer first and acknowledgements (2026-10-07)
+
+- **Model drafts answer first** ([AMG] §1-§3; [CP] §1): after the disclosure the next sentence
+  answers the poster's actual question in their terms from approved claims (a program's
+  status claim for "is X live yet?"; what varies and what to ask for "which providers include
+  follow-up?"); boundary or disclaimer wording only where the question needs it, never as the
+  opener; one useful next step; no generic checklist for a specific question. The reviewer
+  marks a non-responsive / generic reply `needs_human` (`NON_RESPONSIVE`).
+- **Program-status claims** (`program:` in `config/claims.yaml`): offered whenever a post is about
+  that program (product, drug or words). Weight Management, Sexual Wellness and Peptides &
+  Wellness Therapies are "available now" ([LR] §3 APPROVED, site live). Hair Restoration is
+  "coming soon" (site gate; conflicts with [LR] §3, so PENDING); Hormone Optimization and Mental
+  Wellness are "coming soon" ([LR] §3 CONFIRM, PENDING).
+- **Acknowledgement on approved replies** ([AMG] §1 "adapt ordinary conversational wording only
+  as needed"): a `boundary_only` reply may carry ONE sentence between the disclosure and the
+  verbatim approved response that restates the stated issue neutrally ("the shipping delay
+  you're describing"). A model writes it (`drafter.acknowledge`, haiku); it must be one sentence
+  of at most 20 words with no "your ...", customer / patient words, company voice, medical
+  content, promise, link or number absent from the post, and must add no compliance-filter hit;
+  otherwise the reply is the verbatim template. Never on the emergency line or on approved
+  responses that carry their own disclosure. Clinical approval still applies.
+
 ## 5. Competitor mentions and provider switching ([CP])
 
 ### Scope
@@ -436,6 +458,8 @@ information here."
 | Review desk display (CSP-safe) | `harvey/web/app.js` (`engagementHtml`, `protocolHtml`), `replies.js` | `tests/test_engagement_review.py` |
 | Persona | `engagement.persona` | `tests/test_engagement_drafting.py` |
 | Drafter / reviewer instructions | `prompts/draft.md`, `prompts/review.md`, `prompts/reply_rules.md`, `prompts/triage.md` | `tests/test_protocol_pipeline.py`, prompt leak tests |
+| Answer first; program-status claims; reviewer NON_RESPONSIVE -> needs_human | `prompts/draft.md` ("Answer first"), `drafter.ANSWER_FIRST`, `claims.yaml` `program:` (`drafter.programs_for`), `prompts/review.md` | `tests/test_answer_first.py` |
+| One acknowledgement sentence before a verbatim approved response | `harvey/agents/acknowledger.py`, `prompts/acknowledge.md`, `drafting._acknowledged`, `engagement.acknowledged_reply` | `tests/test_acknowledgements.py` |
 | No autonomous posting | no publish / message path in Pulse | `tests/test_protocol_eval.py` |
 
 ## Superseded earlier rules
@@ -496,7 +520,7 @@ until it is provided.
 | `pricing` | Current pricing table and exact program-specific inclusion language (shipping, labs, supplies, cancellation / refund, peptide, sexual-wellness, NextGen, Biotin prices) | yes | — | No price claim is approvable; prices in replies are yellow |
 | `lab_terms` | Testing availability and terms per program | yes | — | Lab-inclusion wording red; WellPeps lab questions HOLD |
 | `gated_download_disclosure` | Validated guide links and the gated-download disclosure | yes | — | Guide claims not approvable; links not live |
-| `program_descriptions` | Program and treatment-category descriptions; Hormone Optimization / Mental Wellness status; sexual-wellness catalog | — | — | No program-description claims |
+| `program_descriptions` | Program and treatment-category descriptions; Hormone Optimization / Mental Wellness status; sexual-wellness catalog | — | — | Program-status claims only: Weight / Sexual Wellness / Peptides from [LR] §3 APPROVED; Hair (site Coming Soon vs [LR] §3), Hormone and Mental Wellness ([LR] CONFIRM) stay PENDING |
 | `adverse_event_contact` | Named adverse-event / clinical safety contact and reporting procedure | — | yes | Pages go to `escalation.clinical_owner` |
 | `emergency_procedure` | Emergency escalation procedure and any required wording | — | yes | Guide wording; paged as adverse_event |
 | `escalation_contacts` | Named privacy / compliance, legal, regulatory and media contacts | — | yes | Media / legal / regulatory share the legal owner |

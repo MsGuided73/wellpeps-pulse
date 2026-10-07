@@ -67,6 +67,7 @@ DEFAULT_MODELS = {
     "triager": "haiku",
     "safety": "haiku",
     "drafter": "sonnet",
+    "drafter.acknowledge": "haiku",
     "reviewer": "sonnet",
     "pulse": "sonnet",   # daily/weekly market brief from aggregates
     # #pulse-query bot: haiku turns a question into a strict QuerySpec,

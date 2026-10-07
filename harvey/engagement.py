@@ -185,6 +185,20 @@ def approved_reply(situation: Situation, triage: Triage | None) -> tuple[str, li
     return f"{opening} {response.text}", [situation.disclosure_claim, response.id]
 
 
+def acknowledged_reply(situation: Situation, triage: Triage | None,
+                       acknowledgement: str) -> tuple[str, list[str]] | None:
+    """The approved reply with ONE acknowledgement sentence between the
+    disclosure and the verbatim approved response ([AMG] §1: adapt ordinary
+    conversational wording, preserve meaning). None when the approved response
+    carries its own disclosure (nothing may be inserted into it)."""
+    text, ids = approved_reply(situation, triage)
+    clause = (acknowledgement or "").strip()
+    opening = disclosure_sentence(situation.disclosure_claim)
+    if not clause or len(ids) != 2 or not text.startswith(f"{opening} "):
+        return None
+    return f"{opening} {clause} {text[len(opening) + 1:]}", ids
+
+
 def close_reply() -> tuple[str, list[str]]:
     """The guide's graceful close (§22), disclosure first."""
     claim = knowledge.claims_by_id()["CLM-AMG-22-CLOSE"]

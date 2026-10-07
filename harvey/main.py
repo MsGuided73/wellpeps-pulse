@@ -221,7 +221,7 @@ async def heartbeat(stop_event: asyncio.Event | None = None):
     brain = Brain(state, models=config.usage.models)
     triager = Triager(brain)
     screen = build_safety_screen(brain, config)
-    drafter = Drafter(brain)
+    drafter = Drafter(brain, acknowledgements=True)
     reviewer = Reviewer(brain)
     notifier = SlackNotifier.from_config(config)          # #pulse-alerts: escalation pages
     briefs_notifier = SlackNotifier.for_briefs(config)    # #pulse-briefs (falls back to alerts)

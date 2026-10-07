@@ -39,6 +39,9 @@ from pydantic import BaseModel, ConfigDict, ValidationError
 from harvey import knowledge as knowledge_module
 from harvey import links
 from harvey.agents import prompting
+from harvey.agents.acknowledger import AGENT as ACK_AGENT
+from harvey.agents.acknowledger import TASK as ACK_TASK
+from harvey.agents.acknowledger import Acknowledger
 from harvey.compliance import names_medication
 from harvey.models import Mention, Triage
 from harvey.models.knowledge import Claim
@@ -71,6 +74,11 @@ PLAYBOOK_CLAIMS = (DISCLOSURE_CLAIM, "CLM-R7-PROVIDER-CHECKLIST", "CLM-LR-02-ONG
                    "CLM-R22-PROVIDER-DETERMINES")
 SERIES_GUIDE_CLAIM = "CLM-EDU-GUIDES"
 GUIDE_LINK_PLACEHOLDER = "<guide link>"
+# Approved Messaging & Response Guide §1-§3 ("Answer the actual question"; the
+# writing standard) and the switching protocol's "respond to the unmet need".
+ANSWER_FIRST = ("Answer first: the sentence right after the disclosure directly answers the poster's actual "
+                "question in their terms, from the claims; boundary or disclaimer wording only where the "
+                "question needs it and never as the opener; then one useful next step.")
 
 
 class DraftAnswer(BaseModel):
@@ -131,13 +139,36 @@ def offerable(claim: Claim) -> bool:
     return not claim.influencer_only and not claim.has_placeholder
 
 
+def programs_for(product: str = "", drug: str = "", text: str = "") -> list[str]:
+    """Programs (products.yaml categories) a mention is about: its product's or
+    drug's program, plus any program the post names ("hair" -> Hair Restoration)."""
+    found = [knowledge_module.program_for(product, drug), *knowledge_module.programs_in_text(text)]
+    return list(dict.fromkeys(p for p in found if p))
+
+
+def _post_text(mention: Mention) -> str:
+    return " ".join(part for part in (mention.title or "", mention.text or "") if part)
+
+
+def _with_status_first(ordered: list[Claim], status: list[Claim]) -> list[Claim]:
+    """The program-status claims right after a leading disclosure claim, so a
+    "is X live yet?" post always has the answer on offer (never cut by MAX_CLAIMS)."""
+    if not status:
+        return ordered
+    rest = [c for c in ordered if c not in status]
+    head = rest[:1] if rest and rest[0].id.startswith(("CLM-AMG-04-", "CLM-R3-DISCLOSURE")) else []
+    return head + status + rest[len(head):]
+
+
 def candidate_claims(product: str, claims=None, *, drug: str = "", category=None,
-                     preferred=(), disclosure: str = DISCLOSURE_CLAIM) -> list[Claim]:
+                     preferred=(), disclosure: str = DISCLOSURE_CLAIM, programs=()) -> list[Claim]:
     """Claims usable for a mention about ``product`` ("" = no product) or
     ``drug``; the playbook claims come first for purchase_intent / question,
     and the situation's ``preferred`` claims (with the ``disclosure`` claim
-    first) before everything else."""
+    first) before everything else. ``programs``: the programs the post is
+    about; their program-status claims are offered right after the disclosure."""
     pool = [c for c in (knowledge_module.claims() if claims is None else claims) if offerable(c)]
+    status = [c for p in programs for c in pool if p and c.program == p]
     about = _about(product, drug)
     specific = [c for c in pool if about & set(c.products)]
     general = [c for c in pool if "*" in c.products and c not in specific]
@@ -152,6 +183,7 @@ def candidate_claims(product: str, claims=None, *, drug: str = "", category=None
         by_id = {c.id: c for c in pool}
         lead = [by_id[cid] for cid in (disclosure, *preferred) if cid in by_id]
         ordered = lead + [c for c in ordered if c not in lead]
+    ordered = _with_status_first(ordered, status)
     unique: dict[str, Claim] = {}
     for claim in ordered:
         unique.setdefault(claim.id, claim)
@@ -205,7 +237,8 @@ def engagement_block(guidance) -> str:
     from the mention)."""
     if guidance is None:
         return ("- Open with exactly this sentence: \"I work with WellPeps.\"\n"
-                "- Answer the actual question first; educate before promoting.")
+                f"- {ANSWER_FIRST}\n"
+                "- Educate before promoting.")
     lines = [f"- Situation: {guidance.label}."]
     if guidance.template:
         lines.append(f"- Shape (Approved Messaging & Response Guide, Template {guidance.template}): "
@@ -215,8 +248,11 @@ def engagement_block(guidance) -> str:
         lines.append(f"- {guidance.notes}")
     lines.append(f"- Open with exactly this sentence: \"{guidance.disclosure}\" "
                  f"(cite {guidance.disclosure_claim}).")
+    lines.append(f"- {ANSWER_FIRST}")
     if guidance.preferred_claims:
-        lines.append("- Prefer these claims for this situation: " + ", ".join(guidance.preferred_claims) + ".")
+        lines.append("- Prefer these claims for this situation: " + ", ".join(guidance.preferred_claims)
+                     + " (only where they answer what was asked; a claim that answers the specific "
+                       "question comes first).")
     if guidance.allow_link:
         lines.append("- A link is allowed only if it directly answers the question; most replies need none.")
     else:
@@ -269,7 +305,7 @@ def build_prompt(mention: Mention, triage: Triage, claims: list[Claim], nonce: s
         "category": triage.category.value,
         "product": triage.product or "none",
         "drug": triage.drug or "none",
-        "program": knowledge_module.program_for(triage.product, triage.drug) or "unknown",
+        "program": ", ".join(programs_for(triage.product, triage.drug, _post_text(mention))) or "unknown",
         "nonce": nonce or prompting.new_nonce(),
         "mention": prompting.mention_block(mention),
     })
@@ -301,10 +337,23 @@ def _split_claim_ids(raw: list, offered: list[str]) -> tuple[list[str], list[str
 class Drafter:
     """Drafts replies through a brain-like object (``think_json``)."""
 
-    def __init__(self, brain, knowledge=None, max_attempts: int = MAX_ATTEMPTS):
+    def __init__(self, brain, knowledge=None, max_attempts: int = MAX_ATTEMPTS, acknowledgements: bool = False):
+        """``acknowledgements``: approved (boundary-only) replies may get one
+        short, validated acknowledgement clause (harvey/agents/acknowledger.py)."""
         self.brain = brain
         self.knowledge = knowledge or knowledge_module
         self.max_attempts = max(1, int(max_attempts))
+        self.acknowledgements = bool(acknowledgements)
+        self._acknowledger = Acknowledger(brain) if self.acknowledgements else None
+
+    def acknowledgement_model(self) -> str:
+        return _model_name(self.brain, ACK_AGENT, ACK_TASK)
+
+    async def acknowledge(self, mention: Mention, situation_label: str) -> tuple[str, list[str]]:
+        """(clause, problems): one validated acknowledgement clause, or "" with why."""
+        if self._acknowledger is None:
+            return "", ["acknowledgements disabled"]
+        return await self._acknowledger.acknowledge(mention, situation_label)
 
     async def _ask(self, prompt: str) -> tuple[DraftAnswer | None, str]:
         try:
@@ -339,6 +388,7 @@ class Drafter:
             triage.product, self.knowledge.claims(), drug=triage.drug, category=triage.category,
             preferred=tuple(getattr(guidance, "preferred_claims", ()) or ()),
             disclosure=getattr(guidance, "disclosure_claim", DISCLOSURE_CLAIM) or DISCLOSURE_CLAIM,
+            programs=programs_for(triage.product, triage.drug, _post_text(mention)),
         )
         offered = [c.id for c in claims]
         model = _model_name(self.brain, AGENT, TASK)

@@ -145,6 +145,9 @@ class ProtocolInput:
     community_id: str = ""
     prior_clinical_in_thread: bool = False
     injection: bool = False
+    # Program-status claims (claims.yaml ``program:``) for the programs the post
+    # is about: a publishable one partly answers a medication-availability need.
+    program_status: tuple[str, ...] = ()
 
 
 def in_scope(triage) -> bool:
@@ -178,7 +181,13 @@ def input_for(triage, community=None, *, prior_clinical_in_thread: bool = False,
         links_allowed=getattr(community, "links_allowed", None),
         community_id=getattr(community, "id", "") or "",
         prior_clinical_in_thread=prior_clinical_in_thread, injection=injection_attempt(text),
+        program_status=_program_status(triage, text),
     )
+
+
+def _program_status(triage, text: str) -> tuple[str, ...]:
+    programs = [knowledge.program_for(triage.product or "", triage.drug or ""), *knowledge.programs_in_text(text)]
+    return tuple(dict.fromkeys(c.id for c in knowledge.status_claims(dict.fromkeys(p for p in programs if p))))
 
 
 # --- Capability matching ([CP] §6) -----------------------------------------------------------------
@@ -407,6 +416,13 @@ def decide(inp: ProtocolInput, publishable: set[str] | frozenset[str] | None = N
         return record(MONITOR_ONLY, ["no useful answer is available ([CP] §4 step 4)"])
     # Step 5: facts and resource fit.
     cap = capability(inp.unmet_need, publishable)
+    if inp.unmet_need == "medication_availability" and cap.fit == 0 and inp.program_status:
+        # "Is the hair program live yet?": the program's approved status claim
+        # answers part of it (program level only, never a specific medication).
+        ok = set(knowledge.publishable_claim_ids() if publishable is None else publishable)
+        status = tuple(c for c in inp.program_status if c in ok)
+        if status:
+            cap = Capability(1, status, cap.focus, cap.label)
     components = _score(inp, cap)
     score = sum(components.values())
     scored = dict(components=components, score=score, evidence=cap.claim_ids)

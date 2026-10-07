@@ -29,8 +29,9 @@ from typing import Awaitable, Callable, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
-from harvey import knowledge, protocol
+from harvey import communities, knowledge, protocol
 from harvey.agents import prompting
+from harvey.batching import run_by_thread
 from harvey.agents.safety_screen import ScreenResult, apply_screen, mentions_health_term
 from harvey.escalation import SEVERE_KINDS, escalation_kind
 from harvey.models import (
@@ -414,6 +415,36 @@ async def _record(
     return status, escalation
 
 
+async def _triage_one(state, triager, mention, report: "TriageReport", escalate, screen) -> None:
+    try:
+        triage = await triager.triage(mention)
+        screened = None
+        if screen is not None and needs_screen(triage, f"{mention.title}\n{mention.text}"):
+            screened = await screen.screen(mention)
+            triage = apply_screen(triage, screened)
+            report.screened += 1
+        # The competitor / switching protocol's decision sequence (pure
+        # Python, after every model call): its ESCALATE route feeds
+        # escalation_kind, its classification the situation match.
+        triage = await protocol.apply(state, mention, triage)
+        status, escalation = await _record(state, mention, triage, escalate, screened)
+    except Exception as exc:
+        report.errors += 1
+        logger.error(f"triage failed for mention {mention.id}: {exc}", exc_info=True)
+        return
+    report.processed += 1
+    report.fallbacks += int(FALLBACK_REASON in triage.urgency_reason)
+    report.paged += int(getattr(escalation, "notified_at", None) is not None)
+    if status is MentionStatus.DROPPED:
+        report.dropped += 1
+    elif status is MentionStatus.ESCALATED or escalation_kind(triage) in SEVERE_KINDS:
+        # Severe escalations, including those kept ``triaged`` for the
+        # guide's approved boundary reply (they are paged all the same).
+        report.escalated += 1
+    else:
+        report.triaged += 1
+
+
 async def triage_batch(
     state,
     triager: Triager,
@@ -421,6 +452,7 @@ async def triage_batch(
     budget_ok: BudgetHook | None = None,
     escalate: EscalateHook | None = None,
     screen=None,
+    concurrency: int = 1,
 ) -> TriageReport:
     """Triage up to ``limit`` status=new mentions, oldest first.
 
@@ -437,39 +469,25 @@ async def triage_batch(
     ``budget_ok`` is checked before each mention; when it returns False the
     batch stops and the rest stay ``new`` for the next cycle. A mention whose
     bookkeeping fails is logged, counted, and left ``new`` to retry later.
+
+    ``concurrency`` > 1 (scripts/seed_demo.py --claude only) triages different
+    threads side by side, one mention per thread at a time (harvey/batching.py).
     """
     report = TriageReport()
     pending = await state.list_mentions(status=MentionStatus.NEW, limit=limit, oldest_first=True)
-    for mention in pending:
+
+    async def one(mention) -> bool:
         if not await _within_budget(budget_ok):
             report.budget_exhausted = True
             logger.info("triage paused: Claude budget exhausted")
-            break
-        try:
-            triage = await triager.triage(mention)
-            screened = None
-            if screen is not None and needs_screen(triage, f"{mention.title}\n{mention.text}"):
-                screened = await screen.screen(mention)
-                triage = apply_screen(triage, screened)
-                report.screened += 1
-            # The competitor / switching protocol's decision sequence (pure
-            # Python, after every model call): its ESCALATE route feeds
-            # escalation_kind, its classification the situation match.
-            triage = await protocol.apply(state, mention, triage)
-            status, escalation = await _record(state, mention, triage, escalate, screened)
-        except Exception as exc:
-            report.errors += 1
-            logger.error(f"triage failed for mention {mention.id}: {exc}", exc_info=True)
-            continue
-        report.processed += 1
-        report.fallbacks += int(FALLBACK_REASON in triage.urgency_reason)
-        report.paged += int(getattr(escalation, "notified_at", None) is not None)
-        if status is MentionStatus.DROPPED:
-            report.dropped += 1
-        elif status is MentionStatus.ESCALATED or escalation_kind(triage) in SEVERE_KINDS:
-            # Severe escalations, including those kept ``triaged`` for the
-            # guide's approved boundary reply (they are paged all the same).
-            report.escalated += 1
-        else:
-            report.triaged += 1
+            return False
+        await _triage_one(state, triager, mention, report, escalate, screen)
+        return True
+
+    if concurrency <= 1:
+        for mention in pending:
+            if not await one(mention):
+                break
+        return report
+    await run_by_thread(pending, lambda m: communities.thread_key(m.url), one, concurrency)
     return report

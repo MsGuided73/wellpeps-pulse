@@ -29,6 +29,23 @@ whatever host/port it is opened on). It also writes a DEMO config copy
 (``--config-dir``, default data/demo-config/) whose claims are marked
 approved for demonstration only; run the dashboard with PULSE_CONFIG_DIR
 pointing at it to demo the full approve -> post loop. See README "Demo sandbox".
+
+Real Claude (``--claude``; ``run_demo.ps1 -Seed -Claude``):
+
+    PULSE_DB_PATH=data/demo.db .venv/Scripts/python scripts/seed_demo.py --sandbox --claude \
+        --review-sheet data/demo-review-sheet.md
+
+seeds the same way, but the hand-written fixture posts (tests/fixtures/mentions,
+everything that is not synthetic history) and the daily / weekly briefs go
+through the REAL pipeline with harvey.brain.Brain (the logged-in claude CLI,
+harvey.yaml's models): triage, safety screen, drafting, the acknowledgement on
+approved replies, the compliance filter and the reviewer. At most 3 Claude calls
+run at a time (``ClaudeDemoBrain``; threads in parallel, harvey/batching.py), with
+progress on stdout. A failed Claude call falls back to the fake for that call
+and the post's draft is marked ``demo-fake (claude failed)``. Real drafts carry
+the real model name. The synthetic history (~290 chart posts) keeps the
+deterministic fake triage and drafts. ``--review-sheet`` writes a Markdown sheet
+of what happened to each hand-written post (harvey/sandbox/review_sheet.py).
 """
 
 import argparse
@@ -39,6 +56,7 @@ import random
 import re
 import sys
 import tempfile
+import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -116,12 +134,16 @@ SPIKES = [
     "Seeing lots of talk about oral wegovy replacing the weekly shots.",
     "WellPeps had a shipping delay this week but support gave a clear update.",
 ]
+# The guide's primary disclosure form ([AMG] §4), then the provider checklist.
 DEMO_REPLY = (
-    "Disclosure: I work with WellPeps, so I am not neutral. A few things worth checking with any "
+    "I work with WellPeps. A few things worth checking with any "
     "provider are whether you are actually reviewed by a licensed clinician, what follow-up is "
     "included, how dose adjustments are handled, and which pharmacy dispenses the medication."
 )
-DEMO_CLAIMS = ["CLM-R3-DISCLOSURE", "CLM-R7-PROVIDER-CHECKLIST"]
+DEMO_CLAIMS = ["CLM-AMG-04-WORK-WITH", "CLM-R7-PROVIDER-CHECKLIST"]
+DEMO_MODEL = "demo-fake"
+FALLBACK_MODEL = "demo-fake (claude failed)"
+CLAUDE_CONCURRENCY = 3  # --claude: at most this many real Claude calls at a time
 
 
 def _mention_text(prompt: str) -> str:
@@ -274,7 +296,7 @@ class DemoBrain:
         self.guide_links = guide_links
 
     def model_for(self, agent: str, task: str) -> str:
-        return "demo-fake"
+        return DEMO_MODEL
 
     async def think_json(self, prompt, session_id=None, agent="", task=""):
         text = _mention_text(prompt)
@@ -283,6 +305,8 @@ class DemoBrain:
         if agent == "safety":
             return {"adverse_event": False, "self_harm": False, "minor": bool(re.search(r"\bim 1[0-7]\b", text)),
                     "evidence": ""}
+        if agent == "drafter" and task == "acknowledge":
+            return {"acknowledgement": ""}  # the fake never writes one: the approved reply stays verbatim
         if agent == "drafter":
             guided = _guide_reply(prompt) if self.guide_links and "?" in text else None
             if guided:
@@ -294,6 +318,74 @@ class DemoBrain:
         if agent == "pulse":
             return _brief_answer(_payload(prompt))
         raise ValueError(f"demo brain has no rule for agent {agent!r}")
+
+
+def hand_written_posts() -> list[str]:
+    """The texts of the hand-written fixture posts (tests/fixtures/mentions):
+    the ones --claude runs through real Claude. Synthetic history is not here."""
+    from harvey.collectors.fixture import DEFAULT_FIXTURE_DIR
+
+    texts: list[str] = []
+    for path in sorted(DEFAULT_FIXTURE_DIR.glob("*.jsonl")):
+        for line in path.read_text(encoding="utf-8").splitlines():
+            try:
+                row = json.loads(line) if line.strip() else {}
+            except json.JSONDecodeError:
+                continue
+            text = str(row.get("text") or "").strip()
+            if text and str(row.get("url") or "").lower().startswith(("http://", "https://")) and text not in texts:
+                texts.append(text)
+    return texts
+
+
+class ClaudeDemoBrain:
+    """``--claude``: the REAL brain for the hand-written demo posts (and the
+    briefs), the deterministic DemoBrain for the synthetic history.
+
+    A prompt belongs to a hand-written post when that post's text is inside its
+    UNTRUSTED_MENTION block (triage, safety screen, drafter, acknowledgement and
+    reviewer prompts all carry one). At most ``max_parallel`` real calls run at
+    once. A real call that fails (no answer / no JSON object) falls back to the
+    fake for that call; ``fallbacks`` records the post so the seed can mark its
+    draft.
+    """
+
+    def __init__(self, real, fake, posts: list[str], max_parallel: int = CLAUDE_CONCURRENCY, out=print):
+        self.real, self.fake, self.out = real, fake, out
+        self.posts = [p for p in (t.strip() for t in posts) if p]
+        self.gate = asyncio.Semaphore(max(1, int(max_parallel)))
+        self.calls = 0
+        self.failed = 0
+        self.fallbacks: dict[str, list[str]] = {}
+
+    def model_for(self, agent: str, task: str) -> str:
+        return self.real.model_for(agent, task) or "claude (CLI default)"
+
+    def post_for(self, prompt: str) -> str | None:
+        block = _mention_text(prompt)
+        return next((p for p in self.posts if p in block), None) if block else None
+
+    async def think_json(self, prompt, session_id=None, agent="", task=""):
+        post = "(brief)" if agent == "pulse" else self.post_for(prompt)
+        if post is None:
+            return await self.fake.think_json(prompt, session_id=session_id, agent=agent, task=task)
+        async with self.gate:
+            self.calls += 1
+            number, started = self.calls, time.monotonic()
+            try:
+                answer = await self.real.think_json(prompt, session_id=session_id, agent=agent, task=task)
+            except Exception as exc:  # the real Brain returns None on failure; be safe anyway
+                answer = None
+                self.out(f"  [claude {number}] {agent}.{task or '-'} raised {type(exc).__name__}")
+        ok = isinstance(answer, dict)
+        label = f"{agent}.{task}" if task else agent
+        self.out(f"  [claude {number}] {label:<20} {'ok' if ok else 'FAILED -> demo fake'} "
+                 f"({time.monotonic() - started:.0f}s) {post[:56]!r}")
+        if ok:
+            return answer
+        self.failed += 1
+        self.fallbacks.setdefault(post, []).append(label)
+        return await self.fake.think_json(prompt, session_id=session_id, agent=agent, task=task)
 
 
 DEFAULT_BASE_URL = "http://127.0.0.1:5555"
@@ -471,10 +563,18 @@ class _DemoConfigEnv:
 
 
 async def seed(db_path: str, *, sandbox_db: str | Path | None = None, config_dir: str | Path | None = None,
-               base_url: str = DEFAULT_BASE_URL) -> None:
-    """Seed ``db_path``; with ``sandbox_db`` also build the DEMO sandbox and DEMO config."""
+               base_url: str = DEFAULT_BASE_URL, real_brain=None, review_sheet: str | Path | None = None,
+               out=print) -> None:
+    """Seed ``db_path``; with ``sandbox_db`` also build the DEMO sandbox and DEMO config.
+
+    ``real_brain`` (``--claude``): a factory ``state -> brain`` (harvey.brain.Brain
+    in real use; tests inject a fake). The hand-written posts then go through
+    that brain (triage, safety screen, drafting, acknowledgement, reviewer) and
+    so do the briefs; the synthetic history keeps the deterministic fake.
+    ``review_sheet``: also write the Markdown review sheet of the hand-written posts.
+    """
     if sandbox_db is None:
-        await _seed(db_path)
+        await _seed(db_path, real_brain=real_brain, review_sheet=review_sheet, out=out)
         return
     from harvey.sandbox.demo_config import DEFAULT_DIR, write_demo_config
     from harvey.sandbox.seeding import SandboxSeeder
@@ -486,11 +586,28 @@ async def seed(db_path: str, *, sandbox_db: str | Path | None = None, config_dir
     store.reset()
     seeder = SandboxSeeder(store, base_url)
     with _DemoConfigEnv(directory), tempfile.TemporaryDirectory() as workdir:
-        await _seed(db_path, seeder=seeder, fixture_dir=_sandbox_fixture_dir(seeder, Path(workdir)))
-    print(f"  sandbox: {Path(sandbox_db)} ({store.count_threads()} threads); demo config: {directory}")
+        await _seed(db_path, seeder=seeder, fixture_dir=_sandbox_fixture_dir(seeder, Path(workdir)),
+                    real_brain=real_brain, review_sheet=review_sheet, out=out)
+    out(f"  sandbox: {Path(sandbox_db)} ({store.count_threads()} threads); demo config: {directory}")
 
 
-async def _seed(db_path: str, seeder=None, fixture_dir: Path | None = None) -> None:
+async def _mark_models(state, posts_by_model: dict[str, list[str]]) -> int:
+    """DEMO: label the drafts of the given posts with ``model`` (the fake after a
+    failed Claude call). Only the throwaway demo DB is touched."""
+    changed = 0
+    async with state.connect() as db:
+        for model, posts in posts_by_model.items():
+            for post in posts:
+                cursor = await db.execute(
+                    "UPDATE drafts SET model = ? WHERE mention_id IN (SELECT id FROM mentions WHERE text = ?)",
+                    (model, post))
+                changed += cursor.rowcount or 0
+        await db.commit()
+    return changed
+
+
+async def _seed(db_path: str, seeder=None, fixture_dir: Path | None = None, real_brain=None,
+                review_sheet: str | Path | None = None, out=print) -> None:
     from harvey.agents.drafter import Drafter
     from harvey.agents.reviewer import Reviewer
     from harvey.agents.safety_screen import SafetyScreen
@@ -502,6 +619,7 @@ async def _seed(db_path: str, seeder=None, fixture_dir: Path | None = None) -> N
     from harvey.escalation import escalate
     from harvey.ingest import run_collectors
     from harvey.notify import SlackNotifier
+    from harvey.sandbox import review_sheet as sheet
     from harvey.state import StateManager
     from harvey.trends import bank_language
 
@@ -509,35 +627,74 @@ async def _seed(db_path: str, seeder=None, fixture_dir: Path | None = None) -> N
     await state.init_db()
     config = PulseConfig()
     notifier = SlackNotifier(None)  # no webhook: escalations stay "not paged"
-    brain = DemoBrain(guide_links=seeder is not None)
+    fake = DemoBrain(guide_links=seeder is not None)
+    posts = hand_written_posts()
+    claude = real_brain is not None
+    brain = ClaudeDemoBrain(real_brain(state), fake, posts, out=out) if claude else fake
+    concurrency = CLAUDE_CONCURRENCY if claude else 1
     now = datetime.now(timezone.utc).replace(tzinfo=None)
     tz = config.usage.quiet_hours.timezone
 
     ingest = await run_collectors(state, [get_collector("fixture", directory=fixture_dir) if fixture_dir
                                           else get_collector("fixture")])
     synthetic = 0
-    posts = _synthetic_posts(now, window_for("daily", now, tz), window_for("weekly", now, tz))
+    history = _synthetic_posts(now, window_for("daily", now, tz), window_for("weekly", now, tz))
     if seeder is not None:  # DEMO sandbox: each post's permalink is its sandbox comment/post
-        placed = seeder.place_synthetic(posts)
-        posts = [m.model_copy(update={"url": placed[m.external_id]}) for m in posts]
-    for mention in posts:
+        placed = seeder.place_synthetic(history)
+        history = [m.model_copy(update={"url": placed[m.external_id]}) for m in history]
+    for mention in history:
         synthetic += (await state.upsert_mention(mention))[1]
+    if claude:
+        out(f"  --claude: real Claude for {len(posts)} hand-written post(s) and the briefs "
+            f"(at most {CLAUDE_CONCURRENCY} calls at a time); synthetic history uses the fake")
+        out("  triage + safety screen ...")
     triage = await triage_batch(
         state, Triager(brain), limit=1000, screen=SafetyScreen(brain),
-        escalate=lambda m, t: escalate(state, notifier, m, t, config),
+        escalate=lambda m, t: escalate(state, notifier, m, t, config), concurrency=concurrency,
     )
-    drafts = await draft_batch(state, Drafter(brain), Reviewer(brain), limit=100)
-    history = await _backdate_escalations(state)
+    if claude:
+        hand_written = set(posts)
+        out("  drafting (drafter, acknowledgement, compliance filter, reviewer) ...")
+        drafts = await draft_batch(state, Drafter(brain, acknowledgements=True), Reviewer(brain), limit=100,
+                                   concurrency=concurrency,
+                                   only=lambda m: (m.text or "").strip() in hand_written)
+        rest = await draft_batch(state, Drafter(fake), Reviewer(fake), limit=100)
+        drafts.processed += rest.processed
+    else:
+        drafts = await draft_batch(state, Drafter(brain), Reviewer(brain), limit=100)
+    escalated = await _backdate_escalations(state)
     banked = await bank_language(state)
+    if claude:
+        out("  daily + weekly brief ...")
     built = [await build_brief(state, brain, period, config=config, now=now) for period in ("daily", "weekly")]
-    print(f"  {BANNER}")
-    print(f"  db: {db_path}")
-    print(f"  ingested {ingest.created} fixture + {synthetic} synthetic mention(s); triaged "
-          f"{triage.processed} ({triage.escalated} escalated, {triage.dropped} dropped); "
-          f"drafted {drafts.processed}; banked language from {banked}; "
-          f"{history} escalation(s) acknowledged in the history")
+    if claude:
+        failed = sorted(brain.fallbacks)
+        await _mark_models(state, {FALLBACK_MODEL: failed})
+        out(f"  real Claude calls: {brain.calls} ({brain.failed} failed -> demo fake for: "
+            f"{', '.join(repr(p[:40]) for p in failed) or 'none'})")
+        out("  DEMO DATA - hand-written posts and briefs by real Claude; synthetic history by keyword rules")
+    else:
+        out(f"  {BANNER}")
+    out(f"  db: {db_path}")
+    out(f"  ingested {ingest.created} fixture + {synthetic} synthetic mention(s); triaged "
+        f"{triage.processed} ({triage.escalated} escalated, {triage.dropped} dropped); "
+        f"drafted {drafts.processed}; banked language from {banked}; "
+        f"{escalated} escalation(s) acknowledged in the history")
     for brief in built:
-        print(f"  {brief['period']} brief #{brief['id']}: {brief['headline']}")
+        out(f"  {brief['period']} brief #{brief['id']}: {brief['headline']}")
+    if review_sheet:
+        title = "DEMO review sheet (real Claude)" if claude else "DEMO review sheet (deterministic fake)"
+        Path(review_sheet).write_text(await sheet.build(state, posts, title), encoding="utf-8")
+        out(f"  review sheet: {review_sheet}")
+
+
+def _real_brain_factory():
+    """``--claude``: harvey.brain.Brain (the claude CLI) with harvey.yaml's models."""
+    from harvey.brain import Brain
+    from harvey.config import load_config
+
+    models = load_config().usage.models
+    return lambda state: Brain(state, models=models)
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -551,13 +708,21 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("--config-dir", help="DEMO config copy (default data/demo-config)")
     parser.add_argument("--base-url", default=os.environ.get("PULSE_DEMO_BASE_URL", "").strip() or DEFAULT_BASE_URL,
                         help=f"dashboard base URL for sandbox permalinks (default {DEFAULT_BASE_URL})")
+    parser.add_argument("--claude", action="store_true",
+                        help="run the hand-written demo posts and the briefs through REAL Claude (the claude "
+                             f"CLI; at most {CLAUDE_CONCURRENCY} calls at a time); synthetic history stays fake")
+    parser.add_argument("--review-sheet", help="also write a Markdown review sheet of the hand-written posts")
     args = parser.parse_args(argv)
     target = _check_target()
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    real = _real_brain_factory() if args.claude else None
     if not _wants_sandbox(argv):
-        asyncio.run(seed(target))
+        asyncio.run(seed(target, real_brain=real, review_sheet=args.review_sheet))
         return
     sandbox_db = _check_sandbox_target(args.sandbox_db or sandbox_db_path(), target)
-    asyncio.run(seed(target, sandbox_db=sandbox_db, config_dir=args.config_dir, base_url=args.base_url))
+    asyncio.run(seed(target, sandbox_db=sandbox_db, config_dir=args.config_dir, base_url=args.base_url,
+                     real_brain=real, review_sheet=args.review_sheet))
 
 
 if __name__ == "__main__":

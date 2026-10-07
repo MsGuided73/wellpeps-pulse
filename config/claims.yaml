@@ -1094,3 +1094,81 @@ claims:
     expires: null
     source: "Approved Messaging Live Reference v1.0 §13.1"
     guide: true
+
+  # --- Program availability / status (2026-10-07) -------------------------------
+  # One claim per program (``program:`` = the products.yaml category). The
+  # drafter offers the program's status claim whenever a post is about that
+  # program (its product, drug or words), so "is X live yet?" gets a direct
+  # answer instead of "I can't speak to availability". Only what the sources
+  # state: Live Reference §3 rows marked APPROVED (public next step "Start Free
+  # Assessment") that agree with the site are Live Reference claims (publishable
+  # while trust_approved_messaging_guide is on); conflicting or CONFIRM items
+  # stay PENDING.
+  - id: CLM-LR-03-STATUS-WEIGHT
+    text: "WellPeps' Weight Management program is available now."
+    products: []
+    program: Weight Loss
+    tier: green
+    approved_by: "Approved Messaging Live Reference v1.0 (Aug 2026), status APPROVED"
+    approved_at: null
+    expires: null
+    source: "Approved Messaging Live Reference v1.0 §3 (Weight Management: APPROVED, public next step Start Free Assessment)"
+    guide: true
+    note: "Status wording adapted from the Live Reference §3 row (APPROVED; next step Start Free Assessment); the site agrees (wellpeps-site src/data/programs.ts status live)."
+
+  - id: CLM-LR-03-STATUS-SEXUAL
+    text: "WellPeps' Sexual Wellness program is available now."
+    products: []
+    program: Sexual Wellness
+    tier: green
+    approved_by: "Approved Messaging Live Reference v1.0 (Aug 2026), status APPROVED"
+    approved_at: null
+    expires: null
+    source: "Approved Messaging Live Reference v1.0 §3 (Sexual Wellness: APPROVED, public next step Start Free Assessment)"
+    guide: true
+    note: "Status wording adapted from the Live Reference §3 row; the site agrees (programs.ts status live). The final catalog and pricing are still CONFIRM (LR Appendix A): never list products or prices with it."
+
+  - id: CLM-LR-03-STATUS-PEPTIDES
+    text: "WellPeps' Peptides & Wellness Therapies (Healthy Aging & Vitality) program is available now."
+    products: []
+    program: "Healthy Aging & Vitality"
+    tier: green
+    approved_by: "Approved Messaging Live Reference v1.0 (Aug 2026), status APPROVED"
+    approved_at: null
+    expires: null
+    source: "Approved Messaging Live Reference v1.0 §3 (Peptides & Wellness Therapies: APPROVED, public next step Start Free Assessment)"
+    guide: true
+    note: "Status wording adapted from the Live Reference §3 row; the site agrees (programs.ts 'Healthy Aging & Vitality' status live). Peptide prices are CONFIRM (LR §5.3)."
+
+  - id: CLM-STATUS-HAIR
+    text: "WellPeps' Hair Restoration program is coming soon and isn't open yet; there's a list you can join to hear when assessments open."
+    products: []
+    program: Hair Restoration
+    tier: green
+    approved_by: PENDING
+    approved_at: null
+    expires: null
+    source: "C:/dev/W/wellpeps-site/src/data/programs.ts (Hair Restoration status coming-soon while HAIR_COMING_SOON) and src/data/hair.ts soonLead ('opens soon. Join the list ... the moment assessments are available'); products.yaml status coming_soon"
+    note: "PENDING: the Approved Messaging Live Reference v1.0 §3 lists Hair Restoration as APPROVED with 'Start Free Assessment', which conflicts with the site's Coming Soon gate. Never say hair restoration is available or live (R21)."
+
+  - id: CLM-STATUS-HORMONE
+    text: "WellPeps' Hormone Optimization program is coming soon; there is a waitlist."
+    products: []
+    program: Hormone Optimization
+    tier: green
+    approved_by: PENDING
+    approved_at: null
+    expires: null
+    source: "C:/dev/W/wellpeps-site/src/data/programs.ts (Hormone Optimization status coming-soon) and src/data/knowledge.ts ('Hormone Optimization is coming soon - you can join the waitlist'); products.yaml status waitlist"
+    note: "PENDING: the Approved Messaging Live Reference v1.0 §3 marks Hormone Optimization 'Coming Soon' with status CONFIRM (final status needs confirmation before public use; finalize program_descriptions)."
+
+  - id: CLM-STATUS-MENTAL
+    text: "WellPeps' Mental Wellness program is coming soon and isn't open yet."
+    products: []
+    program: Mental Wellness
+    tier: green
+    approved_by: PENDING
+    approved_at: null
+    expires: null
+    source: "Approved Messaging Live Reference v1.0 §3 (Mental Wellness: Coming Soon, status CONFIRM); products.yaml status waitlist"
+    note: "PENDING: the Live Reference marks it CONFIRM (final status needs confirmation before public use; finalize program_descriptions). Not on the site."

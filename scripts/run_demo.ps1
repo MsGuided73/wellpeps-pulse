@@ -1,14 +1,17 @@
 # Local client demo: Pulse + the DEMO sandbox, signed in automatically.
 #
-#   .\scripts\run_demo.ps1            # reuse the existing demo data
-#   .\scripts\run_demo.ps1 -Seed      # (re)build data/demo.db, data/sandbox.db and data/demo-config first
-#   .\scripts\run_demo.ps1 -Port 5566 # another port (sandbox links follow the port you open)
+#   .\scripts\run_demo.ps1                 # reuse the existing demo data
+#   .\scripts\run_demo.ps1 -Seed           # (re)build data/demo.db, data/sandbox.db and data/demo-config first
+#   .\scripts\run_demo.ps1 -Seed -Claude   # ... with REAL Claude (claude CLI) for the hand-written demo posts
+#                                          #     and the briefs; synthetic history stays the deterministic fake
+#   .\scripts\run_demo.ps1 -Port 5566      # another port (sandbox links follow the port you open)
 #
 # DEMO ONLY: claims in data/demo-config are marked approved for demonstration
 # (not signed off) and every post link opens a fictional thread on this machine.
 # Never use these settings for real replies, and never in docker-compose/Coolify.
 param(
     [switch]$Seed,
+    [switch]$Claude,
     [int]$Port = 5555
 )
 $ErrorActionPreference = "Stop"
@@ -28,7 +31,12 @@ if ($Seed) {
         Move-Item "data/demo.db" "data/demo.db.bak-$stamp"
         Write-Host "  previous data/demo.db kept as data/demo.db.bak-$stamp"
     }
-    & .venv\Scripts\python.exe scripts\seed_demo.py --sandbox --base-url "http://127.0.0.1:$Port"
+    $seedArgs = @("scripts\seed_demo.py", "--sandbox", "--base-url", "http://127.0.0.1:$Port")
+    if ($Claude) {
+        # Real Claude calls through the logged-in claude CLI, at most 3 at a time.
+        $seedArgs += @("--claude", "--review-sheet", "data/demo-review-sheet.md")
+    }
+    & .venv\Scripts\python.exe @seedArgs
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 }
 & .venv\Scripts\python.exe -m harvey dashboard --port $Port

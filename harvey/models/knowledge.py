@@ -86,6 +86,9 @@ class ProductCategory(_Strict):
     status: Status
     membership: bool
     aliases: list[Alias] = Field(default_factory=list)
+    # Plain words that point a post at this program ("hair" -> Hair
+    # Restoration), so the drafter can offer the program-status claim.
+    keywords: list[str] = Field(default_factory=list)
 
 
 class Membership(_Strict):
@@ -261,6 +264,10 @@ class Claim(_Strict):
     influencer_only: bool = False      # Brand Ambassador / partner wording: never offered to the drafter
     promotional: bool = False          # counts toward the 20 of the 80/20 rule
     note: str = ""                     # e.g. the guide claim this one duplicates
+    # A program-status claim ("... is coming soon"): the products.yaml category
+    # whose availability it states. The drafter offers it whenever a post is
+    # about that program (harvey.agents.drafter.status_claims).
+    program: str | None = None
 
     @model_validator(mode="after")
     def _guide_rules(self) -> "Claim":

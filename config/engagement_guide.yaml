@@ -455,7 +455,7 @@ situations:
     template: A
     reply: draft
     education_only: true
-    preferred_claims: [CLM-R7-PROVIDER-CHECKLIST, CLM-AMG-13-BETTER, CLM-AMG-APPX-COMPETITOR, CLM-LR-02-ONGOING-SUPPORT]
+    preferred_claims: [CLM-R7-PROVIDER-CHECKLIST, CLM-AMG-13-BETTER, CLM-LR-02-ONGOING-SUPPORT]
     notes: "General useful answer. Describe WellPeps only if the person asked about WellPeps (approved facts only). No comparison, no response-time, lab or price claim that is not approved, no call to action. Never repeat or attack the named provider. 40-90 words."
     sources: ["[CP] §4 step 4, §7, Examples 7, 9, 10, 20", "[AMG] §13", "[CT] Scenario 4B"]
   # --- Competitors -------------------------------------------------------------------
@@ -546,6 +546,7 @@ situations:
     template: A
     reply: draft
     preferred_claims: [CLM-AMG-17-TELEHEALTH]
+    notes: "Answer the actual question first, in the poster's terms (a program's status claim when they ask whether it is live or a waitlist; what varies and what to ask when they ask which providers include something); boundary or disclaimer wording only where the question needs it, never as the opener; one useful next step ([AMG] §1-§3 writing standard; [CP] §1 respond to the unmet need)."
     sources: ["[AMG] §2, §25 Template A", "[OM] §18"]
   - id: default
     label: "Other"
@@ -730,7 +731,7 @@ finalize:
   - key: program_descriptions
     item: "Approved program and treatment-category descriptions (Hormone Optimization and Mental Wellness status; final sexual-wellness catalog)"
     sources: ["[AMG] Appendix B", "[LR] §3-4 CONFIRM"]
-    pulse_effect: "No program-description claims exist in Pulse; medication names in replies are yellow for review (R38 blanket ban superseded)."
+    pulse_effect: "Only program-status claims exist (claims.yaml program:); Hair Restoration, Hormone Optimization and Mental Wellness status claims stay PENDING until confirmed; medication names in replies are yellow for review (R38 blanket ban superseded)."
     value: null
   - key: adverse_event_contact
     item: "Named adverse-event / clinical safety contact and reporting procedure"

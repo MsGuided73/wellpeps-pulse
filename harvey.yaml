@@ -21,6 +21,7 @@ usage:
     triager: haiku        # classification: a small model is plenty
     safety: haiku         # independent safety screen: one narrow yes/no question
     drafter: sonnet       # reply drafting from approved claims
+    drafter.acknowledge: haiku  # one short acknowledgement sentence on approved (boundary) replies
     reviewer: sonnet      # adversarial compliance review; never haiku (config rejects it)
     pulse: sonnet         # daily/weekly market brief (aggregates only, never post text)
     slackbot.plan: haiku  # #pulse-query bot: question -> strict query spec (JSON)

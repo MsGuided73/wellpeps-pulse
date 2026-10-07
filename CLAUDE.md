@@ -133,6 +133,18 @@ deterministic compliance filter (`harvey/compliance.py`) exist.
   (`approve_clinical`). Eval: `tests/test_protocol_eval.py` runs the
   protocol's 25 examples (`tests/fixtures/protocol_examples.yaml`).
 
+- Answer-first drafting + acknowledgements (2026-10-07): `prompts/draft.md` "Answer first"
+  ([AMG] §1-§3), `drafter.ANSWER_FIRST` in the engagement block, program-status claims
+  (`program:` in claims.yaml; `drafter.programs_for` = product/drug/words via
+  products.yaml `keywords`), reviewer `NON_RESPONSIVE` -> needs_human. Approved
+  (boundary_only) replies may get ONE validated acknowledgement sentence after the
+  disclosure (`harvey/agents/acknowledger.py`, `prompts/acknowledge.md`, agent `drafter`
+  task `acknowledge` on haiku; `Drafter(acknowledgements=True)` in main.py); any failed
+  check -> the verbatim template. `harvey/batching.py`: optional `concurrency` for
+  triage_batch / draft_batch (threads in parallel; default 1). `scripts/seed_demo.py
+  --claude` (`run_demo.ps1 -Seed -Claude`): real Claude for the hand-written demo posts and
+  briefs (<= 3 calls at a time, fallback to the fake per call), `--review-sheet`.
+
 Later phases add everything else. Don't build ahead of the phase you've
 been asked to do.
 

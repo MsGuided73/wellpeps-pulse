@@ -112,6 +112,10 @@ def _claims(directory: Path) -> tuple[Claim, ...]:
         unknown = [lid for lid in linked if lid not in known]
         if unknown:
             raise KnowledgeError(f"claims.yaml link_id not in links.yaml: {unknown}")
+    programs = {c.name for c in _products(directory).categories}
+    bad_programs = sorted({c.program for c in claims if c.program and c.program not in programs})
+    if bad_programs:
+        raise KnowledgeError(f"claims.yaml program not a products.yaml category: {bad_programs}")
     return claims
 
 
@@ -466,6 +470,29 @@ def program_for(product: str = "", drug: str = "") -> str:
         return by_product
     categories = {program_of_product(name) for name in products_for_drug(drug)}
     return categories.pop() if len(categories) == 1 else ""
+
+
+@lru_cache(maxsize=None)
+def _term_rx(term: str) -> re.Pattern[str]:
+    flags = 0 if term.isupper() and len(term) <= 3 else re.IGNORECASE  # "ED" is not "ed"
+    return re.compile(r"(?<![\w-])" + re.escape(term) + r"(?![\w-])", flags)
+
+
+def programs_in_text(text: str) -> list[str]:
+    """products.yaml categories a post names: the category name, one of its
+    ``keywords`` or one of its aliases (whole words), in config order."""
+    found = []
+    for category in products().categories:
+        terms = [category.name, *category.keywords, *(a.term for a in category.aliases)]
+        if any(_term_rx(t).search(text or "") for t in terms if t.strip()):
+            found.append(category.name)
+    return found
+
+
+def status_claims(programs) -> list[Claim]:
+    """Program-status claims (``program:`` in claims.yaml) for ``programs``."""
+    wanted = [p for p in programs if p]
+    return [c for p in wanted for c in claims() if c.program == p]
 
 
 def competitor_lookup() -> Mapping[str, str]:

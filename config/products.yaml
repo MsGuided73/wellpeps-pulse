@@ -8,6 +8,8 @@
 # are not the branded drugs, and replies must never imply they are (R15, R16).
 # site_price = price on wellpeps.com today. Weight Loss prices are member prices.
 # status: live | coming_soon | waitlist
+# keywords (categories): plain words that point a post at the program (drafter
+# program-status claims).
 # aliases: {term, inferred}. inferred: true = consumer slang / misspelling that
 # does not appear in any WellPeps source file.
 
@@ -22,6 +24,7 @@ categories:
     page: /weight-loss
     status: live
     membership: true
+    keywords: [weight loss, weight management, weight-loss program]
     aliases:
       - {term: GLP-1, inferred: false}
       - {term: GLP-1s, inferred: false}
@@ -43,6 +46,7 @@ categories:
     page: /sexual-wellness
     status: live
     membership: false
+    keywords: [sexual wellness, sexual health]
     aliases:
       - {term: ED, inferred: false}
       - {term: erectile dysfunction, inferred: false}
@@ -58,6 +62,7 @@ categories:
     page: /hair-restoration
     status: coming_soon
     membership: false
+    keywords: [hair, hair loss]
     aliases:
       - {term: fin + minox, inferred: false}
       - {term: topical fin, inferred: false}
@@ -88,6 +93,7 @@ categories:
     page: /healthy-aging
     status: live
     membership: false
+    keywords: [healthy aging, peptides & wellness therapies, wellness therapies]
     aliases:
       - {term: peptides, inferred: false}
       - {term: lipotropic, inferred: false}
@@ -99,11 +105,13 @@ categories:
     page: null
     status: waitlist
     membership: true
+    keywords: [hormone, hormones]
     aliases: []
   - name: Mental Wellness
     page: null
     status: waitlist
     membership: false
+    keywords: [mental wellness, mental health]
     aliases: []
 
 products:

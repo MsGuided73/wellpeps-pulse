@@ -31,7 +31,11 @@ first, before any model call:
 - a ``boundary_only`` situation (dose, labs, adverse event, emergency, media,
   complaint, ...): the guide's approved response verbatim, disclosure first,
   no drafter or reviewer call, ``needs_human`` (a human confirms it fits;
-  adverse events and emergencies need a clinical approver);
+  adverse events and emergencies need a clinical approver). With
+  ``Drafter(acknowledgements=True)`` one short acknowledgement sentence about
+  the post's stated issue may sit between the disclosure and the verbatim
+  response (one haiku call, harvey/agents/acknowledger.py; deterministic
+  checks plus "no new filter hit", else the verbatim reply);
 - otherwise the drafter gets the situation's template, preferred claims, the
   persona's disclosure, the community's link / promotion limits and, for the
   competitor / switching protocol, its brand mode and the unmet need; the
@@ -46,7 +50,10 @@ import logging
 from dataclasses import dataclass
 from typing import Awaitable, Callable
 
-from harvey import engagement, knowledge, links
+from harvey import communities, engagement, knowledge, links
+from harvey.batching import run_by_thread
+from harvey.agents.acknowledger import SKIP_CATEGORIES as ACK_SKIP_CATEGORIES
+from harvey.agents.acknowledger import SKIP_SITUATIONS as ACK_SKIP_SITUATIONS
 from harvey.compliance import GateResult, ReplyContext, compliance_filter
 from harvey.models import (
     AuditEvent,
@@ -291,6 +298,42 @@ def _approved_reasons(situation, triage) -> list[str]:
     return reasons
 
 
+def _hit_keys(gate: GateResult) -> set[tuple[str, str]]:
+    return {(h.rule_id, h.reason) for h in gate.hits}
+
+
+async def _acknowledged(drafter, mention: Mention, situation, triage, text: str, ids: list,
+                        context: ReplyContext) -> tuple[str, str, str]:
+    """(reply, model label, review note): the approved reply with one validated
+    acknowledgement sentence after the disclosure (harvey/agents/acknowledger.py),
+    or the verbatim reply whenever the clause is off, missing or adds any filter hit."""
+    verbatim = (text, engagement.APPROVED_RESPONSE_MODEL, "")
+    acknowledge = getattr(drafter, "acknowledge", None)
+    if not getattr(drafter, "acknowledgements", False) or acknowledge is None \
+            or situation.id in ACK_SKIP_SITUATIONS \
+            or getattr(getattr(triage, "category", None), "value", "") in ACK_SKIP_CATEGORIES:
+        return verbatim
+    try:
+        clause, problems = await acknowledge(mention, situation.label)
+    except Exception as exc:
+        clause, problems = "", [f"error: {type(exc).__name__}"]
+    composed = engagement.acknowledged_reply(situation, triage, clause) if clause else None
+    if composed is None:
+        why = "; ".join(problems) or "the approved response carries its own disclosure"
+        return (text, engagement.APPROVED_RESPONSE_MODEL,
+                f"acknowledgement not used ({why}): the approved response is verbatim")
+    added = _hit_keys(_filter(_Fixed(reply=composed[0], claim_ids=ids), mention, context)) \
+        - _hit_keys(_filter(_Fixed(reply=text, claim_ids=ids), mention, context))
+    if added:
+        rules = ", ".join(sorted({rule for rule, _ in added}))
+        return (text, engagement.APPROVED_RESPONSE_MODEL,
+                f"acknowledgement not used (compliance filter: {rules}): the approved response is verbatim")
+    model = getattr(drafter, "acknowledgement_model", lambda: "")() or "model"
+    return (composed[0], f"{engagement.APPROVED_RESPONSE_MODEL}+ack:{model}",
+            f"acknowledgement sentence \"{clause}\" was written by a model ({model}) and passed the "
+            "deterministic checks; the approved response after it is verbatim")
+
+
 async def _draft_one(state, drafter, reviewer, mention: Mention, report: DraftReport) -> None:
     triage = await state.get_triage(mention.id)
     situation = engagement.situation_of(triage)
@@ -318,7 +361,10 @@ async def _draft_one(state, drafter, reviewer, mention: Mention, report: DraftRe
     if situation.reply == "boundary_only":
         text, ids = engagement.approved_reply(situation, triage)
         reasons = _approved_reasons(situation, triage)
-        await _record_fixed(state, mention, _Fixed(reply=text, claim_ids=ids, rationale=reasons[0]),
+        text, model, note = await _acknowledged(drafter, mention, situation, triage, text, ids, context)
+        if note:
+            reasons.append(note)
+        await _record_fixed(state, mention, _Fixed(reply=text, claim_ids=ids, rationale=reasons[0], model=model),
                             context, reasons, report)
         return
     guidance = engagement.guidance_for(situation, context, triage)
@@ -343,25 +389,39 @@ async def _draft_one(state, drafter, reviewer, mention: Mention, report: DraftRe
 
 
 async def draft_batch(
-    state, drafter, reviewer, limit: int = 10, budget_ok: BudgetHook | None = None
+    state, drafter, reviewer, limit: int = 10, budget_ok: BudgetHook | None = None,
+    concurrency: int = 1, only: Callable[[Mention], bool] | None = None,
 ) -> DraftReport:
     """Draft, filter, and review up to ``limit`` mentions; see module doc.
 
     ``budget_ok`` is checked before each mention (a mention costs a drafter
     call and usually a reviewer call). A mention that fails before its
     draft is saved stays ``triaged`` and is retried next cycle.
+    ``concurrency`` > 1 drafts different threads side by side, one mention
+    per thread at a time (harvey/batching.py; scripts/seed_demo.py --claude).
+    ``only``: draft just the draftable mentions it accepts (the rest wait).
     """
     report = DraftReport()
-    for mention in await state.list_draftable_mentions(limit=limit):
+    mentions = [m for m in await state.list_draftable_mentions(limit=limit) if only is None or only(m)]
+
+    async def one(mention: Mention) -> bool:
         if not await _within_budget(budget_ok):
             report.budget_exhausted = True
             logger.info("drafting paused: Claude budget exhausted")
-            break
+            return False
         try:
             await _draft_one(state, drafter, reviewer, mention, report)
         except Exception as exc:
             report.errors += 1
             logger.error(f"drafting failed for mention {mention.id}: {exc}", exc_info=True)
-            continue
+            return True
         report.processed += 1
+        return True
+
+    if concurrency <= 1:
+        for mention in mentions:
+            if not await one(mention):
+                break
+        return report
+    await run_by_thread(mentions, lambda m: communities.thread_key(m.url), one, concurrency)
     return report
