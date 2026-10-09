@@ -74,11 +74,16 @@ def guide_line(guidance=None) -> str:
     if mode == "forbidden":
         return ("no Smart Patient's Guide may appear in this reply "
                 f"({getattr(guidance, 'guide_why', '') or 'excluded situation'}); a guide here is a violation")
+    if mode == "omit":
+        return ("no guide here: no guide chapter answers this question (WellPeps includes a guide only when a "
+                "specific chapter materially helps); a guide that appears anyway must fit the post's program "
+                "and name a real chapter")
     if not getattr(guidance, "guide_required", False):
         return "no guide reference is required here (if one appears, it must fit the post's program)"
     chapters = " / ".join(f'"{c}"' for c in guidance.guide_chapters) or "a chapter of the guide"
     how = "with its link" if guidance.guide_mode == "link" else "by name, without any link"
-    return (f"REQUIRED (WellPeps instruction): the reply must point to {guidance.guide_title} {how} and say "
+    return (f"EXPECTED (a chapter answers this question): the reply should point to {guidance.guide_title} {how} "
+            "and say "
             f"concretely how it helps with this poster's question, naming a chapter such as {chapters}; "
             "it must say the guide is free and asks for an email. Its short name (\"our free "
             f"{guidance.guide_short}\") is enough, and a neutral phrase about the chapter (\"walks through what "

@@ -266,17 +266,21 @@ def _claims_block(claims: list[Claim], mention: Mention, allow_link: bool = True
 
 
 def guide_lines(guidance) -> list[str]:
-    """The Smart Patient's Guide instruction for this mention (user instruction
-    2026-10-07: refer to the relevant guide and point to how it helps)."""
+    """The Smart Patient's Guide instruction for this mention (WellPeps
+    2026-10-07: point to a guide when a specific chapter materially helps)."""
     mode = getattr(guidance, "guide_mode", "none")
     if mode == "forbidden":
         why = getattr(guidance, "guide_why", "") or "excluded situation"
         return [f"- No Smart Patient's Guide, resource or link in this reply ({why})."]
+    if mode == "omit":
+        return ["- No Smart Patient's Guide in this reply: no guide chapter answers this question, and WellPeps "
+                "includes a guide only when a specific chapter materially helps."]
     if not getattr(guidance, "guide_required", False):
         return []
     chapters = list(guidance.guide_chapters) or ["questions to ask before choosing a provider"]
     named = f'"{chapters[0]}"' + (f' (or, if it fits better, "{chapters[1]}")' if len(chapters) > 1 else "")
-    lines = [f"- Smart Patient's Guide (REQUIRED by WellPeps): after the answer, add ONE sentence that points to "
+    lines = [f"- Smart Patient's Guide (a chapter answers this question, so include it): after the answer, add "
+             "ONE sentence that points to "
              f"the single most relevant guide, {guidance.guide_title} (cite {guidance.guide_claim_id}), and says "
              f"concretely how it helps with THIS poster's question by naming the guide chapter {named}. Tie the "
              "chapter to what they asked (since you're comparing what's included, its chapter 'What's "
@@ -284,18 +288,14 @@ def guide_lines(guidance) -> list[str]:
              "guide'. Describe the chapter only by its title plus a neutral phrase such as 'walks through "
              "what to check' or 'explains the differences'; never claim it covers anything else. Write the "
              f"gate once, exactly: 'our free {guidance.guide_short} (it asks for your email)'. Phrase it as "
-             "help, not a sales pitch; keep answer-first: answer -> guide and how it helps -> the "
-             "provider-determines line."]
+             "help, not a sales pitch; keep answer-first: answer -> guide and how it helps. Vary the wording "
+             "naturally; never a stock sentence."]
     if guidance.guide_mode == "link":
         lines.append(f"- Put the link shown under {guidance.guide_claim_id}, copied exactly, at the end of the "
                      "guide sentence. It is the only link in the reply.")
     else:
         lines.append(f"- No link here ({guidance.guide_why}): name it as 'our free {guidance.guide_short} on the "
                      "WellPeps website' and never write a URL or a domain.")
-    if not guidance.guide_specific:
-        lines.append("- No single program guide fits, so point to the Smart Patient's Guides series: each guide "
-                     "closes with 'The questions every Smart Patient should know to ask' (say 'each guide "
-                     "closes with', not 'has a chapter').")
     return lines
 
 
@@ -340,8 +340,9 @@ def engagement_block(guidance) -> str:
         if guidance.brand_limits:
             lines.append(f"- WellPeps presence ({guidance.brand_mode.replace('_', ' ')}): {guidance.brand_limits}.")
         if required:
-            lines.append("- Aim for 40 to 110 words. The guide reference is required here (user-directed "
-                         "override of Protocol §8 'resource optional'); never in safety or clinical replies.")
+            lines.append("- Aim for 40 to 110 words. A guide chapter answers this question, so include the guide "
+                         "(WellPeps 2026-10-07: a guide when a chapter materially helps; Protocol §8: never in "
+                         "safety or clinical replies).")
         else:
             lines.append("- Aim for 40 to 90 words. A resource is optional and never required to get the answer.")
     lines.extend(guide_lines(guidance))

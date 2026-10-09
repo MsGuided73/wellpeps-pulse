@@ -21,6 +21,7 @@ const LABELS = {
   kind: {
     adverse_event: 'Possible adverse event', legal: 'Legal / regulatory threat', privacy: 'Privacy complaint',
     billing_fraud: 'Billing fraud accusation', viral_negative: 'Viral negative about WellPeps',
+    safety_watch: 'Safety watch (not WellPeps)',
   },
   urgency: {urgent: 'Urgent', high: 'High', normal: 'Normal', low: 'Low'},
   platform: {

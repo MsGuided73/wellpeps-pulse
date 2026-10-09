@@ -27,7 +27,7 @@ from datetime import datetime, timezone
 from harvey import auth, communities, engagement, explain, knowledge, links, protocol
 from harvey.compliance import ReplyContext, compliance_filter
 from harvey.config import ESCALATION_KINDS
-from harvey.escalation import SEVERE_KINDS, escalate
+from harvey.escalation import SAFETY_WATCH, SEVERE_KINDS, escalate
 from harvey.sandbox import urls as sandbox_urls
 from harvey.models import (
     AuditEvent,
@@ -59,6 +59,7 @@ _CATEGORY_FOR_KIND = {
     "privacy": Category.PRIVACY,
     "billing_fraud": Category.BILLING_FRAUD,
     "viral_negative": Category.COMPLAINT,
+    "safety_watch": Category.ADVERSE_EVENT,
 }
 
 
@@ -540,8 +541,11 @@ async def manual_escalate(state, notifier, mention_id: int, kind: str, actor: st
         "subject_type": "wellpeps" if kind == "viral_negative" else triage.subject_type,
         "urgency_reason": f"{MANUAL_REASON}: escalated by {actor}",
     })
-    escalation = await escalate(state, notifier, mention, signal, config)
-    if kind in SEVERE_KINDS:
+    # The human's kind, not escalation_kind(): a manual escalation works on
+    # any mention, including one not about WellPeps (user decision 2026-10-09
+    # gates only the automatic routing).
+    escalation = await escalate(state, notifier, mention, signal, config, kind=kind)
+    if kind in SEVERE_KINDS or kind == SAFETY_WATCH:
         await _move(state, mention_id, MentionStatus.ESCALATED)
     await state.append_audit(AuditEvent(
         mention_id=mention_id, event=AuditEventType.ESCALATED, actor=actor, permalink=mention.url,

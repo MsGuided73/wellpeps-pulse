@@ -28,6 +28,7 @@ class CollectorResult:
     errors: int = 0      # mentions that failed to store
     skipped: int = 0     # raw rows the collector rejected (bad url, bad JSON)
     error: str = ""      # set when the collector itself failed
+    cost_usd: float = 0.0  # what a paid collector's run cost (Apify)
 
     @property
     def ok(self) -> bool:
@@ -58,6 +59,8 @@ class IngestReport:
                 f"{r.name}: {r.created} created, {r.duplicates} duplicates, "
                 f"{r.skipped} skipped, {r.errors} errors"
             )
+            if r.cost_usd:
+                line += f", cost ${r.cost_usd:.3f}"
             if r.error:
                 line += f" — FAILED: {r.error}"
             out.append(line)
@@ -98,16 +101,18 @@ async def _run_one(
         logger.error(f"collector {name} failed: {failure}", exc_info=True)
 
     skipped = int(getattr(collector, "skipped", 0) or 0)
+    # Paid collectors (Apify) report what the run cost; it feeds the monthly budget.
+    cost = float(getattr(collector, "cost_usd", 0.0) or 0.0)
     if failure:
-        await state.finish_run(run_id, status="failed", records=created, error=failure)
+        await state.finish_run(run_id, status="failed", records=created, cost_usd=cost, error=failure)
     else:
         note = f"{errors} mention(s) failed to store" if errors else ""
-        await state.finish_run(run_id, status="completed", records=created, error=note)
+        await state.finish_run(run_id, status="completed", records=created, cost_usd=cost, error=note)
     await state.touch_source(source_id)
 
     return CollectorResult(
         name=name, run_id=run_id, created=created, duplicates=duplicates,
-        errors=errors, skipped=skipped, error=failure,
+        errors=errors, skipped=skipped, error=failure, cost_usd=cost,
     )
 
 

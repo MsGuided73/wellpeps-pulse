@@ -204,11 +204,10 @@ def cmd_usage(args):
 
 def cmd_ingest(args):
     """Run collectors once and print what they stored."""
+    if getattr(args, "apify_reddit", False):
+        return _ingest_live("apify_reddit")
     if args.fixture is None:
-        print(
-            "\n  Nothing to ingest: pass --fixture [DIR]. "
-            "Real collectors arrive in a later phase.\n"
-        )
+        print("\n  Nothing to ingest: pass --fixture [DIR] or --apify-reddit.\n")
         sys.exit(2)
 
     from harvey.collectors import get_collector
@@ -229,6 +228,31 @@ def cmd_ingest(args):
         print(f"  total: {report.created} created, {report.duplicates} duplicates\n")
 
     run_async(_ingest())
+
+
+def _ingest_live(name: str):
+    """One on-demand run of a live (paid) collector, within its monthly budget."""
+    from harvey.collect import run_collector
+    from harvey.config import load_config
+    from harvey.state import StateManager
+
+    config = load_config()
+
+    async def _run():
+        state = StateManager()
+        await state.init_db()
+        report = await run_collector(state, config, name, scheduled=False)
+        print("\n  Ingest report")
+        print("  " + "=" * 52)
+        if report is None:
+            print(f"  {name}: not run (monthly budget reached; see harvey.yaml collectors:)\n")
+            return
+        for line in report.lines():
+            print(f"  {line}")
+        print(f"  total: {report.created} created, {report.duplicates} duplicates")
+        print("  Next: `pulse run` triages and drafts them.\n")
+
+    run_async(_run())
 
 
 def _sla_status(escalation, now) -> str:
@@ -543,6 +567,10 @@ def build_parser() -> argparse.ArgumentParser:
     sub.add_argument(
         "--fixture", nargs="?", const="", default=None, metavar="DIR",
         help="Replay JSONL fixture posts (default dir: tests/fixtures/mentions)",
+    )
+    sub.add_argument(
+        "--apify-reddit", action="store_true",
+        help="Live Reddit search through Apify now (APIFY_TOKEN; capped by harvey.yaml collectors.apify_reddit)",
     )
     sub.set_defaults(func=cmd_ingest)
 

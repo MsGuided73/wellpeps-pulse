@@ -5,7 +5,7 @@ import pytest
 
 from harvey import engagement, knowledge
 from harvey.agents.triager import TriageAnswer, _to_triage, build_prompt, route_status
-from harvey.escalation import escalation_kind
+from harvey.escalation import SAFETY_WATCH, SEVERE_KINDS, escalation_kind, is_serious
 from harvey.models import Category, Mention, MentionStatus, Platform, Triage, Urgency
 from harvey.models.mention import TRIAGE_SUBTYPES
 
@@ -24,13 +24,17 @@ CASES = [
      MentionStatus.TRIAGED),
     (_t(Category.ADVERSE_EVENT, "medication_change", WP), "adverse_event_dose_change", "boundary_only",
      "adverse_event", MentionStatus.TRIAGED),
-    # ... in a third-party thread too (Protocol §5, Example 4; Guide §10).
-    (_t(Category.ADVERSE_EVENT), "adverse_event", "boundary_only", "adverse_event", MentionStatus.TRIAGED),
+    # ... not about WellPeps: the same situation, but nobody is paged (only
+    # WellPeps' own incidents page; user decision 2026-10-09, docs/REVISIONS-LOG.md
+    # R-13, pending WellPeps clinical confirmation). The review gate
+    # (gate:not_ours, tests/test_review_gates.py) keeps it from being drafted.
+    (_t(Category.ADVERSE_EVENT), "adverse_event", "boundary_only", None, MentionStatus.TRIAGED),
     # Emergency: emergency line + escalate, whatever the category.
     (_t(Category.QUESTION, "emergency", WP), "emergency", "boundary_only", "adverse_event",
      MentionStatus.TRIAGED),
-    (_t(Category.ADVERSE_EVENT, "emergency"), "emergency", "boundary_only", "adverse_event",
-     MentionStatus.TRIAGED),
+    # A serious report not about WellPeps: the safety watch (never paged, off the reply queue).
+    (_t(Category.ADVERSE_EVENT, "emergency"), "emergency", "boundary_only", "safety_watch",
+     MentionStatus.ESCALATED),
     # Media: routing line only + escalate (legal owner until a media contact exists).
     (_t(Category.QUESTION, "media_inquiry", WP), "media_inquiry", "boundary_only", "legal",
      MentionStatus.TRIAGED),
@@ -86,17 +90,25 @@ CASES = [
     (_t(Category.COMPLAINT, competitor="Hims & Hers", protocol_decision="monitor_only"), "protocol_monitor_only",
      "no_reply", None, MentionStatus.TRIAGED),
     # HOLD in an unverified community still routes safety internally ([CP] §4 step 1).
+    # About another provider (user decision 2026-10-09, docs/REVISIONS-LOG.md R-13,
+    # pending WellPeps clinical confirmation): a serious harm report goes on the
+    # safety watch; anything else is trends only (no escalation).
+    (_t(Category.QUESTION, competitor="Ro", protocol_decision="hold", protocol_route="adverse_event",
+        intents=["possible_serious_harm"]), "protocol_hold", "no_reply", "safety_watch", MentionStatus.ESCALATED),
     (_t(Category.QUESTION, competitor="Ro", protocol_decision="hold", protocol_route="adverse_event"),
-     "protocol_hold", "no_reply", "adverse_event", MentionStatus.ESCALATED),
+     "protocol_hold", "no_reply", None, MentionStatus.TRIAGED),
     (_t(Category.QUESTION, "dose_question", competitor="Ro", protocol_decision="escalate",
-        protocol_route="adverse_event"), "protocol_escalate_harm_dose", "boundary_only", "adverse_event",
+        protocol_route="adverse_event"), "protocol_escalate_harm_dose", "boundary_only", None,
      MentionStatus.TRIAGED),
+    (_t(Category.QUESTION, competitor="Ro", protocol_decision="escalate", protocol_route="adverse_event",
+        intents=["possible_serious_harm"]), "protocol_escalate_harm", "boundary_only", "safety_watch",
+     MentionStatus.ESCALATED),
     (_t(Category.QUESTION, competitor="Ro", protocol_decision="escalate", protocol_route="adverse_event"),
-     "protocol_escalate_harm", "boundary_only", "adverse_event", MentionStatus.TRIAGED),
+     "protocol_escalate_harm", "boundary_only", None, MentionStatus.TRIAGED),
     (_t(Category.QUESTION, competitor="Ro", protocol_decision="escalate", protocol_route="legal"),
-     "protocol_escalate_legal", "no_reply", "legal", MentionStatus.ESCALATED),
+     "protocol_escalate_legal", "no_reply", None, MentionStatus.TRIAGED),
     (_t(Category.QUESTION, "personal_medical_info", competitor="Hims & Hers", protocol_decision="escalate",
-        protocol_route="privacy"), "protocol_escalate_privacy", "boundary_only", "privacy", MentionStatus.TRIAGED),
+        protocol_route="privacy"), "protocol_escalate_privacy", "boundary_only", None, MentionStatus.TRIAGED),
     # A WellPeps complaint in the protocol's scope: the same Template C reply, support route.
     (_t(Category.COMPLAINT, subject_type=WP, protocol_decision="escalate", protocol_route="support",
         intents=["wellpeps_complaint"]), "protocol_escalate_support", "boundary_only", None,
@@ -137,17 +149,30 @@ def test_minors_and_failed_screens_never_get_a_reply_even_a_boundary_one(marker)
 
 
 def test_every_situation_escalation_agrees_with_escalation_kind():
-    # The yaml's `escalate` documents what harvey/escalation.py decides.
+    # The yaml's `escalate` documents what harvey/escalation.py decides for a
+    # post about WellPeps. About anyone else, only a serious adverse event is
+    # escalated, onto the never-paged safety watch (user decision 2026-10-09,
+    # docs/REVISIONS-LOG.md R-13, pending WellPeps clinical confirmation).
+    checked = {WP: 0, "category": 0}
     for sit in knowledge.engagement_guide().situations:
         cats = [c for c in sit.match.categories if c != "*"] or ["other"]
         subs = [s for s in sit.match.subtypes if s != "*"] or [""]
-        subject = {"wellpeps": WP, "other": "category", "any": "category"}[sit.match.subject]
         decision = next((d for d in sit.match.decisions if d != "*"), "")
         route = next((r for r in sit.match.routes if r != "*"), "")
-        triage = _t(Category(cats[0]), subs[0], subject, protocol_decision=decision, protocol_route=route)
-        if engagement.situation_of(triage).id != sit.id:
-            continue  # shadowed by an earlier, more specific situation for this probe
-        assert escalation_kind(triage) == sit.escalate, sit.id
+        subjects = {"wellpeps": [WP], "other": ["category"], "any": [WP, "category"]}[sit.match.subject]
+        for subject in subjects:
+            triage = _t(Category(cats[0]), subs[0], subject, protocol_decision=decision, protocol_route=route)
+            if engagement.situation_of(triage).id != sit.id:
+                continue  # shadowed by an earlier, more specific situation for this probe
+            if subject == WP:
+                expected = sit.escalate
+            else:
+                expected = (SAFETY_WATCH if sit.escalate in SEVERE_KINDS and escalation_kind(
+                    triage.model_copy(update={"subject_type": WP})) == "adverse_event" and is_serious(triage)
+                    else None)
+            assert escalation_kind(triage) == expected, (sit.id, subject)
+            checked[subject] += 1
+    assert checked[WP] and checked["category"]
 
 
 def test_clinical_approval_for_adverse_events_and_emergencies():

@@ -7,6 +7,7 @@ import re
 import uuid
 from pathlib import Path
 
+from harvey import claude_billing
 from harvey.state import StateManager
 
 logger = logging.getLogger("harvey.brain")
@@ -50,6 +51,10 @@ class Brain:
         # Lazy import avoids a cycle (quota -> usage -> state).
         from harvey.integrations.quota import QuotaClient
         self.quota = QuotaClient()
+        try:
+            logger.info(f"Claude calls billed to: {claude_billing.describe()}")
+        except claude_billing.ClaudeBillingError as e:
+            logger.error(f"Claude billing misconfigured: {e}")
 
     def model_for(self, agent: str, task: str) -> str | None:
         """The configured model for a call; an agent.task key beats agent."""
@@ -110,6 +115,15 @@ class Brain:
 
         logger.debug(f"Brain call (session={session_id}): {prompt[:100]}...")
 
+        # Who pays (harvey/claude_billing.py): the subscription locally, the
+        # API key when deployed. Misconfiguration is not retryable.
+        try:
+            billing = claude_billing.billing_mode()
+            env = claude_billing.cli_env(billing)
+        except claude_billing.ClaudeBillingError as e:
+            logger.error(f"Claude billing misconfigured: {e}")
+            return ""
+
         last_error = ""
         for attempt in range(max_retries + 1):
             if attempt > 0:
@@ -129,6 +143,7 @@ class Brain:
                     stdin=asyncio.subprocess.DEVNULL,
                     stdout=asyncio.subprocess.PIPE,
                     stderr=asyncio.subprocess.PIPE,
+                    env=env,
                 )
                 try:
                     stdout, stderr = await asyncio.wait_for(
@@ -151,10 +166,9 @@ class Brain:
                     )
                     last_error = error
                     if any(p in error.lower() for p in _NON_RETRYABLE_PATTERNS):
-                        logger.error(
-                            "Non-retryable Claude error (auth). "
-                            "Run 'claude login' and restart Harvey."
-                        )
+                        fix = ("Run 'claude login' and restart Pulse." if billing == claude_billing.SUBSCRIPTION
+                               else "Check ANTHROPIC_API_KEY and restart Pulse.")
+                        logger.error(f"Non-retryable Claude error (auth, {billing} billing). {fix}")
                         return ""
                     continue  # retry transient failures
 

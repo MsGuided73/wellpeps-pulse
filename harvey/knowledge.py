@@ -555,6 +555,60 @@ def names_wellpeps(text: str) -> bool:
     return bool(_wellpeps_rx(config_dir()).search((text or "")[:MAX_MENTION_TEXT_CHARS]))
 
 
+# --- Topic gate (first live pull, 2026-10-09) --------------------------------------
+# A post is "in WellPeps' market" when it names WellPeps, a competitor, a
+# WellPeps product / drug (generic, brand, misspelling, specific slang) or a
+# telehealth / treatment-category term. Off-topic posts are dropped and never
+# trip the urgent-keyword override ("lawsuit" in a religion post, "fraud" in a
+# business roundup). Deterministic; no model call.
+TOPIC_TERMS = (
+    "telehealth", "telemedicine", "tele-health", "online doctor", "online provider", "online clinic",
+    "GLP-1", "GLP1", "GLP 1", "GLP-1s", "weight loss", "weight-loss", "hair loss", "hair-loss", "hairloss",
+    "erectile", "compounded", "compounding pharmacy", "peptide", "peptides", "TRT",
+)
+# Slang too common in unrelated posts to signal the market on its own.
+_AMBIGUOUS_SLANG = frozenset({"the shot", "the jab", "fin", "big 3", "serm", "gluta", "microdose", "blue pill"})
+# Competitor aliases that are everyday words or first names: not a market
+# signal on their own (the full competitor name still is).
+_TOPIC_IGNORE_ALIASES = frozenset({"hers", "hymns", "roman", "henry", "mochi", "fella", "orderly", "ww",
+                                   "sequence", "rex", "strut", "hone", "joi", "blokes", "marek", "fountain",
+                                   "defy"})
+# Competitor names / aliases that are ordinary words: matched case-sensitively.
+_AMBIGUOUS_NAMES = frozenset({"ro", "found", "eden", "fridays", "willow", "emerge", "sesame", "keeps",
+                              "maximus", "novos", "superpower", "elysium", "calibrate", "form health"})
+
+
+@lru_cache(maxsize=None)
+def _topic_rx(directory: Path) -> tuple[re.Pattern[str], re.Pattern[str] | None]:
+    kw = _keywords(directory)
+    terms = {*kw.brand.exact, *kw.brand.variants, *kw.products.names, *kw.products.generics,
+             *kw.products.brand_names, *kw.products.misspellings, *TOPIC_TERMS,
+             *(t for t in kw.products.slang if t.lower() not in _AMBIGUOUS_SLANG)}
+    terms |= {n for p in _products(directory).products for n in (*p.generic_names, *p.brand_equivalents)}
+    exact: set[str] = set()
+    for comp in _competitors(directory).all():
+        for term in (comp.name, *comp.aliases):
+            key = term.strip().lower()
+            if key in _TOPIC_IGNORE_ALIASES:
+                continue
+            (exact if key in _AMBIGUOUS_NAMES else terms).add(term)
+
+    def rx(words, flags):
+        names = sorted({w.strip() for w in words if w and w.strip()}, key=len, reverse=True)
+        if not names:
+            return None
+        return re.compile(r"(?<![\w])(?:" + "|".join(re.escape(n) for n in names) + r")(?![\w])", flags)
+
+    return rx(terms, re.IGNORECASE), rx(exact, 0)
+
+
+def on_topic(text: str) -> bool:
+    """True when ``text`` is in WellPeps' market (see TOPIC_TERMS)."""
+    body = (text or "")[:MAX_MENTION_TEXT_CHARS]
+    loose, exact = _topic_rx(config_dir())
+    return bool((loose and loose.search(body)) or (exact and exact.search(body)))
+
+
 def medication_names() -> list[str]:
     """Generic and brand drug names from products.yaml (R38 filter input)."""
     names = {

@@ -91,4 +91,27 @@ slack_query:
   per_user_per_hour: 20   # answered questions per Slack user per rolling hour
 
 # Days to keep mention text before purging (pending legal sign-off).
+# Live collection (Phase 9, harvey/collect.py). OFF until WellPeps' legal
+# sign-off on scraping (docs/PLAN.md). Every run costs Apify credit: capped
+# per run (max_items, max_charge_usd) and per calendar month
+# (monthly_budget_usd; the Apify account's own usage limit also applies).
+# Run once by hand: `pulse ingest --apify-reddit` (needs APIFY_TOKEN).
+collectors:
+  apify_reddit:
+    enabled: false
+    interval_minutes: 720       # twice a day
+    max_items: 30               # ~$0.004 per post on the Apify Free plan
+    max_charge_usd: 0.25        # hard cap per run (Apify maxTotalChargeUsd)
+    monthly_budget_usd: 4.0     # stop scheduling once this month's runs cost this
+    lookback_hours: 48          # never older than this, even on the first run
+    searches:                   # Reddit-wide, newest first; exact phrases, buying intent (R-11)
+      - '"WellPeps"'
+      - '"compounded tirzepatide" telehealth'
+      - '"compounded semaglutide" telehealth'
+      - '"GLP-1" telehealth price'
+      - '"GLP-1" provider recommendation'
+      - '"switching" "GLP-1" provider'
+      - '"Henry Meds"'
+      - '"Hims" GLP-1'
+
 retention_days: 180

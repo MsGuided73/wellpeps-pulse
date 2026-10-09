@@ -295,6 +295,9 @@ function ownerHtml(owner) {
 }
 
 function pagedHtml(e) {
+  if (e.kind === 'safety_watch') {
+    return '<span class="badge t-waiting" title="Serious health report not involving WellPeps: listed for a daily look, never paged">Safety watch (not paged)</span>';
+  }
   const at = parseTs(e.notified_at);
   if (!e.notified || !at) return '<span class="badge t-waiting" title="Slack page not sent yet; the sweep retries">Not paged</span>';
   const sameDay = at.toDateString() === new Date().toDateString();
@@ -597,6 +600,8 @@ function engagementHtml(d) {
     if (g.drafted && !g.satisfied) {
       chips.push(toneBadge('Guide reference missing', 'bad'));
     }
+  } else if (g && g.mode === 'omit') {
+    chips.push(tag('Guide', 'none: ' + (g.why || 'no chapter answers this question')));
   }
   if (e.persona) chips.push(tag('Speaking as', e.persona.persona === 'identified_employee'
     ? 'identified employee (' + e.persona.display_name + ')' : 'official account'));

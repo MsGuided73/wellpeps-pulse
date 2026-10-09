@@ -33,7 +33,7 @@ from harvey import communities, knowledge, protocol
 from harvey.agents import prompting
 from harvey.batching import run_by_thread
 from harvey.agents.safety_screen import ScreenResult, apply_screen, mentions_health_term
-from harvey.escalation import SEVERE_KINDS, escalation_kind
+from harvey.escalation import SAFETY_WATCH, SEVERE_KINDS, escalation_kind
 from harvey.models import (
     AuditEvent,
     AuditEventType,
@@ -180,6 +180,7 @@ def _verbatim_phrases(phrases: list[str], text: str) -> list[str]:
 
 
 SEVERE_REASON = "severe_category"
+OFF_TOPIC_REASON = "off_topic"
 
 
 def apply_safety_net(triage: Triage, text: str) -> Triage:
@@ -191,6 +192,17 @@ def apply_safety_net(triage: Triage, text: str) -> Triage:
     ``route_status``) and never sits in ``triaged`` where it can't be drafted.
     """
     update: dict = {}
+    # Topic gate (first live pull, 2026-10-09): a post outside WellPeps'
+    # market is dropped and never trips the keyword override ("lawsuit" in a
+    # religion post). The safety screen can still flag it afterwards.
+    if not knowledge.on_topic(text):
+        reason = f"{OFF_TOPIC_REASON}; {triage.urgency_reason}".rstrip("; ")
+        return triage.model_copy(update={"relevant": False, "reply_appropriate": False,
+                                         "urgency_reason": reason[:300]})
+    # Naming WellPeps makes WellPeps the subject, whatever the model said
+    # (escalations and boundary replies depend on it).
+    if triage.subject_type != "wellpeps" and knowledge.names_wellpeps(text):
+        update["subject_type"] = "wellpeps"
     hit = knowledge.urgent_override(text)
     if hit:
         override_category, pattern = hit
@@ -345,7 +357,10 @@ def route_status(triage: Triage) -> MentionStatus:
 
     if not triage.relevant:
         return MentionStatus.DROPPED
-    if escalation_kind(triage) in SEVERE_KINDS and engagement.reply_mode(triage) != "boundary_only":
+    kind = escalation_kind(triage)
+    if kind == SAFETY_WATCH:
+        return MentionStatus.ESCALATED  # off the reply queue, on the daily safety watch
+    if kind in SEVERE_KINDS and engagement.reply_mode(triage) != "boundary_only":
         return MentionStatus.ESCALATED
     return MentionStatus.TRIAGED
 
@@ -427,6 +442,10 @@ async def _triage_one(state, triager, mention, report: "TriageReport", escalate,
         # Python, after every model call): its ESCALATE route feeds
         # escalation_kind, its classification the situation match.
         triage = await protocol.apply(state, mention, triage)
+        # Review gates (not ours / not worth it): after the protocol, which
+        # decides the situation; recorded so drafting and the heartbeat agree.
+        from harvey import engagement  # late: engagement imports compliance -> knowledge
+        triage = engagement.with_review_gate(triage)
         status, escalation = await _record(state, mention, triage, escalate, screened)
     except Exception as exc:
         report.errors += 1
@@ -437,7 +456,7 @@ async def _triage_one(state, triager, mention, report: "TriageReport", escalate,
     report.paged += int(getattr(escalation, "notified_at", None) is not None)
     if status is MentionStatus.DROPPED:
         report.dropped += 1
-    elif status is MentionStatus.ESCALATED or escalation_kind(triage) in SEVERE_KINDS:
+    elif status is MentionStatus.ESCALATED or escalation_kind(triage) in (*SEVERE_KINDS, SAFETY_WATCH):
         # Severe escalations, including those kept ``triaged`` for the
         # guide's approved boundary reply (they are paged all the same).
         report.escalated += 1

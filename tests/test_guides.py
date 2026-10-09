@@ -211,9 +211,11 @@ def test_the_catch_all_situation_needs_no_guide():
 def test_misinformation_correction_gets_a_guide_only_when_one_fits():
     t = _triage(subtype="misinformation_about_wellpeps")
     situation = engagement.situation_of(t)
-    assert guides.requirement_for(situation, ALLOWED, t, _mention("WellPeps auto-approves everyone")).mode == "none"
+    assert guides.requirement_for(situation, ALLOWED, t, _mention("WellPeps auto-approves everyone")).mode == "omit"
     fits = guides.requirement_for(situation, ALLOWED, t, _mention("WellPeps auto-approves everyone for hair loss"))
-    assert fits.mode == "link" and fits.pick.guide.slug == "hair-restoration"
+    # The Hair Restoration guide fits the program, but none of its chapters
+    # answers "auto-approves everyone", so it is considered and omitted.
+    assert fits.mode == "omit" and fits.pick.guide.slug == "hair-restoration"
 
 
 # --- Deterministic check ---------------------------------------------------------------------------
@@ -318,7 +320,7 @@ def test_drafter_prompt_requires_the_how_it_helps_sentence():
     claims = candidate_claims(t.product, drug=t.drug, category=t.category, preferred=g.preferred_claims,
                               guide_claim_id=g.guide_claim_id)
     prompt = build_prompt(mention, t, claims, guidance=g)
-    assert "Smart Patient's Guide (REQUIRED by WellPeps)" in prompt
+    assert "Smart Patient's Guide (a chapter answers this question, so include it)" in prompt
     assert '"What\'s actually included in the price"' in prompt
     assert "our free GLP-1 Weight Loss guide (it asks for your email)" in prompt
     assert "Chapters in this guide (approved guide content" in prompt
@@ -344,7 +346,7 @@ def test_reviewer_checks_relevance_and_specificity():
     prompt = reviewer_mod.build_prompt(WITH_GUIDE, "reddit", _mention(PRICE_POST),
                                        [by_id[c] for c in GUIDE_IDS], g)
     assert 'Smart Patient\'s Guide (rule id "GUIDE"' in prompt
-    assert "Guide: REQUIRED (WellPeps instruction)" in prompt
+    assert "Guide: EXPECTED (a chapter answers this question)" in prompt
     assert "generic" in prompt and "`needs_human`" in prompt
     assert "Chapters in this guide (approved guide content)" in prompt
 
@@ -436,3 +438,49 @@ def test_examples_show_the_guide_pattern():
         assert any(t in example.reply for t in titles), example.id
         assert "it asks for your email" in example.reply
         assert guides.pick_for(text=example.post).guide.slug == guide.slug, example.id
+
+
+# --- Refined rule (Derek Goldberg's review, 2026-10-07) -------------------------------------------
+
+UNKNOWN = ReplyContext(community_id="reddit:r/x", participation="unknown", links_allowed=None)
+
+
+def test_unverified_community_gets_no_guide_even_by_name():
+    req = _requirement(UNKNOWN)
+    assert req.mode == "forbidden" and "unverified" in req.why
+    red, _ = guides.reference_hits(WITH_GUIDE, IDS, req)
+    assert red and red[0].rule_id == "GUIDE"
+
+
+def test_no_matching_chapter_means_the_guide_is_omitted_with_a_reason():
+    req = _requirement(ALLOWED, text="tirzepatide question")
+    assert req.mode == "omit" and not req.required and req.why == guides.OMIT_REASON
+    assert guides.reference_hits(ANSWER, IDS, req) == ([], [])
+
+
+def test_a_matching_chapter_still_means_include_the_guide():
+    req = _requirement(ALLOWED)
+    assert req.mode == "link" and req.pick.helps and req.pick.chapter == "What's actually included in the price"
+
+
+def test_a_chapter_that_is_not_verbatim_guide_content_is_flagged():
+    invented = WITH_GUIDE.replace("What's actually included in the price", "How to save on your GLP-1")
+    _, yellow = guides.reference_hits(invented, IDS, _requirement(ALLOWED))
+    assert [h.reason for h in yellow] == [guides.CHAPTER_REASON]
+    assert guides.reference_hits(WITH_GUIDE, IDS, _requirement(ALLOWED)) == ([], [])
+
+
+def test_competitor_complaint_asking_for_alternatives_is_answered_not_dropped():
+    for decision in ("appropriate_alternative", "educational_only"):
+        sit = engagement.situation_for("complaint", "", "competitor", decision)
+        assert sit.reply == "draft" and sit.id.startswith("protocol_"), (decision, sit.id)
+    assert engagement.situation_for("complaint", "", "competitor").id == "complaint_other"
+    assert engagement.situation_for("complaint", "", "wellpeps").id == "complaint"
+    assert engagement.situation_for("billing_fraud", "", "wellpeps").id == "billing_complaint"
+
+
+def test_provider_line_is_only_for_treatment_questions_in_the_prompt():
+    t, g = _guidance()
+    prompt = build_prompt(_mention(PRICE_POST), t, [], guidance=g)
+    assert "provider-determines line only when the post is about treatment choice" in prompt
+    assert "-> the provider-determines line" not in prompt

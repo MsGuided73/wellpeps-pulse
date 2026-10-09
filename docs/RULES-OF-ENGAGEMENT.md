@@ -113,7 +113,9 @@ The disclosure must be in the first sentence and easy to notice ([AMG] §4;
    runs the decision sequence and stores the classification, escalation
    route, opportunity score and record on the triage row.
 3. **Escalation** pages the owner for severe categories, safety subtypes and
-   the protocol's ESCALATE route (also when the public decision is HOLD).
+   the protocol's ESCALATE route (also when the public decision is HOLD),
+   **only when the post is about WellPeps** (see "Review gates and incident
+   routing" below).
 4. **The situation** (first match in `engagement_guide.yaml`) decides the
    reply mode: `draft` (model draft in the template's shape), `boundary_only`
    (the approved response verbatim, no model call), `stop` (empty draft for a
@@ -123,6 +125,44 @@ The disclosure must be in the first sentence and easy to notice ([AMG] §4;
    community's rules) and, for model drafts, the adversarial reviewer.
 6. **A human** approves in the review desk (with the clinical gate for adverse
    events and emergencies), copies the reply and posts it by hand.
+
+### Review gates and incident routing (user decision 2026-10-09)
+
+From the first live Reddit pull (22 real posts): Pulse was reviewing and paging
+on posts that could never benefit WellPeps. A post now reaches the review queue
+only through three gates, in this order (safety and permission before benefit,
+so benefit is never a reason to engage with someone vulnerable, [CP] §1):
+
+1. **Relevant** (`knowledge.on_topic`, deterministic): the post names WellPeps,
+   a competitor, a WellPeps product or drug (generic, brand, misspelling,
+   specific slang), or a telehealth / treatment-category term. Otherwise it is
+   dropped (`off_topic`) and the urgent-keyword override never fires on it.
+   Competitor aliases that are everyday words or first names ("Henry", "Hers",
+   "Roman", "Sequence"...) are not a signal on their own.
+2. **Allowed**: the community rules and the situation playbook permit a reply,
+   and a clinical or boundary reply (`boundary_only` / `stop`) goes only to a
+   post about WellPeps (`gate:not_ours`). Pulse does not answer strangers'
+   side-effect, dose, lab or treatment posts at all.
+3. **Worth it** (`engagement.worth_it`): a reply could plausibly benefit
+   WellPeps: the post is about WellPeps or a competitor, the protocol says
+   APPROPRIATE ALTERNATIVE / EDUCATIONAL ONLY, the person is buying, or the
+   question is about process, pricing, choosing or comparing providers, or
+   WellPeps itself. Otherwise `gate:not_worth_it`: no draft. Trends and the
+   language bank still count it.
+
+**Incident routing** (pending WellPeps clinical / compliance confirmation; this
+narrows [AMG] §10 and [CP] Example 4, which cover adverse events "in any
+thread"):
+
+| The post | Pulse |
+|---|---|
+| About WellPeps (names it, or the person appears to be a WellPeps patient) | Pages the owner as before; approved boundary reply where the guide has one |
+| Serious health report (emergency, self-harm, an urgent keyword such as ER / hospitalized / gallbladder, a possible minor, possible serious harm) not about WellPeps | **Safety watch**: an escalation row that is never paged, reviewed daily (24 h window), status `escalated`, no reply, not counted as an open escalation |
+| Other companies' legal, privacy or billing issues; expected or cosmetic side effects not about WellPeps | No escalation, no reply; trends only |
+
+Basis: Pre-LegitScript plan ("Respond only where WellPeps can add value";
+"Don't respond merely because a keyword appeared"); user decision 2026-10-09;
+`docs/REVISIONS-LOG.md` R-11 to R-14.
 
 ## 4. Situation playbook
 
@@ -143,7 +183,7 @@ is open).
 | Abusive / threatening thread (`abusive`) | Stop: empty draft for a human; moderation / escalation by hand | — | — | [AMG] §22; [OM] §13.3 |
 | Billing complaint about WellPeps (`billing_complaint`) | Template C (CLM-AMG-09-BILLING, "I'm part of the WellPeps team.") | billing_fraud | reviewer (blocked until FINALIZE support_channel) | [AMG] §9, §25 C; [CP] Example 17 |
 | Complaint about WellPeps (`complaint`) | Template C (CLM-AMG-APPX-COMPLAINT); a viral one is also paged | viral_negative when urgent | reviewer (blocked until FINALIZE support_channel) | [AMG] §9, §25 C; [OM] §13 |
-| Complaint about another company (`complaint_other`, `billing_other`) | No reply; never pile on a competitor | billing_fraud for fraud accusations | — | [AMG] §13; [OM] §5.3 |
+| Complaint about another company (`complaint_other`, `billing_other`) | No reply; never pile on a competitor. Ordered AFTER the protocol's answering situations (precedence fix 2026-10-07): a competitor complaint that asks for alternatives is answered as APPROPRIATE ALTERNATIVE / EDUCATIONAL ONLY | billing_fraud for fraud accusations | — | [AMG] §13; [OM] §5.3 |
 | Poster shares medical details (`personal_medical_info`) | Privacy response (CLM-AMG-08-POSTED-DETAILS) | — (privacy page in protocol scope) | reviewer (blocked until FINALIZE care_routing) | [AMG] §8; [OM] §10.2; [CT] Module 5; [CP] Example 16 |
 | Wants to send records by DM (`records_dm_request`) | CLM-AMG-08-DM-RECORDS | — | reviewer (FINALIZE care_routing) | [AMG] §8; [OM] §10.3 |
 | Dose / labs / stop-change / which treatment / results / is it safe / do I qualify, asked of WellPeps | Template B boundary (CLM-AMG-06-*, -25-TEMPLATE-B, -07-*, -05-QUALIFY) | — | reviewer | [AMG] §5-7, §25 B; [OM] §9, §19; [CT] Module 3 |
@@ -176,33 +216,48 @@ is open).
   otherwise the reply is the verbatim template. Never on the emergency line or on approved
   responses that carry their own disclosure. Clinical approval still applies.
 
-### Smart Patient's Guide in every answering reply (binding user instruction, 2026-10-07)
+### Smart Patient's Guide when a chapter materially helps (user instruction 2026-10-07, refined the same day)
 
 > "We must refer to a relevant guide and point to how the guide can help."
 
-- **Where**: every drafted reply in an answering situation (`guide: required` in
-  `config/engagement_guide.yaml`): general questions and education, process / eligibility /
-  availability questions, purchase intent, pricing, competitor comparison, clinic
-  recommendations, "has anyone used WellPeps?", and the protocol's APPROPRIATE ALTERNATIVE and
-  EDUCATIONAL ONLY decisions. A correction of misinformation about WellPeps carries one only when
-  a program guide covers the topic (`guide: if_specific`).
+Refined after Derek Goldberg's review (2026-10-07): Pulse **considers** the relevant guide for
+every answering reply and **includes** it when a specific chapter materially helps with the
+question. When no chapter answers the question the guide is omitted and the reason is recorded
+(`omit`: "no guide chapter answers this question"), so there is a real "no relevant guide"
+outcome. Basis: [PL] Channel 1 step 6 ("Not every comment gets a link") and Channel 3 ("Don't drop
+links in every response", "Don't mention WellPeps in every response", "Don't use identical
+answers").
+
+- **Where**: considered in every drafted reply in an answering situation (`guide: required` in
+  `config/engagement_guide.yaml` now means "consider; include when a chapter answers"): general
+  questions and education, process / eligibility / availability questions, purchase intent,
+  pricing, competitor comparison, clinic recommendations, "has anyone used WellPeps?", the
+  protocol's APPROPRIATE ALTERNATIVE and EDUCATIONAL ONLY decisions (including a complaint about
+  another company that asks for alternatives) and corrections of misinformation about WellPeps.
 - **Which guide**: the single most relevant Smart Patient's Guide (`config/guides.yaml`, from the
   site's `ebooks.ts` / `guide-pages.ts`; `harvey/guides.py`): program / product / drug / post
-  words; NAD+ posts get the NAD+ guide; the series index only when no single guide fits.
+  words; NAD+ posts get the NAD+ guide; the series index only when no single guide fits and one
+  of its own chapters answers the question.
 - **How**: answer first, then ONE sentence naming the guide and how it helps with THIS question,
   naming the chapter that answers it (e.g. GLP-1 guide -> "What's actually included in the price"
   for a follow-up / pricing question; Hair Restoration guide -> "What does a good result actually
-  look like?" or "Oral vs. topical: what actually changes?"), then the provider-determines line.
+  look like?" or "Oral vs. topical: what actually changes?"). Chapter titles are verbatim guide
+  content, picked by Pulse's deterministic rule, never written by the model. Vary the wording; no
+  stock sentence. The provider-determines line follows only when the post is about treatment
+  choice, suitability, eligibility or results ([AMG] §3: state the boundary "when necessary").
   Help, not a pitch. Always "free, it asks for your email". The tracked registry link where the
   community allows links; otherwise the guide by name ("our free GLP-1 Weight Loss guide on the
   WellPeps website": no URL or domain, which would count as a link). Reddit up to ~110 words.
 - **Never**: adverse events, emergencies, self-harm, legal / regulatory, privacy, media,
   complaint or billing escalations, individual clinical questions (all boundary or no-reply
   situations), a possible minor (safety screen, or "I'm 16" in the post), or a community that
-  prohibits promotion / has not granted permission (then no guide at all).
+  prohibits promotion / has not granted permission / has unverified rules (then no guide at all,
+  by name or by link: a named guide is still a company resource offer; [CP] §2 "Unknown rules
+  mean HOLD", §10 "Never silently default unknown permission to allowed"; [OM] §5.1).
 - **Enforced**: the compliance filter (`GUIDE`): required but missing -> yellow "missing guide
   reference", one automatic redraft with that feedback, still missing -> `needs_human`; a guide
-  in an excluded situation -> red; a guide link without the email-gate disclosure -> yellow. The
+  in an excluded situation -> red; a guide link without the email-gate disclosure -> yellow; a
+  "chapter" that is not a verbatim chapter title from `config/guides.yaml` -> yellow. The
   reviewer checks relevance (wrong program -> reject) and specificity (generic -> needs_human).
   The review desk shows "Guide: <Title> -> <chapter>".
 - **Approval**: the user's instruction counts as WellPeps' approval of the gated-download
@@ -328,7 +383,9 @@ label, rule-based rationale, route and whether safety was routed despite a
 public hold, community rule status, intent tags, need (label and focus),
 risks (clinical flag, privacy flag, competitor-claim risk, confidence),
 opportunity components / total / band (or null), brand mode and limits,
-disclosure, resource (always "none" until a verified live link fits),
+disclosure, resource (the guide link where the community allows links and promotion and a
+chapter answers the question; otherwise "none". The review desk shows the guide decision: link,
+name only, omitted with its reason, or forbidden with its reason),
 evidence (the approved claim ids behind the WellPeps facts), required
 review, blockers, queue rank, and "human only" publishing. The review desk
 adds the escalation handoff status ([CP] §5: never "escalated" unless the
@@ -368,7 +425,7 @@ database of each community's rules"). Every community starts `unknown`.
 | Rule status | Effect |
 |---|---|
 | `prohibited` | No reply at all (audit `skipped`, never retried); the protocol says DO NOT ENGAGE; a draft is red (R44). |
-| `unknown` (or not registered) | Competitor / switching posts: HOLD, nothing drafted ([CP] §2). Everything else: drafted, yellow "community rules unverified", no link (a link is red). |
+| `unknown` (or not registered) | Competitor / switching posts: HOLD, nothing drafted ([CP] §2). Everything else: drafted, yellow "community rules unverified", no link (a link is red) and no Smart Patient's Guide, even by name (red). Approval of these drafts is still possible today; blocking it until permission is verified is the next planned change ([CP] §2, §10; [OM] §5.1). |
 | `with_permission`, permission not obtained | Yellow; no link and no promotion (red); an alternatives request is downgraded to EDUCATIONAL ONLY. |
 | `allowed` | Normal; `links_allowed: false` still makes any link red. |
 | no community (owned channels, review sites, Instagram / TikTok comments) | Platform rules only. |
@@ -388,7 +445,8 @@ with no patient-specific discussion.
 - At most one link, only from `config/links.yaml` through a cited claim
   (R6), only when it directly answers the question and the community allows
   links ([AMG] §14; [CP] §8). In answering situations the relevant Smart
-  Patient's Guide link is required (user instruction 2026-10-07, section 4).
+  Patient's Guide link is included when a guide chapter answers the question
+  (user instruction 2026-10-07, refined; section 4).
 - Never in safety, emergency or individual clinical replies ([CP] §8).
 - No verified link (`live: false`): yellow and approval blocked; never a
   generic homepage or invented slug ([CP] §8).
@@ -438,6 +496,7 @@ a link, cites a promotional claim, names a price or uses a call to action
 | Billing / account complaint about WellPeps | Template C | billing_fraud |
 | Other complaint about WellPeps | Template C | viral_negative when urgent; otherwise support by hand (no queue yet) |
 | Threat / serious safety concern, self-harm | none | adverse_event |
+| Any of the above **not about WellPeps** (2026-10-09, pending clinical confirmation) | none | serious health reports: safety watch (never paged); everything else: none |
 
 Escalations ignore quiet hours, page with a link and a category only, are
 re-paged by the sweep when unsent or past SLA, and show "NOT handed off" on
@@ -506,7 +565,7 @@ information here."
 | R38: no medication or drug-brand names in replies (`forbid_medication_names_in_replies: true`) | Names allowed for general treatment-category education (yellow for review); never an individual recommendation or dose; compounded-equivalence stays red (retained R15/R16) | [CT] Module 3 (general-to-individual boundary: "the difference between semaglutide and tirzepatide" can be answered generally); [CG] Official Account; [OM] §9.1; [PL] "Review first: medication names" |
 | Conversion playbook step 3: ONE WellPeps fact in every purchase-intent / question reply | WellPeps facts only when the person asks about WellPeps or explicitly asks for alternatives in a community that allows it; otherwise the disclosure only | [CP] §1, §7 (brand modes); [OM] §12.2 ("If a WellPeps mention is not necessary... consider leaving it out"); [AMG] §2 |
 | Conversion playbook: the program's guide claim pushed right after the disclosure, "one CTA (the guide)", guide link on purchase intent | A resource is optional, only when it directly answers and the community allows links, never in safety / clinical replies, email gate stated; the guide claim is offered after the fixed claims | [CP] §8; [AMG] §14; [OM] §11.1; [PL] Channel 1 step 6 ("Not every comment gets a link") |
-| [CP] §8 / the row above: "a resource is optional", protocol record `resource` "none" unless a live link fits, EDUCATIONAL ONLY "no guide offer" | **User-directed override (2026-10-07)**: every answering reply (incl. APPROPRIATE ALTERNATIVE and EDUCATIONAL ONLY) points to the most relevant Smart Patient's Guide and says how it helps, naming a chapter; the protocol record's `resource` is that guide link where the community allows links and promotion. Safety, clinical, legal, privacy, media, complaint / billing, minors and no-promotion communities stay excluded | Binding user instruction 2026-10-07 ("We must refer to a relevant guide and point to how the guide can help"); section 4 |
+| [CP] §8 / the row above: "a resource is optional", protocol record `resource` "none" unless a live link fits, EDUCATIONAL ONLY "no guide offer" | **User-directed override (2026-10-07), refined the same day after Derek Goldberg's review**: every answering reply (incl. APPROPRIATE ALTERNATIVE and EDUCATIONAL ONLY) considers the most relevant Smart Patient's Guide and includes it, naming a chapter, when a chapter materially helps; otherwise it is omitted with the reason recorded; the protocol record's `resource` is that guide link where the community allows links and promotion. Safety, clinical, legal, privacy, media, complaint / billing, minors and no-promotion communities stay excluded | Binding user instruction 2026-10-07 ("We must refer to a relevant guide and point to how the guide can help"); section 4 |
 | Default disclosure "Disclosure: I work with WellPeps, so I am not neutral." (CLM-R3-DISCLOSURE) | Default "I work with WellPeps." (old form still accepted) | [AMG] §4; [CP] §7 |
 | CLM-PRICE-FOLLOWUP "...included in the one monthly price" as a fixed playbook claim | Not offered first; FINALIZE `pricing`; the Live Reference's approved ongoing-support fact is used instead | [CP] §6; [LR] §6 ("One Simple Price. Everything Included." needs verification); [AMG] §12 FINALIZE |
 | CLM-PRICE-ALLIN (includes "standard shipping") | FINALIZE `pricing` | [LR] §6-7 (shipping CONFIRM); [CP] §6 |

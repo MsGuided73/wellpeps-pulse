@@ -34,6 +34,19 @@ from harvey.models.knowledge import Situation
 # Safety-screen / triage markers that block any reply, boundary replies included.
 SAFETY_BLOCK_MARKERS = ("safety_screen:minor", "safety_screen:self_harm", "safety_screen:failed",
                         "triage_failed")
+# Review gates (first live pull, user decision 2026-10-09; docs/REVISIONS-LOG.md
+# R-13, R-14). Appended to the triage's urgency_reason at triage time so the
+# Python and SQL views of "what gets drafted" stay identical.
+GATE_NOT_OURS = "gate:not_ours"            # a boundary / clinical reply to a post not about WellPeps
+GATE_NOT_WORTH_IT = "gate:not_worth_it"    # a reply could not plausibly benefit WellPeps
+NO_REPLY_MARKERS = (*SAFETY_BLOCK_MARKERS, GATE_NOT_OURS, GATE_NOT_WORTH_IT)
+# Questions where a WellPeps answer can lead somewhere (choosing, comparing,
+# how it works, asking about WellPeps).
+BENEFIT_SUBTYPES = frozenset({
+    "process_question", "pricing_question", "has_anyone_used_wellpeps", "clinic_recommendation",
+    "competitor_comparison", "competitor_comparison_wellpeps", "misinformation_about_wellpeps",
+})
+BENEFIT_DECISIONS = frozenset({"appropriate_alternative", "educational_only"})
 DRAFTING_MODES = frozenset({"draft", "boundary_only", "stop"})
 APPROVED_RESPONSE_MODEL = "approved-response"
 RECENT_REPLY_LIMIT = 2000
@@ -88,10 +101,57 @@ def safety_blocked(triage: Triage | None) -> bool:
 
 
 def reply_mode(triage: Triage) -> str:
-    """draft | boundary_only | stop | no_reply for this triage (safety screen included)."""
-    if safety_blocked(triage):
+    """draft | boundary_only | stop | no_reply for this triage (safety screen
+    and review gates included)."""
+    if safety_blocked(triage) or gated(triage):
         return "no_reply"
     return situation_of(triage).reply
+
+
+def gated(triage: Triage | None) -> str:
+    """The review gate that stopped this triage ("" = none)."""
+    reason = (triage.urgency_reason if triage else "") or ""
+    return next((g for g in (GATE_NOT_OURS, GATE_NOT_WORTH_IT) if g in reason), "")
+
+
+def worth_it(triage: Triage) -> bool:
+    """Gate 3: a reply could plausibly benefit WellPeps."""
+    category = _value(triage.category)
+    return (triage.subject_type in ("wellpeps", "competitor")
+            or (triage.protocol_decision or "") in BENEFIT_DECISIONS
+            or category == "purchase_intent"
+            or (triage.subtype or "") in BENEFIT_SUBTYPES)
+
+
+def review_gate(triage: Triage) -> str:
+    """Which review gate applies to a fresh triage ("" = it may be drafted).
+    Order: safety and permission (situations, protocol) first, then gate 2b
+    (clinical / boundary replies only for posts about WellPeps), then gate 3
+    (benefit). Benefit is never a reason to engage; it only filters."""
+    if not triage.relevant or safety_blocked(triage):
+        return ""
+    mode = situation_of(triage).reply
+    if mode in ("boundary_only", "stop") and triage.subject_type != "wellpeps":
+        return GATE_NOT_OURS
+    if mode == "draft" and not worth_it(triage):
+        return GATE_NOT_WORTH_IT
+    return ""
+
+
+def with_review_gate(triage: Triage) -> Triage:
+    """The triage with its review gate recorded (a new copy; unchanged when none).
+
+    The gate goes after the existing reason: its leading marker (override:,
+    safety_screen:, severe_category...) is what ``escalation.reason_code`` and
+    ``explain.urgency_explanation`` read. The reason is trimmed so the gate
+    always fits in the 300-character column."""
+    gate = review_gate(triage)
+    if not gate:
+        return triage
+    suffix = f"; {gate}"
+    reason = (triage.urgency_reason or "").strip()
+    reason = f"{reason[:300 - len(suffix)]}{suffix}" if reason else gate
+    return triage.model_copy(update={"urgency_reason": reason})
 
 
 def drafts_reply(triage: Triage) -> bool:
@@ -146,12 +206,12 @@ def draftable_where() -> tuple[str, tuple]:
     skipped before, and a situation that drafts (model drafts also need
     triage's reply_appropriate)."""
     case, case_params = _mode_case_sql()
-    blocks = " AND ".join("instr(COALESCE(t.urgency_reason, ''), ?) = 0" for _ in SAFETY_BLOCK_MARKERS)
+    blocks = " AND ".join("instr(COALESCE(t.urgency_reason, ''), ?) = 0" for _ in NO_REPLY_MARKERS)
     sql = (f"m.status = 'triaged' AND t.relevant = TRUE AND {blocks} "
            f"AND NOT EXISTS (SELECT 1 FROM audit_log a WHERE a.mention_id = m.id AND a.event = '{SKIPPED_EVENT}') "
            f"AND (({case} = 'draft' AND t.reply_appropriate = TRUE) "
            f"OR {case} IN ('boundary_only', 'stop'))")
-    return sql, (*SAFETY_BLOCK_MARKERS, *case_params, *case_params)
+    return sql, (*NO_REPLY_MARKERS, *case_params, *case_params)
 
 
 # --- Persona and approved replies ------------------------------------------------------------
@@ -446,8 +506,8 @@ class DraftGuidance:
         from harvey import guides
 
         if not self.guide_required:
-            return guides.GuideRequirement(self.guide_mode if self.guide_mode == "forbidden" else "none",
-                                           None, self.guide_why)
+            mode = self.guide_mode if self.guide_mode in ("forbidden", "omit") else "none"
+            return guides.GuideRequirement(mode, None, self.guide_why)
         guide = guides.by_claim_id(self.guide_claim_id)
         return guides.GuideRequirement(self.guide_mode, guides.GuidePick(guide, self.guide_chapters,
                                                                          self.guide_specific), self.guide_why)

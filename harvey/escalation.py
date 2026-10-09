@@ -58,6 +58,13 @@ _KIND_BY_SUBTYPE = {
 }
 _WELLPEPS_ONLY_SUBTYPES = {"media_inquiry": "legal"}
 VIRAL_NEGATIVE = "viral_negative"
+# Serious health report that does not involve WellPeps (user decision
+# 2026-10-09, pending WellPeps clinical confirmation): listed for a person to
+# scan daily, never paged, no SLA re-page.
+SAFETY_WATCH = "safety_watch"
+SAFETY_WATCH_REVIEW_MINUTES = 24 * 60
+_SERIOUS_SUBTYPES = frozenset({"emergency", "self_harm"})
+_SERIOUS_MARKERS = ("override:", "safety_screen:self_harm", "safety_screen:minor")
 # Kinds whose mention leaves the reply queue (status ``escalated``). A
 # viral negative is paged but stays ``triaged`` so a reply can be drafted.
 SEVERE_KINDS = frozenset(_KIND_BY_CATEGORY.values())
@@ -65,7 +72,7 @@ SEVERE_KINDS = frozenset(_KIND_BY_CATEGORY.values())
 
 def all_kinds() -> tuple[str, ...]:
     """Every kind ``escalation_kind`` can return."""
-    return (*_KIND_BY_CATEGORY.values(), VIRAL_NEGATIVE)
+    return (*_KIND_BY_CATEGORY.values(), VIRAL_NEGATIVE, SAFETY_WATCH)
 
 
 def _check_kinds_configured() -> None:
@@ -96,16 +103,22 @@ def escalation_kind(triage: Triage) -> str | None:
     """
     if not triage.relevant:
         return None
-    kind = _KIND_BY_CATEGORY.get(triage.category) or _KIND_BY_SUBTYPE.get(triage.subtype or "")
-    if kind:
-        return kind
     # The competitor / switching protocol's safety and incident route
     # (harvey/protocol.py; [CP] §4 step 2, §5), also when the public decision
     # is HOLD / DO NOT ENGAGE ("safety observations may still be routed
     # internally"). "support" has no paging owner yet (FINALIZE support_channel).
     route = getattr(triage, "protocol_route", "") or ""
-    if route in SEVERE_KINDS:
-        return route
+    kind = (_KIND_BY_CATEGORY.get(triage.category) or _KIND_BY_SUBTYPE.get(triage.subtype or "")
+            or (route if route in SEVERE_KINDS else None))
+    if kind:
+        # Only WellPeps' own incidents page anyone (user decision 2026-10-09).
+        # A serious health report that may involve an unnamed provider goes on
+        # the safety watch; everything else about other companies is trends.
+        if triage.subject_type == "wellpeps":
+            return kind
+        if kind == "adverse_event" and is_serious(triage):
+            return SAFETY_WATCH
+        return None
     if triage.subject_type == "wellpeps" and (triage.subtype or "") in _WELLPEPS_ONLY_SUBTYPES:
         return _WELLPEPS_ONLY_SUBTYPES[triage.subtype]
     if (
@@ -115,6 +128,16 @@ def escalation_kind(triage: Triage) -> str | None:
     ):
         return VIRAL_NEGATIVE
     return None
+
+
+def is_serious(triage: Triage) -> bool:
+    """A serious health report: an emergency or self-harm subtype, an urgent
+    keyword (ER, hospitalized, gallbladder...), self-harm or a possible minor
+    flagged by the safety screen, or the protocol's possible-serious-harm intent."""
+    reason = triage.urgency_reason or ""
+    return ((triage.subtype or "") in _SERIOUS_SUBTYPES
+            or any(marker in reason for marker in _SERIOUS_MARKERS)
+            or "possible_serious_harm" in (triage.intents or []))
 
 
 def owner_for(kind: str, config) -> str:
@@ -193,9 +216,14 @@ async def _page(notifier, mention, escalation, triage, config, *, breached=False
         return False
 
 
-async def escalate(state, notifier, mention: Mention, triage: Triage, config, now=None) -> Escalation:
-    """Open (or return the already-open) escalation for a mention and page it."""
-    kind = escalation_kind(triage)
+async def escalate(state, notifier, mention: Mention, triage: Triage, config, now=None,
+                   kind: str | None = None) -> Escalation:
+    """Open (or return the already-open) escalation for a mention and page it.
+
+    ``kind``: a human's choice (manual escalation from the desk). It bypasses
+    ``escalation_kind``, so a person can escalate any mention, WellPeps or not;
+    automatic escalations leave it None and follow the rules."""
+    kind = kind or escalation_kind(triage)
     if kind is None:
         raise ValueError(f"mention {mention.id} is not an escalation ({triage.category.value})")
     existing = await state.get_open_escalation(mention.id)
@@ -203,17 +231,20 @@ async def escalate(state, notifier, mention: Mention, triage: Triage, config, no
         return existing
 
     now = now or _utcnow()
+    watch = kind == SAFETY_WATCH
     draft = Escalation(
         mention_id=mention.id,
         kind=kind,
         owner=owner_for(kind, config),
-        sla_due_at=now + timedelta(minutes=config.escalation.sla_minutes),
+        sla_due_at=now + timedelta(minutes=SAFETY_WATCH_REVIEW_MINUTES if watch else config.escalation.sla_minutes),
         created_at=now,
     )
     escalation = draft.model_copy(update={"id": await state.create_escalation(draft)})
 
-    paged = await _page(notifier, mention, escalation, triage, config)
-    if paged:
+    paged = False if watch else await _page(notifier, mention, escalation, triage, config)
+    if watch:
+        logger.info(f"escalation {escalation.id}: on the safety watch (not paged)")
+    elif paged:
         await state.mark_escalation_notified(escalation.id, now)
         escalation = escalation.model_copy(update={"notified_at": now})
     else:
@@ -222,7 +253,7 @@ async def escalate(state, notifier, mention: Mention, triage: Triage, config, no
     await state.append_audit(AuditEvent(
         mention_id=mention.id, event=AuditEventType.ESCALATED, actor=ACTOR,
         verdict={
-            "action": "opened",
+            "action": "watch_listed" if watch else "opened",
             "escalation_id": escalation.id,
             "kind": kind,
             "owner": escalation.owner,
@@ -249,6 +280,8 @@ class SweepReport:
 
 
 async def _sweep_one(state, notifier, config, escalation: Escalation, now, report: SweepReport):
+    if escalation.kind == SAFETY_WATCH:
+        return  # a daily list for a person, never paged or re-paged
     due = escalation.sla_due_at is not None and now >= escalation.sla_due_at
     breach = due and not escalation.breached
     retry = escalation.notified_at is None

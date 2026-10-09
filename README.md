@@ -135,8 +135,10 @@ slackbot`, the read-only #pulse-query bot over an outbound Socket Mode
 connection; it idles healthily when the Slack tokens are unset). Everything is configured
 through environment variables; data lives in Supabase (`PULSE_DATABASE_URL`),
 and `PULSE_REQUIRE_POSTGRES=true` makes every command refuse to fall back to
-SQLite inside a container. The Claude CLI in the image uses
-`ANTHROPIC_API_KEY`.
+SQLite inside a container. The Claude CLI in the image bills
+`ANTHROPIC_API_KEY` (`PULSE_CLAUDE_BILLING` defaults to `api` when deployed);
+local runs and demos use the logged-in Claude subscription and never pass an
+API key to the CLI (`harvey/claude_billing.py`).
 
 - Health: the dashboard serves `GET /healthz` (public, `{"ok": true}` or 503);
   the worker's check is `pulse health --worker` (database reachable and a

@@ -107,7 +107,12 @@ async def _escalated(state, spy, config=None, **triage_kw):
 
 
 @pytest.mark.parametrize("category,urgency,subject_type,expected", [
-    (Category.ADVERSE_EVENT, Urgency.URGENT, "product", "adverse_event"),
+    (Category.ADVERSE_EVENT, Urgency.URGENT, "wellpeps", "adverse_event"),
+    # Not WellPeps: only WellPeps' own incidents page (user decision 2026-10-09,
+    # docs/REVISIONS-LOG.md R-13, pending WellPeps clinical confirmation). The
+    # default urgency_reason is a keyword override, so this one is serious.
+    (Category.ADVERSE_EVENT, Urgency.URGENT, "product", "safety_watch"),
+    (Category.LEGAL_REGULATORY, Urgency.URGENT, "competitor", None),
     (Category.LEGAL_REGULATORY, Urgency.URGENT, "wellpeps", "legal"),
     (Category.PRIVACY, Urgency.HIGH, "wellpeps", "privacy"),
     (Category.BILLING_FRAUD, Urgency.URGENT, "wellpeps", "billing_fraud"),
@@ -447,9 +452,9 @@ async def _seed(state, text, n):
 async def test_triage_batch_escalates_through_the_hook(state):
     spy = SlackSpy()
     config = _config()
-    adverse = await _seed(state, "emergency room last night after my dose", 1)
+    adverse = await _seed(state, "emergency room last night after my WellPeps GLP-1 dose", 1)
     viral = await _seed(state, "WellPeps ghosted me, do not sign up", 2)
-    praise = await _seed(state, "My provider checks in often", 3)
+    praise = await _seed(state, "My telehealth provider checks in often", 3)
     brain = FakeBrain({
         "emergency room": [_answer(category="praise", urgency="low")],
         "ghosted me": [_answer(category="complaint", urgency="urgent", sentiment=-0.9,
@@ -477,7 +482,7 @@ async def test_triage_batch_escalates_through_the_hook(state):
 
 @pytest.mark.asyncio
 async def test_failed_escalation_leaves_mention_new_for_retry(state):
-    mid = await _seed(state, "emergency room last night after my dose", 1)
+    mid = await _seed(state, "emergency room last night after my WellPeps GLP-1 dose", 1)
     brain = FakeBrain({"emergency room": [_answer(category="adverse_event", urgency="urgent")]})
 
     async def broken(mention, triage):

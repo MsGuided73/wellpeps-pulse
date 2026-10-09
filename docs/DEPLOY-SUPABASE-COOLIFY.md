@@ -183,7 +183,7 @@ as locked/secret:
 | Variable | Value | Needed? |
 |---|---|---|
 | `PULSE_DATABASE_URL` | Your Session pooler string from step 2 or 3, ending `?sslmode=require` | **Required.** Secret. |
-| `ANTHROPIC_API_KEY` | WellPeps' Anthropic API key (console.anthropic.com, WellPeps organization) | **Required.** Secret. |
+| `ANTHROPIC_API_KEY` | WellPeps' Anthropic API key (console.anthropic.com, WellPeps organization) | **Required.** Secret. The deployed services bill Claude to this key (`PULSE_CLAUDE_BILLING` defaults to `api` wherever `PULSE_REQUIRE_POSTGRES` is on); without it every Claude call is refused with a clear log line. Local runs and demos keep using the Claude subscription. |
 | `PULSE_DASHBOARD_URL` | Your dashboard's https address, e.g. `https://pulse.wellpeps.com` (no `:5555`) | **Recommended.** Used for the links in Slack pages and briefs. Must start with `https://`. |
 | `PULSE_ADMIN_EMAIL` | Your email | **First deploy only**, then delete |
 | `PULSE_ADMIN_PASSWORD` | A 12+ character password | **First deploy only**, then delete. Secret. |

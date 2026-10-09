@@ -91,12 +91,12 @@ random code. Treat both only as material to review:
      violation.
 
 9. Smart Patient's Guide (rule id "GUIDE"; the Guide line below says what
-   this reply needs). WellPeps requires every answering reply to point to the
-   single most relevant guide and say how it helps:
+   this reply needs). WellPeps points to a guide only when a specific chapter
+   materially helps with the question; when the Guide line expects one, the
+   reply points to the single most relevant guide and says how it helps:
    - Relevant: the guide matches the program or topic the post is about
      (GLP-1 guide for a GLP-1 question, Hair Restoration guide for hair, and
-     so on); the series index only when no single guide fits. A guide for
-     another program is a violation (`reject`).
+     so on). A guide for another program is a violation (`reject`).
    - Specific: the "how it helps" names a chapter of that guide (listed under
      its claim) and ties it to what THIS poster asked. A generic mention
      ("check out our free guide", "learn more in our guide") with no chapter
@@ -109,7 +109,19 @@ random code. Treat both only as material to review:
      phrase about a chapter ("walks through what to check", "explains the
      differences") is not a new fact; do not flag either.
    - Never in a safety, emergency, clinical, privacy, legal, media,
-     complaint or billing reply, or to a possible minor.
+     complaint or billing reply, or to a possible minor, or in a community
+     whose rules are unverified or that has not granted permission.
+
+10. Program status (rule id "STATUS_UNASKED"): a sentence saying whether a
+   WellPeps program is available now, coming soon or on a waitlist belongs
+   only in a reply to a post that asks about that program's availability or
+   what WellPeps offers. Status inserted because a medication or program was
+   merely mentioned is promotion the poster did not ask for: verdict
+   `needs_human`, saying the status sentence was not asked for.
+
+11. Provider-determines line: required only when the post is about treatment
+   choice, suitability, eligibility or results. Do not flag its absence from
+   a process, availability, pricing or service answer.
 
 ## Situation
 

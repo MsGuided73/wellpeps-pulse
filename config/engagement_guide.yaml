@@ -329,13 +329,6 @@ situations:
     link_policy: none
     notes: "Acknowledge, protect privacy, route to support. Never argue, never confirm patient status, never ask for account details publicly."
     sources: ["[AMG] §9, §24, §25 Template C", "[OM] §13", "[CT] Module 7"]
-  - id: billing_other
-    label: "Billing accusation about another company"
-    match: {categories: [billing_fraud]}
-    reply: no_reply
-    escalate: billing_fraud
-    link_policy: none
-    sources: ["[OM] §5.3"]
   - id: complaint
     label: "Complaint about WellPeps"
     match: {categories: [complaint], subject: wellpeps}
@@ -346,13 +339,6 @@ situations:
     link_policy: none
     notes: "Acknowledge without admitting unverifiable facts, do not debate, protect privacy, route support. A viral complaint is also paged (viral_negative)."
     sources: ["[AMG] §9, §25 Template C, Appendix A", "[OM] §13", "[CT] Module 7"]
-  - id: complaint_other
-    label: "Complaint about another company"
-    match: {categories: [complaint]}
-    reply: no_reply
-    link_policy: none
-    notes: "Not WellPeps' complaint to handle; never pile on a competitor."
-    sources: ["[AMG] §13", "[OM] §5.3"]
   # --- Privacy of the poster -------------------------------------------------------
   - id: records_dm_request
     label: "Wants to send medical records / labs privately"
@@ -448,7 +434,7 @@ situations:
     reply: draft
     guide: required
     preferred_claims: [CLM-R7-PROVIDER-CHECKLIST, CLM-LR-02-ONGOING-SUPPORT, CLM-AMG-05-HOW-IT-WORKS]
-    notes: "Explicit request for alternatives. Answer the underlying need first (what to ask any provider), then ONE concise, disclosed, factual description of WellPeps ('WellPeps is one option you can evaluate'), no superiority claim, no promise it is right for them. Never repeat or attack the named provider; a complaint is the poster's account, not a fact. Then the relevant Smart Patient's Guide and how it helps (required, user instruction 2026-10-07). 40-110 words."
+    notes: "Explicit request for alternatives. Answer the underlying need first (what to ask any provider), then ONE concise, disclosed, factual description of WellPeps ('WellPeps is one option you can evaluate'), no superiority claim, no promise it is right for them. Never repeat or attack the named provider; a complaint is the poster's account, not a fact. Then the relevant Smart Patient's Guide and how it helps when a chapter answers the question (WellPeps 2026-10-07, refined). 40-110 words."
     sources: ["[CP] §1, §4, §7, Examples 1, 6", "[AMG] §13, §17"]
   - id: protocol_educational_only
     label: "Protocol EDUCATIONAL ONLY"
@@ -458,8 +444,27 @@ situations:
     guide: required
     education_only: true
     preferred_claims: [CLM-R7-PROVIDER-CHECKLIST, CLM-AMG-13-BETTER, CLM-LR-02-ONGOING-SUPPORT]
-    notes: "General useful answer. Describe WellPeps only if the person asked about WellPeps (approved facts only). No comparison, no response-time, lab or price claim that is not approved, no call to action. Never repeat or attack the named provider. The relevant Smart Patient's Guide and how it helps is education, not promotion, and is required (user instruction 2026-10-07). 40-110 words."
+    notes: "General useful answer. Describe WellPeps only if the person asked about WellPeps (approved facts only). No comparison, no response-time, lab or price claim that is not approved, no call to action. Never repeat or attack the named provider. The relevant Smart Patient's Guide and how it helps, when a chapter answers the question (WellPeps 2026-10-07, refined). 40-110 words."
     sources: ["[CP] §4 step 4, §7, Examples 7, 9, 10, 20", "[AMG] §13", "[CT] Scenario 4B"]
+  # Precedence fix (2026-10-07): complaints and billing accusations about
+  # another company come AFTER the protocol's answering situations, so a
+  # competitor complaint that explicitly asks for alternatives (APPROPRIATE
+  # ALTERNATIVE / EDUCATIONAL ONLY) gets a reply; pure venting is MONITOR ONLY
+  # (above) and a complaint outside the protocol's scope still gets none.
+  - id: billing_other
+    label: "Billing accusation about another company"
+    match: {categories: [billing_fraud]}
+    reply: no_reply
+    escalate: billing_fraud
+    link_policy: none
+    sources: ["[OM] §5.3"]
+  - id: complaint_other
+    label: "Complaint about another company"
+    match: {categories: [complaint]}
+    reply: no_reply
+    link_policy: none
+    notes: "Not WellPeps' complaint to handle; never pile on a competitor."
+    sources: ["[AMG] §13", "[OM] §5.3"]
   # --- Competitors -------------------------------------------------------------------
   - id: competitor_comparison_wellpeps
     label: "Is WellPeps better than a competitor?"

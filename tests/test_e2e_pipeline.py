@@ -34,12 +34,18 @@ CLEAN_Q = "Is WellPeps legit?"            # drafted cleanly, reviewer passes
 HYPE_Q = "anyone tried compounded tirzepatide"  # draft says "clinically proven"
 SWITCH_Q = "Switching from Henry Meds"    # competitor switching in r/Mounjaro (rules unknown): HOLD
 REJECT_Q = "daily tadalafil through an online service"  # reviewer rejects
-SEVERE = {ADVERSE: "adverse_event", LEGAL: "legal", PRIVACY: "privacy", FRAUD: "billing_fraud"}
-# Rules of engagement: an adverse event and a WellPeps billing complaint keep
-# the guide's approved boundary reply (drafted for a human, no model call) next
-# to their escalation; legal and privacy get no public reply.
-BOUNDARY = {ADVERSE: "CLM-AMG-10-REACTION", FRAUD: "CLM-AMG-09-BILLING", VIRAL: "CLM-AMG-APPX-COMPLAINT"}
-ESCALATED_ONLY = {LEGAL, PRIVACY}
+# WellPeps' own incidents: paged to a named owner.
+SEVERE = {LEGAL: "legal", PRIVACY: "privacy", FRAUD: "billing_fraud"}
+# The ER post never names WellPeps (semaglutide, provider unknown): only
+# WellPeps' own incidents page, so this serious report goes on the safety
+# watch (never paged, no reply). User decision 2026-10-09,
+# docs/REVISIONS-LOG.md R-13, pending WellPeps clinical confirmation.
+SAFETY_WATCHED = {ADVERSE}
+# Rules of engagement: a WellPeps billing complaint keeps the guide's approved
+# boundary reply (drafted for a human, no model call) next to its escalation;
+# legal and privacy get no public reply.
+BOUNDARY = {FRAUD: "CLM-AMG-09-BILLING", VIRAL: "CLM-AMG-APPX-COMPLAINT"}
+ESCALATED_ONLY = {LEGAL, PRIVACY, *SAFETY_WATCHED}
 DRAFTED = {CLEAN_Q, HYPE_Q, REJECT_Q, *BOUNDARY}
 
 CLEAN_REPLY = (
@@ -83,12 +89,12 @@ def _triage_brain() -> FakeBrain:
 
 def _drafter_brain() -> FakeBrain:
     return FakeBrain({
-        CLEAN_Q: [{"reply": CLEAN_REPLY + GUIDE_SENTENCE, "claim_ids": CLEAN_GUIDE_IDS, "rationale": "education",
+        CLEAN_Q: [{"reply": CLEAN_REPLY, "claim_ids": CLEAN_IDS, "rationale": "education",
                    "needs_human_reason": None}],
         HYPE_Q: [{"reply": "Compounded options through licensed providers are clinically proven.",
                   "claim_ids": ["CLM-R15-COMPOUNDED-DISCLOSURE"], "rationale": "x",
                   "needs_human_reason": None}],
-        REJECT_Q: [{"reply": CLEAN_REPLY + GUIDE_SENTENCE, "claim_ids": CLEAN_GUIDE_IDS, "rationale": "education",
+        REJECT_Q: [{"reply": CLEAN_REPLY, "claim_ids": CLEAN_IDS, "rationale": "education",
                     "needs_human_reason": None}],
     }, model="sonnet")
 
@@ -174,16 +180,20 @@ async def test_full_pipeline_on_the_sample_fixture(state):
     for marker, kind in SEVERE.items():
         esc = by_mention[_find(mentions, marker).id]
         assert esc.kind == kind and esc.notified_at == NOW
-    assert by_mention[_find(mentions, ADVERSE).id].owner == "Clinical Lead"
     assert by_mention[_find(mentions, VIRAL).id].kind == "viral_negative"
-    assert len(open_escalations) == len(SEVERE) + 1
-    assert len(slack.payloads) == len(open_escalations)
+    for marker in SAFETY_WATCHED:
+        watch = by_mention[_find(mentions, marker).id]
+        assert watch.kind == "safety_watch" and watch.notified_at is None
+    assert len(open_escalations) == len(SEVERE) + len(SAFETY_WATCHED) + 1
+    assert len(slack.payloads) == len(SEVERE) + 1                # the safety watch is never paged
+    assert (await state.get_state_summary())["open_escalations"] == len(SEVERE) + 1
 
     # Slack payloads: no post text, no handles
     raw = json.dumps(slack.payloads)
     for mention in mentions.values():
         if mention.id in by_mention:
-            assert mention.url in raw
+            paged = by_mention[mention.id].kind != "safety_watch"
+            assert (mention.url in raw) is paged
             assert mention.author_handle.lstrip("@u/") not in raw
             for chunk in (mention.text[:40], mention.text[-40:]):
                 assert chunk not in raw
@@ -193,8 +203,9 @@ async def test_full_pipeline_on_the_sample_fixture(state):
     # Drafts: tiers and verdicts
     clean = await state.get_latest_draft(_find(mentions, CLEAN_Q).id)
     # r/Semaglutide's rules are not verified yet (config/communities.yaml), so
-    # the only finding is the yellow "community rules unverified" (R44).
-    assert (clean.tier, clean.review_verdict, clean.claim_ids) == ("yellow", ReviewVerdict.PASS, CLEAN_GUIDE_IDS)
+    # the only finding is the yellow "community rules unverified" (R44), and no
+    # guide is offered there (no company resource until permission is verified).
+    assert (clean.tier, clean.review_verdict, clean.claim_ids) == ("yellow", ReviewVerdict.PASS, CLEAN_IDS)
     assert all(h.startswith("R44") for h in clean.filter_hits), clean.filter_hits
     hype = await state.get_latest_draft(_find(mentions, HYPE_Q).id)
     assert (hype.tier, hype.review_verdict) == ("red", ReviewVerdict.REJECT)

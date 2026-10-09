@@ -62,18 +62,26 @@ def test_safety_net_forces_urgent_and_no_reply_for_severe_categories(category, u
     assert out.reply_appropriate is False
     assert out.urgency_reason.startswith("severe_category")
     assert "model says so" in out.urgency_reason
-    # An adverse event keeps ``triaged`` for the guide's approved boundary reply
-    # (drafted for a clinical approver) and is paged all the same.
-    expected = MentionStatus.TRIAGED if category == "adverse_event" else MentionStatus.ESCALATED
+    # The text names WellPeps, so WellPeps is the subject (user decision
+    # 2026-10-09) and the incident pages. An adverse event and a billing
+    # complaint about WellPeps keep ``triaged`` for the guide's approved
+    # boundary reply (drafted for a human approver) and are paged all the same.
+    assert out.subject_type == "wellpeps"
+    assert escalation_kind(out) in SEVERE_KINDS
+    expected = (MentionStatus.TRIAGED if category in ("adverse_event", "billing_fraud")
+                else MentionStatus.ESCALATED)
     assert route_status(out) is expected
 
 
 @pytest.mark.parametrize("category", sorted(c.value for c in SEVERE_CATEGORIES))
 def test_route_status_escalates_any_severe_kind_even_if_not_urgent(category):
-    triage = Triage(mention_id=1, category=Category(category), urgency=Urgency.NORMAL)
+    # Only WellPeps' own incidents escalate (user decision 2026-10-09).
+    triage = Triage(mention_id=1, category=Category(category), urgency=Urgency.NORMAL,
+                    subject_type="wellpeps")
 
     assert escalation_kind(triage) in SEVERE_KINDS
-    expected = MentionStatus.TRIAGED if category == "adverse_event" else MentionStatus.ESCALATED
+    expected = (MentionStatus.TRIAGED if category in ("adverse_event", "billing_fraud")
+                else MentionStatus.ESCALATED)
     assert route_status(triage) is expected
 
 

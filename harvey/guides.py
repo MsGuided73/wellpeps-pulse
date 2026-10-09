@@ -1,27 +1,33 @@
-"""Smart Patient's Guide references (binding user instruction, 2026-10-07).
+"""Smart Patient's Guide references.
 
-"We must refer to a relevant guide and point to how the guide can help."
-Every drafted reply in an answering situation points to the single most
-relevant Smart Patient's Guide and says how it helps with THIS poster's
-question, naming a chapter from the guide (config/guides.yaml, verbatim from
-the site's ebooks.ts / guide-pages.ts). Deterministic; no model calls.
+WellPeps instruction (2026-10-07): "We must refer to a relevant guide and
+point to how the guide can help", refined after Derek Goldberg's review of the
+Rules of Engagement (2026-10-07): Pulse considers the relevant guide for every
+answering reply and includes it when a specific chapter materially helps with
+THIS question; otherwise the reply carries no guide and the omission is
+recorded with its reason. Chapters come verbatim from config/guides.yaml
+(the site's ebooks.ts / guide-pages.ts). Deterministic; no model calls.
 
 - ``guide_for``: the best guide for a product / drug / post text (program
   match, then guide keywords; NAD+ prefers its own guide), else the series
-  index. Never None.
+  index (``specific=False``). Never None.
 - ``chapters_for``: the chapter(s) that answer the question (subtype, unmet
-  need, post words), else the guide's default chapter.
+  need, post words); empty when none does.
 - ``best_guide(mention, triage)``: the pick for a mention, or None where a
   guide must never appear (adverse event, emergency, self-harm, legal /
   regulatory, privacy, media, complaints and billing, clinical / individual
   questions, a possible minor, any no-reply or boundary situation).
 - ``requirement_for``: what the draft must do: ``link`` (guide + tracked
   registry link + gated-download disclosure), ``name`` (no link allowed here:
-  name the guide without one), ``forbidden`` (no guide at all) or ``none``.
+  name the guide without one), ``omit`` (considered, but no chapter answers
+  this question: no guide, reason recorded), ``forbidden`` (no guide at all:
+  excluded situation, or the community prohibits promotion, has not granted
+  permission or has unverified rules) or ``none``.
 - ``reference_hits``: the deterministic check (compliance filter):
   required but missing -> yellow "missing guide reference" (drafting redrafts
   once, then needs_human); referenced where forbidden -> red; guide linked
-  without the email-gate disclosure -> yellow.
+  without the email-gate disclosure -> yellow; a "chapter" that is not a
+  verbatim chapter title of the guides -> yellow.
 """
 
 import re
@@ -35,6 +41,9 @@ MISSING_RULE = "GUIDE"
 MISSING_REASON = "missing guide reference"
 FORBIDDEN_REASON = "guide referenced in an excluded situation"
 GATE_REASON = "guide offered without the gated-download disclosure (free, it asks for your email)"
+CHAPTER_REASON = "names a guide chapter that is not a verbatim chapter title from config/guides.yaml"
+OMIT_REASON = "no guide chapter answers this question (considered and omitted)"
+UNVERIFIED_REASON = "community rules are unverified: no company resource until participation permission is verified"
 # Situations / categories where a guide never appears (safety, legal, privacy,
 # media, complaints and billing; Protocol §8 "never in safety / clinical").
 EXCLUDED_CATEGORIES = frozenset({"adverse_event", "legal_regulatory", "privacy", "billing_fraud", "complaint"})
@@ -43,6 +52,12 @@ EXCLUDED_SUBTYPES = frozenset({
     "personal_medical_info", "abusive", "dose_question", "lab_question", "medication_change",
     "individual_treatment", "results_question", "safety_question", "qualify_question", "symptom_report",
 })
+# A complaint about another company that explicitly asks for alternatives is
+# answered under the protocol (APPROPRIATE ALTERNATIVE / EDUCATIONAL ONLY), so
+# the guide is not excluded by its category there (complaints about WellPeps
+# never reach these decisions: they escalate).
+ANSWERING_DECISIONS = frozenset({"appropriate_alternative", "educational_only"})
+COMPETITOR_COMPLAINT_CATEGORIES = frozenset({"complaint", "billing_fraud"})
 EXCLUDED_DECISIONS = frozenset({"clinical_caution", "escalate", "hold", "do_not_engage", "monitor_only"})
 # A post that says the author is under 18 ("im 16", "I'm 17", "16 years old").
 _MINOR_RX = re.compile(
@@ -59,6 +74,7 @@ class GuidePick:
     guide: Guide
     chapters: tuple[str, ...]
     specific: bool               # False = the series index (no single guide fits)
+    helps: bool = True           # a chapter of this guide answers the question
 
     @property
     def chapter(self) -> str:
@@ -67,12 +83,13 @@ class GuidePick:
     def as_dict(self) -> dict:
         return {"slug": self.guide.slug, "title": self.guide.title, "short": self.guide.short,
                 "claim_id": self.guide.claim_id, "link_id": self.guide.link_id,
-                "chapter": self.chapter, "chapters": list(self.chapters), "specific": self.specific}
+                "chapter": self.chapter, "chapters": list(self.chapters), "specific": self.specific,
+                "helps": self.helps}
 
 
 @dataclass(frozen=True)
 class GuideRequirement:
-    mode: str = "none"           # link | name | forbidden | none
+    mode: str = "none"           # link | name | omit | forbidden | none
     pick: GuidePick | None = None
     why: str = ""
 
@@ -137,7 +154,7 @@ def guide_for(product: str = "", drug: str = "", text: str = "") -> GuidePick:
 
 def chapters_for(guide: Guide, subtype: str = "", need: str = "", text: str = "") -> tuple[str, ...]:
     """Up to MAX_CHAPTERS chapter titles that answer this question (book
-    chapters before landing topics on a tie), else the guide's default."""
+    chapters before landing topics on a tie); empty when none does."""
     forbid = knowledge.compliance_rules().toggles.forbid_medication_names_in_replies
     from harvey.compliance import names_medication
 
@@ -149,15 +166,20 @@ def chapters_for(guide: Guide, subtype: str = "", need: str = "", text: str = ""
         if score:
             scored.append((-score, order, chapter))
     scored.sort(key=lambda item: (item[0], item[1]))
-    picked = tuple(c.title for _, _, c in scored[:MAX_CHAPTERS])
-    return picked or (guide.default_chapter,)
+    return tuple(c.title for _, _, c in scored[:MAX_CHAPTERS])
 
 
 def pick_for(product: str = "", drug: str = "", text: str = "", subtype: str = "", need: str = "") -> GuidePick:
+    """The guide pick; ``helps`` is False when no single guide fits or no
+    chapter of it answers the question (then no guide is offered)."""
     base = guide_for(product, drug, text)
     if not base.specific:
-        return base
-    return GuidePick(base.guide, chapters_for(base.guide, subtype, need, text), specific=True)
+        series = chapters_for(base.guide, subtype, need, text)
+        return GuidePick(base.guide, series or base.chapters, specific=False, helps=bool(series))
+    chapters = chapters_for(base.guide, subtype, need, text)
+    if not chapters:
+        return GuidePick(base.guide, (base.guide.default_chapter,), specific=True, helps=False)
+    return GuidePick(base.guide, chapters, specific=True)
 
 
 def mentions_minor(text: str) -> bool:
@@ -180,7 +202,8 @@ def excluded(triage, mention=None) -> str:
     if mention is not None and mentions_minor(_post_text(mention)):
         return "the author may be a minor"
     category, subtype = _value(triage.category), triage.subtype or ""
-    if category in EXCLUDED_CATEGORIES:
+    answering = (triage.protocol_decision or "") in ANSWERING_DECISIONS
+    if category in EXCLUDED_CATEGORIES and not (answering and category in COMPETITOR_COMPLAINT_CATEGORIES):
         return f"category {category}"
     if subtype in EXCLUDED_SUBTYPES:
         return f"subtype {subtype}"
@@ -209,11 +232,15 @@ def requirement_for(situation, context=None, triage=None, mention=None) -> Guide
         return NO_REQUIREMENT
     pick = best_guide(mention, triage) if mention is not None else pick_for(
         triage.product or "", triage.drug or "", "", triage.subtype or "", triage.unmet_need or "")
-    if pick is None or (policy == "if_specific" and not pick.specific):
+    if pick is None:
         return NO_REQUIREMENT
     promo = getattr(context, "promotion_forbidden", "") if context is not None else ""
     if promo:
         return GuideRequirement("forbidden", None, f"the community prohibits promotion ({promo})")
+    if context is not None and getattr(context, "participation", "") == "unknown":
+        return GuideRequirement("forbidden", None, UNVERIFIED_REASON)
+    if not pick.helps:
+        return GuideRequirement("omit", pick, OMIT_REASON)
     link_reason = ("this situation never carries a link" if situation.link_policy == "none"
                    else (getattr(context, "link_forbidden", "") if context is not None else ""))
     if link_reason:
@@ -268,12 +295,33 @@ def satisfied(text: str, requirement: GuideRequirement) -> bool:
     return names_guide(text, pick.guide if pick.specific else None) or names_guide(text)
 
 
+_CHAPTER_WORD_RX = re.compile(r"\bchapters?\b", re.IGNORECASE)
+
+
+def _norm(text: str) -> str:
+    text = (text or "").replace("\u2019", "'").replace("\u201c", '"').replace("\u201d", '"')
+    return re.sub(r"\s+", " ", text).lower()
+
+
+def unverified_chapter(text: str) -> bool:
+    """The reply says "chapter" but quotes no verbatim chapter title of any
+    guide (a paraphrased or invented chapter)."""
+    body = links.mask_registry_links(text or "", " ")
+    if not _CHAPTER_WORD_RX.search(body):
+        return False
+    norm = _norm(body)
+    titles = [c.title for g in all_guides() for c in (*g.chapters, *g.landing)]
+    return not any(_norm(t).rstrip("?.!") in norm for t in titles)
+
+
 def reference_hits(text: str, claim_ids, requirement: GuideRequirement | None):
     """(red, yellow) Hit lists for the guide rule (compliance.Hit)."""
     from harvey.compliance import Hit
 
     if requirement is None or requirement.mode == "none":
         return [], []
+    if requirement.mode != "forbidden" and references_guide(text, claim_ids) and unverified_chapter(text):
+        return [], [Hit(MISSING_RULE, "guide", "", CHAPTER_REASON)]
     if requirement.mode == "forbidden":
         if references_guide(text, claim_ids):
             return [Hit(MISSING_RULE, "guide", "", f"{FORBIDDEN_REASON} ({requirement.why})")], []

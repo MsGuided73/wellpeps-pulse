@@ -12,6 +12,6 @@ Rules every collector follows:
 from harvey.collectors.base import REGISTRY, Collector, get_collector, register
 
 # Import concrete collectors so they register themselves.
-from harvey.collectors import fixture  # noqa: E402,F401
+from harvey.collectors import apify, fixture  # noqa: E402,F401
 
 __all__ = ["REGISTRY", "Collector", "get_collector", "register"]

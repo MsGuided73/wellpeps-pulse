@@ -128,12 +128,12 @@ class UsageConfig(BaseModel):
 
 
 # Escalation kinds (harvey/escalation.py derives one per urgent mention).
-ESCALATION_KINDS = ("adverse_event", "legal", "privacy", "billing_fraud", "viral_negative")
+ESCALATION_KINDS = ("adverse_event", "legal", "privacy", "billing_fraud", "viral_negative", "safety_watch")
 
 
 def _default_owners() -> dict[str, str]:
     # adverse_event always goes to clinical_owner; the rest are named here.
-    return {"legal": "", "privacy": "", "billing_fraud": "", "viral_negative": ""}
+    return {"legal": "", "privacy": "", "billing_fraud": "", "viral_negative": "", "safety_watch": ""}
 
 
 class EscalationConfig(BaseModel):
@@ -281,6 +281,29 @@ class SlackQueryConfig(BaseModel):
     per_user_per_hour: int = Field(default=20, ge=1, le=1000)
 
 
+class ApifyRedditConfig(BaseModel):
+    """Live Reddit collection through Apify (harvey/collectors/apify.py).
+
+    Off by default: scraping still needs WellPeps' legal sign-off
+    (docs/PLAN.md), and every run costs Apify credit."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    enabled: bool = False
+    interval_minutes: int = Field(default=720, ge=30)
+    max_items: int = Field(default=30, ge=1, le=500)
+    max_charge_usd: float = Field(default=0.25, gt=0, le=5)
+    monthly_budget_usd: float = Field(default=4.0, ge=0)
+    lookback_hours: int = Field(default=48, ge=1, le=24 * 14)
+    searches: list[str] = Field(default_factory=list)
+
+
+class CollectorsConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    apify_reddit: ApifyRedditConfig = Field(default_factory=ApifyRedditConfig)
+
+
 class PulseConfig(BaseModel):
     # Unknown keys fail loudly, so a leftover sales-era harvey.yaml is caught.
     model_config = ConfigDict(extra="forbid")
@@ -294,6 +317,7 @@ class PulseConfig(BaseModel):
     review: ReviewConfig = Field(default_factory=ReviewConfig)
     pulse: PulseBriefConfig = Field(default_factory=PulseBriefConfig)
     slack_query: SlackQueryConfig = Field(default_factory=SlackQueryConfig)
+    collectors: CollectorsConfig = Field(default_factory=CollectorsConfig)
     retention_days: int = Field(default=180, ge=1)
 
 

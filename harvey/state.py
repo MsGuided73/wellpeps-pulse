@@ -646,6 +646,30 @@ class StateManager:
             await db.commit()
             return cursor.rowcount
 
+    async def last_run_started(self, stage: str) -> datetime | None:
+        """When the latest run of ``stage`` started (any status); None if never."""
+        async with self._connect() as db:
+            async with db.execute(
+                "SELECT MAX(started_at) FROM runs WHERE stage = ?", (stage,)
+            ) as cursor:
+                row = await cursor.fetchone()
+        value = row[0] if row else None
+        if value is None:
+            return None
+        if not isinstance(value, datetime):
+            value = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+        return value.astimezone(timezone.utc).replace(tzinfo=None) if value.tzinfo else value
+
+    async def run_cost_since(self, stage: str, since: datetime) -> float:
+        """Total cost_usd of ``stage`` runs started at or after ``since`` (naive UTC)."""
+        async with self._connect() as db:
+            async with db.execute(
+                "SELECT COALESCE(SUM(cost_usd), 0) FROM runs WHERE stage = ? AND started_at >= ?",
+                (stage, sql_utc(since)),
+            ) as cursor:
+                row = await cursor.fetchone()
+        return float(row[0] or 0.0) if row else 0.0
+
     async def get_runs(self, limit: int = 25) -> list[dict]:
         async with self._connect() as db:
             async with db.execute(
@@ -1286,7 +1310,7 @@ class StateManager:
                 for status, n in await cursor.fetchall():
                     counts[status] = n
             async with db.execute(
-                "SELECT COUNT(*) FROM escalations WHERE acked_at IS NULL"
+                "SELECT COUNT(*) FROM escalations WHERE acked_at IS NULL AND kind <> 'safety_watch'"
             ) as cursor:
                 (open_escalations,) = await cursor.fetchone()
         return {

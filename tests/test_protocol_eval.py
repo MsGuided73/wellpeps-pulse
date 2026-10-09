@@ -16,7 +16,7 @@ import yaml
 
 from harvey import engagement, knowledge, protocol
 from harvey.compliance import compliance_filter
-from harvey.escalation import SEVERE_KINDS, escalation_kind
+from harvey.escalation import SAFETY_WATCH, SEVERE_KINDS, escalation_kind, is_serious
 from harvey.models import Category, Mention, Platform, Triage
 
 FIXTURE = Path(__file__).parent / "fixtures" / "protocol_examples.yaml"
@@ -136,11 +136,45 @@ def test_escalate_reaches_the_designated_owner(example):
     """[CP] §5: serious or uncertain safety reports reach human safety review;
     a symptomatic person asking for a new provider stays in the safety queue."""
     triage = _applied(example)
-    route = example["expected"]["route"]
+    expected = example["expected"]
+    route = expected["route"]
     if route in SEVERE_KINDS:
-        assert escalation_kind(triage) == route
-    if example["expected"]["decision"] != "escalate":
+        # Only WellPeps' own incidents page the owner; about another provider a
+        # serious report goes on the safety watch, the rest is trends only.
+        # User decision 2026-10-09 (docs/REVISIONS-LOG.md R-13), pending
+        # WellPeps clinical confirmation.
+        kind = expected["pulse_escalation"] if "pulse_escalation" in expected else route
+        assert escalation_kind(triage) == kind
+        if triage.subject_type == "wellpeps":
+            assert kind == route
+        else:
+            assert kind in (SAFETY_WATCH, None)
+            assert (kind == SAFETY_WATCH) == (route == "adverse_event" and is_serious(triage))
+    if expected["decision"] != "escalate":
         assert triage.protocol_route == ""
+
+
+@pytest.mark.parametrize("example", EXAMPLES, ids=IDS)
+def test_review_gates_on_the_examples(example):
+    """Review gates (user decision 2026-10-09, docs/REVISIONS-LOG.md R-13/R-14):
+    no boundary or clinical reply to a post not about WellPeps; the protocol's
+    scored decisions are always worth a draft."""
+    triage = _applied(example)
+    gated = engagement.with_review_gate(triage)
+    situation_mode = engagement.situation_of(triage).reply
+    if situation_mode in ("boundary_only", "stop") and triage.subject_type != "wellpeps":
+        assert engagement.gated(gated) == engagement.GATE_NOT_OURS
+        assert engagement.reply_mode(gated) == "no_reply"
+    if example["expected"]["decision"] in protocol.SCORED_DECISIONS:
+        if protocol.applies(_triage(example), _mention(example)):
+            assert engagement.gated(gated) == ""
+            assert engagement.reply_mode(gated) == "draft"
+        else:
+            # Out of the protocol's scope (no competitor, not about WellPeps),
+            # so its educational_only decision is not applied and a general
+            # education question is not worth a reply (Example 10). Flagged
+            # for WellPeps: the protocol scores this one high.
+            assert engagement.gated(gated) == engagement.GATE_NOT_WORTH_IT
 
 
 @pytest.mark.parametrize("example", [e for e in EXAMPLES if e["reply"]],

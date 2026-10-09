@@ -117,7 +117,35 @@ async def test_unknown_community_rules_hold_and_nothing_is_drafted(state):
 
 @pytest.mark.asyncio
 async def test_serious_harm_is_escalated_even_under_a_non_severe_category(state, allowed_community):
-    mid = await _new(state, "harm1", "Severe stomach pain on my meds from Ro, who should I switch to?", ALLOWED)
+    mid = await _new(state, "harm1", "Severe stomach pain on my WellPeps meds, should I switch to Ro?", ALLOWED)
+    brain = FakeBrain({"Severe stomach": _answer(competitor="Ro", category="question",
+                                                 intents=["possible_serious_harm", "alternatives_requested"],
+                                                 unmet_need="continuity", need_clarity=1, useful_contribution=0)})
+    escalated = []
+
+    async def hook(mention, triage):
+        escalated.append(escalation_kind(triage))
+
+    await triage_batch(state, Triager(brain), escalate=hook)
+
+    triage = await state.get_triage(mid)
+    assert triage.subject_type == "wellpeps"                    # the post names WellPeps
+    assert triage.protocol_decision == "escalate" and triage.protocol_route == "adverse_event"
+    assert escalated == ["adverse_event"]
+    assert triage.opportunity_score is None                     # never scored as a sales opportunity
+    # The guide's approved safety wording is drafted for a clinical approver; no switching draft.
+    await draft_batch(state, _Drafter(), _Reviewer())
+    draft = await state.get_latest_draft(mid)
+    assert draft.model == "approved-response" and "seek immediate emergency medical care" in draft.text
+    assert "CLM-AMG-10-REACTION" in draft.claim_ids
+
+
+@pytest.mark.asyncio
+async def test_serious_harm_about_another_provider_goes_on_the_safety_watch(state, allowed_community):
+    # Only WellPeps' own incidents page; a serious report about another provider
+    # is listed on the never-paged safety watch and gets no reply (user decision
+    # 2026-10-09, docs/REVISIONS-LOG.md R-13, pending WellPeps clinical confirmation).
+    mid = await _new(state, "harm2", "Severe stomach pain on my meds from Ro, who should I switch to?", ALLOWED)
     brain = FakeBrain({"Severe stomach": _answer(competitor="Ro", category="question",
                                                  intents=["possible_serious_harm", "alternatives_requested"],
                                                  unmet_need="continuity", need_clarity=1, useful_contribution=0)})
@@ -130,13 +158,12 @@ async def test_serious_harm_is_escalated_even_under_a_non_severe_category(state,
 
     triage = await state.get_triage(mid)
     assert triage.protocol_decision == "escalate" and triage.protocol_route == "adverse_event"
-    assert escalated == ["adverse_event"]
-    assert triage.opportunity_score is None                     # never scored as a sales opportunity
-    # The guide's approved safety wording is drafted for a clinical approver; no switching draft.
+    assert escalated == ["safety_watch"]
+    assert triage.opportunity_score is None
+    assert (await state.get_mention(mid)).status is MentionStatus.ESCALATED
+    assert "gate:not_ours" in triage.urgency_reason
     await draft_batch(state, _Drafter(), _Reviewer())
-    draft = await state.get_latest_draft(mid)
-    assert draft.model == "approved-response" and "seek immediate emergency medical care" in draft.text
-    assert "CLM-AMG-10-REACTION" in draft.claim_ids
+    assert await state.get_latest_draft(mid) is None
 
 
 @pytest.mark.asyncio
@@ -210,8 +237,10 @@ async def test_protocol_guidance_reaches_the_drafter_and_one_reply_per_thread(st
     assert guidance.protocol_label == "APPROPRIATE ALTERNATIVE"
     assert guidance.brand_mode == "brief_factual_option" and "no superiority" in guidance.brand_limits
     assert guidance.allow_link is False                          # this community allows no links
-    # The guide is still required (user instruction 2026-10-07): named, without a link.
-    assert guidance.guide_mode == "name" and guidance.guide_claim_id == "CLM-EDU-GUIDES"
+    # No program is named and no guide chapter answers a price-alternatives
+    # question, so the guide is considered and omitted, with the reason recorded
+    # (WellPeps 2026-10-07: a guide only when a chapter materially helps).
+    assert guidance.guide_mode == "omit" and "no guide chapter answers" in guidance.guide_why
     assert report.skipped == 1
     skipped = [e for e in await state.list_audit(b) if e.event is AuditEventType.SKIPPED]
     assert skipped and "one representative per thread" in skipped[0].verdict["reason"]
@@ -236,8 +265,8 @@ def test_reviewer_and_drafter_prompts_carry_the_protocol_checks():
     assert 'rule id "PROTOCOL"' in review_prompt
     assert "WellPeps presence affiliation only (identity disclosure is not a sales pitch)" in review_prompt
     block = drafter_mod.engagement_block(guidance)
-    assert "Questions to ask about messaging and follow-up" in block and "40 to 110 words" in block
-    # EDUCATIONAL ONLY now requires the guide reference (user-directed override of [CP] §8).
-    assert "Smart Patient's Guide (REQUIRED by WellPeps)" in block and "no guide or assessment offer" not in block
-    assert "REQUIRED (WellPeps instruction)" in review_prompt
+    assert "Questions to ask about messaging and follow-up" in block and "40 to 90 words" in block
+    # No post text and no program: no chapter answers, so no guide (omission recorded).
+    assert "No Smart Patient's Guide in this reply: no guide chapter answers this question" in block
+    assert "no guide here: no guide chapter answers this question" in review_prompt
     assert "never name, repeat or attack the other provider" in block

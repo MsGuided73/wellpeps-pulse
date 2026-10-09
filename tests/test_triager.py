@@ -367,9 +367,9 @@ def _batch_brain() -> FakeBrain:
 
 @pytest.mark.asyncio
 async def test_triage_batch_routes_statuses_and_writes_audit(state):
-    praise = await _seed(state, "My provider checks in often", 1, 40)
+    praise = await _seed(state, "My telehealth provider checks in often", 1, 40)
     noise = await _seed(state, "Well Peps U10 squad won", 2, 30)
-    adverse = await _seed(state, "emergency room last night after my dose", 3, 20)
+    adverse = await _seed(state, "emergency room last night after my WellPeps GLP-1 dose", 3, 20)
     viral = await _seed(state, "WellPeps ghosted me, do not sign up", 4, 10)
 
     report = await triage_batch(state, Triager(_batch_brain()))
@@ -398,9 +398,9 @@ async def test_triage_batch_routes_statuses_and_writes_audit(state):
 
 @pytest.mark.asyncio
 async def test_triage_batch_takes_oldest_new_first_up_to_limit(state):
-    newest = await _seed(state, "My provider checks in often", 1, 1)
-    oldest = await _seed(state, "My provider checks in weekly", 2, 60)
-    middle = await _seed(state, "My provider checks in monthly", 3, 30)
+    newest = await _seed(state, "My telehealth provider checks in often", 1, 1)
+    oldest = await _seed(state, "My telehealth provider checks in weekly", 2, 60)
+    middle = await _seed(state, "My telehealth provider checks in monthly", 3, 30)
 
     report = await triage_batch(state, Triager(_batch_brain()), limit=2)
 
@@ -412,7 +412,7 @@ async def test_triage_batch_takes_oldest_new_first_up_to_limit(state):
 
 @pytest.mark.asyncio
 async def test_triage_batch_skips_already_triaged(state):
-    await _seed(state, "My provider checks in often", 1, 10)
+    await _seed(state, "My telehealth provider checks in often", 1, 10)
     await triage_batch(state, Triager(_batch_brain()))
 
     again = await triage_batch(state, Triager(_batch_brain()))
@@ -423,7 +423,7 @@ async def test_triage_batch_skips_already_triaged(state):
 @pytest.mark.asyncio
 @pytest.mark.parametrize("async_hook", [False, True])
 async def test_budget_hook_false_processes_nothing(state, async_hook):
-    mid = await _seed(state, "My provider checks in often", 1, 10)
+    mid = await _seed(state, "My telehealth provider checks in often", 1, 10)
     brain = _batch_brain()
 
     async def over_async():
@@ -441,8 +441,8 @@ async def test_budget_hook_false_processes_nothing(state, async_hook):
 
 @pytest.mark.asyncio
 async def test_budget_running_out_mid_batch_stops(state):
-    await _seed(state, "My provider checks in often", 1, 20)
-    await _seed(state, "My provider checks in weekly", 2, 10)
+    await _seed(state, "My telehealth provider checks in often", 1, 20)
+    await _seed(state, "My telehealth provider checks in weekly", 2, 10)
     answers = iter([True, False])
 
     report = await triage_batch(state, Triager(_batch_brain()), budget_ok=lambda: next(answers))
@@ -453,8 +453,8 @@ async def test_budget_running_out_mid_batch_stops(state):
 
 @pytest.mark.asyncio
 async def test_one_failing_mention_does_not_stop_the_batch(state, monkeypatch):
-    bad = await _seed(state, "My provider checks in often", 1, 20)
-    good = await _seed(state, "My provider checks in weekly", 2, 10)
+    bad = await _seed(state, "My telehealth provider checks in often", 1, 20)
+    good = await _seed(state, "My telehealth provider checks in weekly", 2, 10)
     real_save = state.save_triage
 
     async def flaky(triage):
