@@ -6,7 +6,12 @@
 #              domain as https://pulse.example.com:5555 (Traefik routes to it).
 #   slackbot   the read-only #pulse-query bot (`pulse slackbot`, Slack Socket
 #              Mode: outbound WebSocket only, no domain, no inbound port).
-#              Without SLACK_BOT_TOKEN/SLACK_APP_TOKEN it idles, healthy.
+#              Without SLACK_BOT_TOKEN/SLACK_APP_TOKEN it idles, healthy; bad
+#              or rejected tokens log a warning and idle (never crash-loop).
+#              OFF BY DEFAULT: it sits behind the "slack" profile until the
+#              Slack app exists and the bot has been verified against real
+#              Slack. Enable with COMPOSE_PROFILES=slack (or
+#              `docker compose --profile slack up`).
 #
 # Configuration comes only from environment variables (Coolify injects the
 # ones set in its UI); see .env.example and docs/DEPLOY-SUPABASE-COOLIFY.md.
@@ -83,6 +88,9 @@ services:
         max-file: "3"
 
   slackbot:
+    # Not started by default; see the header. Kept here (not deleted or
+    # commented out) so enabling it is a profile switch, not an edit.
+    profiles: ["slack"]
     build: .
     command: ["python", "-m", "harvey", "slackbot"]
     environment:

@@ -21,6 +21,10 @@ Behavior (``QueryBot.handle_mention``, testable without Slack):
 
 Without tokens the process logs "Slack query bot disabled (no tokens)" and
 idles, still stamping its heartbeat, so a deploy without Slack stays healthy.
+Half-set or malformed settings log "Slack query bot disabled (misconfigured)",
+and tokens Slack rejects log "Slack rejected the tokens (<code>)"; both idle
+the same way. Network failures retry with capped backoff. The process never
+exits on a Slack problem, so it cannot crash-loop under `restart: unless-stopped`.
 """
 
 import asyncio
@@ -45,6 +49,15 @@ CHANNEL_ENV = "SLACK_QUERY_CHANNEL_ID"
 HEARTBEAT_SECONDS = 60
 REACTION = "hourglass_flowing_sand"
 DISABLED_MESSAGE = "Slack query bot disabled (no tokens)"
+MISCONFIGURED_MESSAGE = "Slack query bot disabled (misconfigured)"
+# Socket Mode connect retries: capped exponential backoff (transient errors only).
+RETRY_BASE_SECONDS = 5.0
+RETRY_MAX_SECONDS = 300.0
+# Slack error codes meaning the tokens themselves were refused: no retry.
+AUTH_ERROR_CODES = frozenset({
+    "invalid_auth", "not_authed", "account_inactive", "token_revoked",
+    "token_expired", "not_allowed_token_type", "missing_scope",
+})
 _CHANNEL_ID = re.compile(r"^[CG][A-Z0-9]{6,20}$")
 _SEEN_MAX = 500
 # Mentions that still arrive as app_mention with a subtype.
@@ -297,16 +310,90 @@ async def _heartbeat_loop(state, stop_event: asyncio.Event, interval: float) -> 
             pass
 
 
+def _auth_error_code(exc: BaseException) -> str:
+    """Slack's error code when ``exc`` means the tokens were rejected, else ""."""
+    try:
+        from slack_sdk.errors import SlackApiError
+    except ImportError:  # pragma: no cover - slack-sdk is a hard dependency
+        return ""
+    if not isinstance(exc, SlackApiError):
+        return ""
+    response = exc.response
+    code = response.get("error", "") if hasattr(response, "get") else ""
+    return code if code in AUTH_ERROR_CODES else ""
+
+
+async def _wait_or_stop(stop_event: asyncio.Event, seconds: float) -> bool:
+    """Sleep up to ``seconds``; True when stop was requested meanwhile."""
+    try:
+        await asyncio.wait_for(stop_event.wait(), timeout=seconds)
+    except asyncio.TimeoutError:
+        return False
+    return True
+
+
+async def _connect(handler_factory, bolt_app, app_token: str, stop_event: asyncio.Event,
+                   retry_base_seconds: float):
+    """Open the Socket Mode connection: (handler, "connected"|"auth_failed"|"stopped").
+
+    Rejected tokens are not retried (they won't start working by themselves);
+    anything else (network, Slack outage) retries with capped exponential
+    backoff so a transient failure never turns into a crash loop.
+    """
+    attempt = 0
+    while not stop_event.is_set():
+        handler = handler_factory(bolt_app, app_token)
+        try:
+            await handler.connect_async()
+            return handler, "connected"
+        except Exception as exc:
+            code = _auth_error_code(exc)
+            if code:
+                logger.warning(f"Slack rejected the tokens ({code}): check SLACK_BOT_TOKEN / "
+                               "SLACK_APP_TOKEN and redeploy. Slack query bot idling meanwhile.")
+                await _close_quietly(handler)
+                return None, "auth_failed"
+            delay = min(retry_base_seconds * (2 ** attempt), RETRY_MAX_SECONDS)
+            attempt += 1
+            logger.warning(f"Slack connection failed ({type(exc).__name__}); retrying in {delay:.0f}s")
+            await _close_quietly(handler)
+            if await _wait_or_stop(stop_event, delay):
+                break
+    return None, "stopped"
+
+
+async def _close_quietly(handler) -> None:
+    try:
+        await handler.close_async()
+    except Exception as exc:
+        logger.debug(f"Slack handler close failed: {type(exc).__name__}")
+
+
 async def run(config, *, stop_event: asyncio.Event | None = None, environ=None, state=None,
-              brain=None, interval: float = HEARTBEAT_SECONDS, handler_factory=None) -> str:
-    """Run until ``stop_event``. Returns "disabled" or "stopped"."""
+              brain=None, interval: float = HEARTBEAT_SECONDS, handler_factory=None,
+              retry_base_seconds: float = RETRY_BASE_SECONDS) -> str:
+    """Run until ``stop_event``.
+
+    Returns "disabled" (no tokens), "misconfigured" (half-set or malformed
+    settings), "auth_failed" (Slack rejected the tokens) or "stopped". None
+    of these exit the process: the heartbeat keeps running, so a container
+    without working Slack settings idles visibly in its logs instead of
+    crash-looping under `restart: unless-stopped`.
+    """
     from harvey.state import StateManager
 
     stop_event = stop_event or asyncio.Event()
-    settings = read_settings(environ)
+    try:
+        settings, problem = read_settings(environ), None
+    except ConfigError as exc:
+        settings, problem = None, exc
     _quiet_slack_loggers()
     state = state or StateManager()
     await state.init_db()
+    if problem is not None:
+        logger.warning(f"{MISCONFIGURED_MESSAGE}: {problem} Fix the Slack settings and redeploy.")
+        await _heartbeat_loop(state, stop_event, interval)
+        return "misconfigured"
     if settings is None:
         logger.info(DISABLED_MESSAGE)
         await _heartbeat_loop(state, stop_event, interval)
@@ -326,14 +413,21 @@ async def run(config, *, stop_event: asyncio.Event | None = None, environ=None, 
         def handler_factory(app, token):
             return AsyncSocketModeHandler(app, token)
 
-    handler = handler_factory(build_bolt_app(bot, bot_token), app_token)
-    await handler.connect_async()
-    logger.info("Slack query bot connected (Socket Mode).")
+    # Heartbeat from the start, so connection retries never look like a hang.
+    beats = asyncio.create_task(_heartbeat_loop(state, stop_event, interval))
+    handler = None
     try:
-        await _heartbeat_loop(state, stop_event, interval)
+        handler, outcome = await _connect(handler_factory, build_bolt_app(bot, bot_token),
+                                          app_token, stop_event, retry_base_seconds)
+        if outcome == "connected":
+            logger.info("Slack query bot connected (Socket Mode).")
+        await stop_event.wait()
+        return "auth_failed" if outcome == "auth_failed" else "stopped"
     finally:
-        await handler.close_async()
-    return "stopped"
+        stop_event.set()
+        await beats
+        if handler is not None:
+            await _close_quietly(handler)
 
 
 def main() -> None:

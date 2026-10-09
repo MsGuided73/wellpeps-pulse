@@ -91,6 +91,15 @@ def test_environment_variables(base):
         "${SLACK_BRIEFS_WEBHOOK_URL:-}"
 
 
+def test_slackbot_is_opt_in_via_profile(base):
+    # Off by default until the Slack app is verified; the worker and dashboard
+    # must never be gated by a profile.
+    services = base["services"]
+    assert services["slackbot"]["profiles"] == ["slack"]
+    assert "profiles" not in services["worker"]
+    assert "profiles" not in services["dashboard"]
+
+
 def test_slackbot_service(base):
     bot = base["services"]["slackbot"]
     env = _env(bot)

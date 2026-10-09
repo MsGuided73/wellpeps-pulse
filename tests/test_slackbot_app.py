@@ -295,6 +295,105 @@ async def test_enabled_bot_connects_socket_mode_and_never_logs_tokens(tmp_path, 
     assert "SECRETBOTTOKEN" not in caplog.text and "SECRETAPPTOKEN" not in caplog.text
 
 
+async def _run_briefly(state, env, handler_factory, seconds=0.08, **kwargs):
+    stop = asyncio.Event()
+
+    async def stopper():
+        await asyncio.sleep(seconds)
+        stop.set()
+
+    asyncio.get_running_loop().create_task(stopper())
+    return await app_mod.run(_config(), stop_event=stop, environ=env, state=state,
+                             brain=ScriptedBrain(), interval=0.01,
+                             handler_factory=handler_factory, **kwargs)
+
+
+async def _heartbeat_stamp(state):
+    from harvey.health import SLACKBOT_HEARTBEAT_KEY
+
+    return await state.get_setting(SLACKBOT_HEARTBEAT_KEY, "")
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("env", [
+    {"SLACK_BOT_TOKEN": BOT_TOKEN},                                  # one token only
+    {"SLACK_BOT_TOKEN": "nope", "SLACK_APP_TOKEN": APP_TOKEN,
+     "SLACK_QUERY_CHANNEL_ID": CHANNEL},                             # wrong prefix
+    {"SLACK_BOT_TOKEN": BOT_TOKEN, "SLACK_APP_TOKEN": APP_TOKEN,
+     "SLACK_QUERY_CHANNEL_ID": "not-a-channel"},                     # bad channel id
+])
+async def test_misconfigured_settings_idle_instead_of_crashing(tmp_path, caplog, env):
+    caplog.set_level(logging.WARNING)
+    state = await fresh_state(tmp_path)
+    _FakeHandler.instances.clear()
+
+    outcome = await _run_briefly(state, env, _FakeHandler)
+
+    assert outcome == "misconfigured"
+    assert _FakeHandler.instances == []                 # never tried to connect
+    assert await _heartbeat_stamp(state)                # still healthy for Docker
+    assert "Slack query bot disabled (misconfigured)" in caplog.text
+    assert "SECRETBOTTOKEN" not in caplog.text and "SECRETAPPTOKEN" not in caplog.text
+
+
+class _RejectingHandler(_FakeHandler):
+    async def connect_async(self):
+        from slack_sdk.errors import SlackApiError
+
+        raise SlackApiError("invalid_auth", {"ok": False, "error": "invalid_auth"})
+
+
+@pytest.mark.asyncio
+async def test_rejected_tokens_idle_instead_of_crashing(tmp_path, caplog):
+    caplog.set_level(logging.WARNING)
+    state = await fresh_state(tmp_path)
+    env = {"SLACK_BOT_TOKEN": BOT_TOKEN, "SLACK_APP_TOKEN": APP_TOKEN, "SLACK_QUERY_CHANNEL_ID": CHANNEL}
+
+    outcome = await _run_briefly(state, env, _RejectingHandler)
+
+    assert outcome == "auth_failed"
+    assert await _heartbeat_stamp(state)
+    assert "Slack rejected the tokens (invalid_auth)" in caplog.text
+    assert "SECRETBOTTOKEN" not in caplog.text and "SECRETAPPTOKEN" not in caplog.text
+
+
+class _FlakyHandler(_FakeHandler):
+    failures_left = 2
+
+    async def connect_async(self):
+        if _FlakyHandler.failures_left > 0:
+            _FlakyHandler.failures_left -= 1
+            raise OSError("network unreachable")
+        self.connected = True
+
+
+@pytest.mark.asyncio
+async def test_transient_connect_errors_retry_then_connect(tmp_path, caplog):
+    caplog.set_level(logging.WARNING)
+    state = await fresh_state(tmp_path)
+    env = {"SLACK_BOT_TOKEN": BOT_TOKEN, "SLACK_APP_TOKEN": APP_TOKEN, "SLACK_QUERY_CHANNEL_ID": CHANNEL}
+    _FlakyHandler.failures_left = 2
+    _FakeHandler.instances.clear()
+
+    outcome = await _run_briefly(state, env, _FlakyHandler, seconds=0.3, retry_base_seconds=0.01)
+
+    assert outcome == "stopped"
+    assert any(h.connected for h in _FakeHandler.instances)
+    assert await _heartbeat_stamp(state)
+    assert "retrying in" in caplog.text
+
+
+@pytest.mark.asyncio
+async def test_stop_during_connect_retries_exits_cleanly(tmp_path):
+    state = await fresh_state(tmp_path)
+    env = {"SLACK_BOT_TOKEN": BOT_TOKEN, "SLACK_APP_TOKEN": APP_TOKEN, "SLACK_QUERY_CHANNEL_ID": CHANNEL}
+    _FlakyHandler.failures_left = 10_000
+
+    outcome = await _run_briefly(state, env, _FlakyHandler, seconds=0.05, retry_base_seconds=0.01)
+
+    assert outcome == "stopped"
+
+
 @pytest.mark.asyncio
 async def test_handler_never_logs_tokens_or_answers(state, caplog):
     caplog.set_level(logging.DEBUG)
