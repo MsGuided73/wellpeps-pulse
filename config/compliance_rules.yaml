@@ -38,24 +38,38 @@ limits:
     instagram: 2200
     facebook: 8000
 
-# R2/R3 disclosure: every Pulse reply is a brand reply, so its FIRST sentence
-# must carry one of the approved disclosure forms (case-insensitive; "Full
-# disclosure: I work with WellPeps, so I'm not neutral." passes). Missing ->
+# R2/R3 disclosure: every Pulse reply is a brand reply, so one of its first TWO
+# sentences must carry one of the approved disclosure forms (case-insensitive
+# substring; "Full disclosure: I work with WellPeps, so I'm not neutral." and
+# "Ugh, that pricing maze is the worst. I'm part of the WellPeps team, so I'm
+# biased, but here's what I'd check." both pass), and it must come before any
+# other mention of WellPeps, its programs or a wellpeps.com link. Missing, only
+# in sentence 3 or later (or only at the end), or WellPeps named earlier ->
 # RED. third_person patterns talk about WellPeps like a neutral customer or
 # bystander ("I signed up with WellPeps", "check out WellPeps"); they are RED
 # when the disclosure is missing too (astroturfing), with their own reason.
+#
+# Placement (owner decision 2026-10-15): "There is no requirement that it be
+# first. It just needs to be obvious." The source documents only ask that the
+# disclosure be easy to notice and not buried (Operations Manual §4.3; Approved
+# Messaging Guide §4; Competitor Protocol §7: "clear in-message"). "First
+# sentence" was a Pulse implementation choice, so a reply may open by
+# responding to the person and disclose in sentence 1 or 2. within_sentences
+# is that window.
 #
 # Approved forms (2026-10-06): the Approved Messaging & Response Guide §4
 # forms ("I work with WellPeps." is the primary one and the drafter's default;
 # "I'm part of the WellPeps team." for the community team). "I work for" /
 # "I'm with" WellPeps say the same affiliation just as plainly, so they stay
 # accepted. "Full disclosure: I work with WellPeps, so I'm not neutral." stays
-# allowed: it is in the first sentence, so it is not buried (Guide §4 "Do Not
-# Use: a disclosure buried where a reasonable viewer is unlikely to notice it").
+# allowed: it is within the first two sentences, so it is not buried (Guide §4
+# "Do Not Use: a disclosure buried where a reasonable viewer is unlikely to
+# notice it").
 # influencer_forms are the Brand Ambassador / partner forms (Guide §4): they
 # disclose, but Pulse never drafts as an influencer, so they are yellow (R47).
 disclosure:
   required: true
+  within_sentences: 2
   default_form: "I work with WellPeps."
   forms:
     - "I work with WellPeps"

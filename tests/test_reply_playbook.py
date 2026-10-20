@@ -22,7 +22,7 @@ from harvey.agents.drafter import (
     guide_claim,
 )
 from harvey.agents.reviewer import Reviewer
-from harvey.compliance import compliance_filter, first_sentence, has_disclosure
+from harvey.compliance import compliance_filter, first_sentence, has_disclosure, opening_sentences
 from harvey.config import PulseConfig
 from harvey.drafting import draft_batch
 from harvey.models import (
@@ -184,27 +184,33 @@ def test_link_examples_show_only_the_not_live_yellow():
 
 
 def test_the_real_tirzepatide_scenario_is_an_example():
-    """Rewritten to the guidelines: the guide's primary disclosure, one brief
-    factual option (the person asks which providers include follow-up), no
-    'one monthly price', the guide's email gate stated."""
+    """Rewritten to the guidelines: a reaction to the person, then the guide's
+    primary disclosure in sentence 2, one brief factual option (the person asks
+    which providers include follow-up), no 'one monthly price', the guide's
+    email gate stated."""
     example = next(e for e in knowledge.reply_examples().examples if e.post == EXAMPLE_POST)
     assert example.category == "purchase_intent" and example.platform == "reddit"
-    assert example.reply.startswith("I work with WellPeps.")
+    assert not example.reply.startswith("I work with WellPeps.")
+    assert "I work with WellPeps" in opening_sentences(example.reply)
     # Answer, then the GLP-1 guide and how it helps with THIS question (its chapter on price inclusions).
-    assert "It varies by provider" in example.reply
+    assert "it varies by provider" in example.reply
     assert "What's actually included in the price" in example.reply
     assert "one monthly price" not in example.reply and "CLM-PRICE-FOLLOWUP" not in example.claim_ids
-    assert "it asks for your email" in example.reply
+    assert "just asks for an email" in example.reply
     assert links.registry_link(GLP1).id == links.find_links(example.reply)[0].link.id
 
 
 def test_examples_follow_the_guidelines_not_the_superseded_playbook():
     for example in knowledge.reply_examples().examples:
-        assert example.reply.startswith("I work with WellPeps.")             # Guide §4; Protocol §7
+        assert has_disclosure(example.reply)                                  # Guide §4; Protocol §7
+        assert not example.reply.startswith("I work with WellPeps.")          # familiar voice: reaction first
         assert 30 <= len(example.reply.split()) <= 110                        # 40-90 words, ~110 with the guide
         assert not {"CLM-PRICE-FOLLOWUP", "CLM-PRICE-ALLIN"} & set(example.claim_ids)
         if links.find_links(example.reply):
-            assert "asks for your email" in example.reply                     # Protocol §8
+            assert re.search(r"\be-?mail\b", example.reply)                   # Protocol §8: the email gate is stated
+        assert not example.reply.rstrip().lower().endswith(("hope this helps!", "hope this helps."))
+        # The provider-boundary line only where treatment choice is the question.
+        assert ("CLM-R22-PROVIDER-DETERMINES" in example.claim_ids) == (example.id == "EX-NO-LINK-COMMUNITY")
 
 
 def test_examples_block_masks_registry_urls():
@@ -306,10 +312,12 @@ def test_non_reddit_prompt_has_no_word_limit():
 def test_reviewer_and_rules_check_disclosure_astroturfing_and_link_relevance():
     review_md = (PROJECT_ROOT / "prompts" / "review.md").read_text(encoding="utf-8")
     rules = (PROJECT_ROOT / "prompts" / "reply_rules.md").read_text(encoding="utf-8")
-    assert "Undisclosed affiliation" in review_md and "FIRST sentence" in review_md
+    assert "Undisclosed affiliation" in review_md and "FIRST TWO sentences" in review_md
+    assert "FIRST sentence" not in review_md
     assert "Astroturfing" in review_md and "as a happy customer" in review_md
     assert "Link relevance" in review_md
-    assert "FIRST sentence" in rules and "links registry" in rules
+    assert "first two sentences" in rules and "FIRST sentence" not in rules and "links registry" in rules
+    assert "before any other mention of WellPeps" in rules
 
 
 # --- Disclosure rules -------------------------------------------------------------------
@@ -332,10 +340,12 @@ def test_missing_disclosure_is_red():
     assert any(h.rule_id == "R3" and h.kind == "disclosure" for h in result.hits)
 
 
-def test_disclosure_must_be_in_the_first_sentence():
+def test_disclosure_may_be_the_second_sentence_but_not_later():
     text = "Great question. Disclosure: I work with WellPeps, so I am not neutral."
     assert first_sentence(text) == "Great question."
-    assert compliance_filter(text, "reddit", ["CLM-R3-DISCLOSURE"]).tier == "red"
+    assert compliance_filter(text, "reddit", ["CLM-R3-DISCLOSURE"]).tier != "red"
+    late = "Great question. Thanks for asking. Disclosure: I work with WellPeps, so I am not neutral."
+    assert compliance_filter(late, "reddit", ["CLM-R3-DISCLOSURE"]).tier == "red"
 
 
 @pytest.mark.parametrize("text", [

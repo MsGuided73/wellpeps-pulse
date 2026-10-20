@@ -138,8 +138,14 @@ def test_ambassador_and_partner_forms_disclose_but_are_yellow(opening):
 
 
 def test_a_buried_disclosure_is_red():
-    result = compliance_filter("Great question. I work with WellPeps. Thanks.", "reddit", IDS)
+    result = compliance_filter("Great question. Thanks for asking. I work with WellPeps. Hope that helps.",
+                               "reddit", IDS)
     assert "R3" in {h.rule_id for h in result.red_hits}
+
+
+def test_a_disclosure_in_the_second_sentence_is_clean():
+    result = compliance_filter("Great question. I work with WellPeps. Thanks.", "reddit", IDS)
+    assert not [h for h in result.hits if h.kind == "disclosure"]
 
 
 def test_default_disclosure_is_the_guides_primary_form():

@@ -101,7 +101,8 @@ deterministic compliance filter (`harvey/compliance.py`) exist.
   `config/reply_examples.yaml` (PENDING few-shot style guidance), the
   purchase-intent/question playbook in `prompts/draft.md` (claim selection in
   `drafter.candidate_claims` / `guide_claim`), deterministic disclosure rules
-  (`disclosure:` in compliance_rules.yaml: first sentence must disclose),
+  (`disclosure:` in compliance_rules.yaml: disclose within the first two
+  sentences and before any other WellPeps mention; owner decision 2026-10-15),
   link rules in the filter (outside registry / unbacked -> red, not live ->
   yellow + approval blocker), migration v7 (`drafts.link_json`,
   `db/postgres/0003_draft_links.sql`), `harvey/reply_analytics.py` +

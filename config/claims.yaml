@@ -52,7 +52,7 @@ claims:
     approved_at: null
     expires: null
     source: "reply-compliance-rules.md R3 ([PB] §04-05)"
-    note: "Same affiliation as the guide's primary form CLM-AMG-04-WORK-WITH (Guide §4), which the drafter now uses by default. This longer form stays allowed: it is in the first sentence, so the disclosure is not buried."
+    note: "Same affiliation as the guide's primary form CLM-AMG-04-WORK-WITH (Guide §4), which the drafter now uses by default. This longer form stays allowed: it sits within the first two sentences, so the disclosure is not buried."
 
   - id: CLM-R3-BIO
     text: "Helping answer general questions about telehealth and patient education. I work with WellPeps. Not individual medical advice."

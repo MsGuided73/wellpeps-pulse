@@ -78,7 +78,7 @@ Pulse drafts as one of two personas (`engagement.persona` in
 `config/engagement_guide.yaml`). There is deliberately no anonymous persona
 ([CG] Option 5; [OM] §3.5).
 
-| Persona | When | Opening sentence | Source |
+| Persona | When | Disclosure sentence (sentence 1 or 2) | Source |
 |---|---|---|---|
 | `official_account` (default) | WellPeps' own accounts | "I work with WellPeps." | [OM] §3.2; [CG] Option "WellPeps Official Account"; [CP] §7 ("Official accounts use clear company identity") |
 | `identified_employee` | a named team member (`display_name`, no clinical titles) | "Hi, I'm <name> — I work with WellPeps." | [CG] Option 1; [AMG] §4; [PL] Channel 3 / 6 |
@@ -94,8 +94,27 @@ Approved disclosure forms ([AMG] §4; [CT] Module 2; [OM] §4.2):
 - The earlier "Full disclosure: I work with WellPeps, so I'm not neutral."
   ([PL] Channel 3) stays allowed; it is no longer the default.
 
-The disclosure must be in the first sentence and easy to notice ([AMG] §4;
-[OM] §4.3): a missing or buried disclosure is red (R3).
+**Placement (owner decision 2026-10-15).** "There is no requirement that it be
+first. It just needs to be obvious." The source documents only require the
+disclosure to be easy to notice and not buried ([OM] §4.3; [AMG] §4; [CP] §7
+"clear in-message"); "first sentence" was a Pulse implementation choice. The
+rule (R3, `disclosure.within_sentences: 2` in `config/compliance_rules.yaml`):
+
+- The disclosure appears **within the first two sentences** of the reply and
+  **before any other mention of WellPeps, its programs, or a wellpeps.com
+  link**. It is never only at the end, only in a profile, or after a "more"
+  fold.
+- It may sit in its own sentence ("I work with WellPeps.") or be woven into one
+  ("Ugh, that pricing maze is the worst. I'm part of the WellPeps team, so I'm
+  biased, but here's what I'd check..."). The approved forms above stay the
+  source of accepted phrases (case-insensitive substring).
+- A reply may, and usually should, open by responding to the person: a short,
+  specific reaction, not canned empathy ("We understand your concern").
+- Red (R3): no approved form in sentences 1-2; or WellPeps, "our" program /
+  guide / membership / team wording, or a registry link before the form.
+  Third-person / customer-voice talk stays red (R2) when there is no
+  disclosure. `boundary_only` replies keep the verbatim approved response and
+  still open with the disclosure.
 
 ## 3. How Pulse decides
 
@@ -196,7 +215,8 @@ is open).
 
 ### Answer first and acknowledgements (2026-10-07)
 
-- **Model drafts answer first** ([AMG] §1-§3; [CP] §1): after the disclosure the next sentence
+- **Model drafts answer first** ([AMG] §1-§3; [CP] §1): a short reaction to the person, the
+  disclosure (sentence 1 or 2, see section 2), then the sentence that
   answers the poster's actual question in their terms from approved claims (a program's
   status claim for "is X live yet?"; what varies and what to ask for "which providers include
   follow-up?"); boundary or disclaimer wording only where the question needs it, never as the
@@ -570,6 +590,8 @@ information here."
 | CLM-PRICE-FOLLOWUP "...included in the one monthly price" as a fixed playbook claim | Not offered first; FINALIZE `pricing`; the Live Reference's approved ongoing-support fact is used instead | [CP] §6; [LR] §6 ("One Simple Price. Everything Included." needs verification); [AMG] §12 FINALIZE |
 | CLM-PRICE-ALLIN (includes "standard shipping") | FINALIZE `pricing` | [LR] §6-7 (shipping CONFIRM); [CP] §6 |
 | `config/reply_examples.yaml` (four playbook examples) | Rewritten: primary disclosure, no unsolicited WellPeps fact, no "one monthly price", email gate stated, 40-90 words | [CP] §7-8; [AMG] §4 |
+| Disclosure must be the FIRST sentence of every reply (Pulse choice, 2026-10-06; `first_sentence`) | Within the first two sentences, before any other WellPeps mention; replies open by responding to the person (2026-10-15) | Owner decision 2026-10-15; [OM] §4.3; [AMG] §4; [CP] §7 ("easy to notice", not buried) |
+| Drafter shape: disclosure, answer, provider line on every reply | Reaction, disclosure, answer, one next step; familiar voice (contractions, varied openings, no stock closing); provider line only for treatment choice, suitability, eligibility, results or safety, worked into the answer | Owner decision 2026-10-15; [AMG] §3 ("when necessary") |
 | 80/20 as a per-reply gate (partial work: R45 yellow; no link / education only when a community is over 20%) | Planning metric only (review desk chip, Analytics card) | [CP] §1; [OM] §2.1 |
 | Severe categories are never drafted (`NO_DRAFT_CATEGORIES`, before 2026-10-06); third-party adverse events get no reply (partial work) | Adverse events in any thread get the guide's boundary reply for a clinical approver, plus the page; billing / complaints about WellPeps get Template C | [AMG] §9-10, §19, §25; [OM] §19, §25; [CP] §5, Examples 4, 17-18 |
 | Unknown community rules: draft yellow, no link (partial work, for every post) | For competitor / switching posts: HOLD, nothing drafted (other posts unchanged) | [CP] §2, §4 step 1, Example 14 |

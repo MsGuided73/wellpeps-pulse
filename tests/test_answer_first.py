@@ -15,7 +15,7 @@ from harvey.agents.drafter import (
     engagement_block,
     programs_for,
 )
-from harvey.compliance import compliance_filter
+from harvey.compliance import compliance_filter, has_disclosure, sentence_spans
 from harvey.models import Category, Mention, Platform, Triage
 from harvey.models.knowledge import LIVE_REFERENCE_APPROVER
 from harvey.paths import PROJECT_ROOT
@@ -167,16 +167,28 @@ async def test_drafter_offers_the_status_claim_for_the_real_hair_post():
 # --- Few-shot examples -----------------------------------------------------------------------
 
 
+def _disclosure_sentence(reply: str) -> str:
+    """The sentence (one of the first two) that carries the disclosure."""
+    spans = sentence_spans(reply)
+    assert has_disclosure(reply), reply
+    return next(reply[a:b] for a, b in spans[:2] if has_disclosure(reply[a:b]))
+
+
+def _sentence_after_disclosure(reply: str) -> str:
+    sentence = _disclosure_sentence(reply)
+    return reply.split(sentence, 1)[1].strip()
+
+
 def test_examples_cover_availability_and_follow_up_pricing_answer_first():
     examples = {e.post: e for e in knowledge.reply_examples().examples}
     hair = examples[HAIR_POST]
     assert "CLM-STATUS-HAIR" in hair.claim_ids
-    assert hair.reply.split(". ", 1)[1].startswith("Not live yet")              # the answer comes second
+    assert _sentence_after_disclosure(hair.reply).startswith("Not live yet")     # the answer follows the disclosure
     followup = examples[FOLLOWUP_POST]
-    assert followup.reply.split(". ", 1)[1].startswith("It varies by provider")
+    assert "it varies by provider" in _disclosure_sentence(followup.reply).lower()   # woven into the disclosure
     for example in examples.values():
-        second = example.reply.split(". ", 1)[1].lower()
-        assert not second.startswith(("compounded", "a licensed healthcare provider determines")), example.id
+        after = _sentence_after_disclosure(example.reply).lower()
+        assert not after.startswith(("compounded", "a licensed healthcare provider determines")), example.id
 
 
 # --- Protocol: a publishable program-status claim partly answers availability ----------------------

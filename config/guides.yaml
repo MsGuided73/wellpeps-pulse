@@ -170,8 +170,8 @@ guides:
         needs: [treatment_education]
       - title: "NAD+ vs. NR vs. NMN"
         keywords: [nmn, nr, precursor, precursors, supplement, supplements, vs, versus, difference]
-      - title: "Compounded and FDA-approved aren't the same thing"
-        keywords: [compounded, fda, fda-approved, approved, regulated]
+      - title: "How is NAD+ therapy used?"
+        keywords: [how is it used, how it's used, used for, uses, iv, infusion, infusions, injection, injections, shot, shots, nasal]
       - title: "What should you expect from NAD+ therapy?"
         keywords: [expect, expectations, results, worth it, work, works, energy]
     landing:

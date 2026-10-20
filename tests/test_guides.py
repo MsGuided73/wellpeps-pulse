@@ -256,6 +256,27 @@ def test_guide_link_without_the_email_gate_is_yellow():
     assert [h.reason for h in _guide_hits(result)] == [guides.GATE_REASON]
 
 
+@pytest.mark.parametrize("gate", [
+    "(it's free, it just asks for an email)",
+    "(it just needs an email)",
+    "(it just asks for your email)",
+    "(free, it needs your email)",
+    "(it asks for your email)",
+    "(you'll just need to give an e-mail)",
+])
+def test_natural_email_gate_wordings_satisfy_the_rule(gate):
+    text = WITH_GUIDE.replace("(it asks for your email)", gate)
+    assert gate in text
+    result = compliance_filter(text, "reddit", GUIDE_IDS, guide=_requirement(ALLOWED))
+    assert _guide_hits(result) == []
+
+
+def test_a_gate_that_never_mentions_email_is_still_yellow():
+    text = WITH_GUIDE.replace(" (it asks for your email)", " (it's free, no strings)")
+    result = compliance_filter(text, "reddit", GUIDE_IDS, guide=_requirement(ALLOWED))
+    assert [h.reason for h in _guide_hits(result)] == [guides.GATE_REASON]
+
+
 def test_named_guide_satisfies_the_no_link_rule():
     text = (ANSWER + " Our free GLP-1 Weight Loss guide on the WellPeps website (it asks for your email) has a "
                      "chapter, \"What's actually included in the price\", on what to check.")
@@ -322,7 +343,7 @@ def test_drafter_prompt_requires_the_how_it_helps_sentence():
     prompt = build_prompt(mention, t, claims, guidance=g)
     assert "Smart Patient's Guide (a chapter answers this question, so include it)" in prompt
     assert '"What\'s actually included in the price"' in prompt
-    assert "our free GLP-1 Weight Loss guide (it asks for your email)" in prompt
+    assert "our free GLP-1 Weight Loss guide ... (it's free, it just asks for an email)" in prompt
     assert "Chapters in this guide (approved guide content" in prompt
     assert links.tracked_url_for(knowledge.links_by_id()["LNK-GUIDE-GLP-1-WEIGHT-LOSS"], mention) in prompt
     assert f"under {REDDIT_MAX_WORDS_WITH_GUIDE} words" in length_rule("reddit", g)
@@ -436,7 +457,7 @@ def test_examples_show_the_guide_pattern():
         guide = next(g for g in guides.all_guides() if g.claim_id in example.claim_ids)
         titles = [c.title for c in (*guide.chapters, *guide.landing)]
         assert any(t in example.reply for t in titles), example.id
-        assert "it asks for your email" in example.reply
+        assert guides.GATE_RX.search(example.reply)
         assert guides.pick_for(text=example.post).guide.slug == guide.slug, example.id
 
 

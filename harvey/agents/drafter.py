@@ -24,13 +24,14 @@ situations ``guidance`` names the single most relevant guide and the chapter(s)
 that answer this question (harvey/guides.py). Its claim is offered right after
 the disclosure / status claims, with its chapters as approved guide content, and
 the prompt requires one "how it helps" sentence naming the chapter, the
-gated-download disclosure ("free, it asks for your email") and the tracked link
+gated-download disclosure ("free, it just asks for an email") and the tracked link
 (or the guide's name without a link where links are not allowed).
 
 Rules of engagement (docs/RULES-OF-ENGAGEMENT.md): ``guidance``
 (harvey.engagement.DraftGuidance) carries the situation, its template (Guide
-§25 A-E), the persona's exact opening disclosure ("I work with WellPeps." by
-default), the situation's preferred claims (offered first), and whether this
+§25 A-E), the persona's exact disclosure sentence ("I work with WellPeps." by
+default; it goes in sentence 1 or 2, after a short reaction to the person),
+the situation's preferred claims (offered first), and whether this
 community allows a link or promotion at all. With no link allowed, claim
 links are not shown to the model. Influencer-only wording and guide
 templates with an unfilled [slot] are never offered.
@@ -86,9 +87,13 @@ SERIES_GUIDE_CLAIM = "CLM-EDU-GUIDES"
 GUIDE_LINK_PLACEHOLDER = "<guide link>"
 # Approved Messaging & Response Guide §1-§3 ("Answer the actual question"; the
 # writing standard) and the switching protocol's "respond to the unmet need".
-ANSWER_FIRST = ("Answer first: the sentence right after the disclosure directly answers the poster's actual "
-                "question in their terms, from the claims; boundary or disclaimer wording only where the "
-                "question needs it and never as the opener; then one useful next step.")
+ANSWER_FIRST = ("Answer first: open with a short, specific reaction to what the poster said, then the "
+                "disclosure (sentence 1 or 2), then directly answer the poster's actual question in their "
+                "terms, from the claims; boundary or disclaimer wording only where the question needs it and "
+                "never as the opener; then one useful next step.")
+# Owner decision 2026-10-15: the disclosure must be obvious, not necessarily first.
+DISCLOSURE_RULE = ("within the first two sentences of the reply and before any other mention of WellPeps, its "
+                   "programs or a wellpeps.com link; never only at the end")
 
 
 class DraftAnswer(BaseModel):
@@ -287,7 +292,8 @@ def guide_lines(guidance) -> list[str]:
              "actually included in the price' walks through what to check); never a generic 'check out our "
              "guide'. Describe the chapter only by its title plus a neutral phrase such as 'walks through "
              "what to check' or 'explains the differences'; never claim it covers anything else. Write the "
-             f"gate once, exactly: 'our free {guidance.guide_short} (it asks for your email)'. Phrase it as "
+             f"gate once, in natural words, e.g. 'our free {guidance.guide_short} ... (it's free, it just asks for an "
+             "email)' or '(it just needs your email)'; it must mention the email. Phrase it as "
              "help, not a sales pitch; keep answer-first: answer -> guide and how it helps. Vary the wording "
              "naturally; never a stock sentence."]
     if guidance.guide_mode == "link":
@@ -303,7 +309,7 @@ def engagement_block(guidance) -> str:
     """The rules-of-engagement section of the prompt (all from config, never
     from the mention)."""
     if guidance is None:
-        return ("- Open with exactly this sentence: \"I work with WellPeps.\"\n"
+        return (f"- Include exactly this disclosure sentence: \"I work with WellPeps.\", {DISCLOSURE_RULE}.\n"
                 f"- {ANSWER_FIRST}\n"
                 "- Educate before promoting.")
     lines = [f"- Situation: {guidance.label}."]
@@ -313,8 +319,9 @@ def engagement_block(guidance) -> str:
                      "texts; never leave brackets in the reply.")
     if guidance.notes:
         lines.append(f"- {guidance.notes}")
-    lines.append(f"- Open with exactly this sentence: \"{guidance.disclosure}\" "
-                 f"(cite {guidance.disclosure_claim}).")
+    lines.append(f"- Include exactly this disclosure sentence: \"{guidance.disclosure}\" "
+                 f"(cite {guidance.disclosure_claim}), {DISCLOSURE_RULE}. It may follow a short "
+                 "reaction to the person, or sit inside a sentence (\"...I work with WellPeps, so I'm biased, but...\").")
     lines.append(f"- {ANSWER_FIRST}")
     if guidance.preferred_claims:
         lines.append("- Prefer these claims for this situation: " + ", ".join(guidance.preferred_claims)

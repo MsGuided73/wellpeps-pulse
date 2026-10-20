@@ -104,7 +104,7 @@ def situation_line(guidance=None) -> str:
         limits.append(f"competitor/switching protocol {guidance.protocol_label}; WellPeps presence "
                       f"{guidance.brand_mode.replace('_', ' ')} ({guidance.brand_limits})")
     extra = f"; limits: {'; '.join(limits)}" if limits else ""
-    return f"{guidance.label}{template}; required opening: \"{guidance.disclosure}\"{extra}"
+    return f"{guidance.label}{template}; required disclosure (within the first two sentences, before any other WellPeps mention): \"{guidance.disclosure}\"{extra}"
 
 
 def build_prompt(reply: str, platform: str, mention: Mention, claims: list[Claim], guidance=None) -> str:

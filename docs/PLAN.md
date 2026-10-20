@@ -178,8 +178,10 @@ Steps 4–6 respect quiet hours and budget; 1–3 do not (triage has budget prio
   Few-shot examples in `config/reply_examples.yaml` (PENDING, style only;
   each must pass the filter apart from "link not live yet").
 - **Disclosure is deterministic** (`disclosure:` in compliance_rules.yaml):
-  every Pulse reply is a brand reply, so a first sentence without an approved
-  form ("I work with WellPeps", ...) is RED (R3); third-person / customer-voice
+  every Pulse reply is a brand reply, so a reply without an approved form
+  ("I work with WellPeps", ...) in its first two sentences (relaxed from "first
+  sentence" on 2026-10-15; also red if WellPeps, its programs or a wellpeps.com
+  link is named before it) is RED (R3); third-person / customer-voice
   talk about WellPeps without it is RED too, with its own R2 reason. The
   reviewer also checks undisclosed affiliation, astroturfing tone and link
   relevance.

@@ -196,9 +196,12 @@ class Limits(_Strict):
 
 
 class Disclosure(_Strict):
-    """R2/R3: the first sentence of every reply must carry an approved form."""
+    """R2/R3: the first ``within_sentences`` sentences of every reply must carry
+    an approved form, before any other WellPeps mention (2026-10-15: obvious,
+    not necessarily first)."""
 
     required: bool = False
+    within_sentences: int = Field(default=2, ge=1, le=3)
     forms: list[str] = Field(default_factory=list)
     # Approved forms for Brand Ambassadors / partners (Guide §4). They count
     # as a disclosure, but Pulse drafts as the official account or an

@@ -5,8 +5,8 @@ and the claims library. It never calls Claude, so the same input always gives
 the same result. Tiers follow reply-compliance-rules.md:
 
 - red:    a hard block (R13-R39 "never write this", R31 privacy, missing or
-          unknown claim IDs, limits, no disclosure in the first sentence
-          (R2/R3), a link outside config/links.yaml or not backed by a
+          unknown claim IDs, limits, no disclosure in the first two sentences
+          or WellPeps / its link named before it (R2/R3), a link outside config/links.yaml or not backed by a
           cited claim's ``link_id``). ``ok`` is False.
 - yellow: allowed as a draft but needs human compliance review (R10), incl.
           a registry link that is not live yet (approval is blocked on it
@@ -19,7 +19,8 @@ these are checked here in code:
 - R42  a cited claim with an open FINALIZE item -> yellow (approval is blocked
        separately in harvey/review.py).
 - R43  a "naked" link (fewer than ``link_rules.min_words_with_link`` words
-       besides the link and the disclosure sentence) -> red; the same link
+       besides the link and the disclosure sentence, wherever it sits in the
+       first two sentences) -> red; the same link
        already used in the community within the window -> yellow (context).
 - R44  community rules (config/communities.yaml, via ``ReplyContext``):
        prohibited -> red; unknown -> yellow and any link red;
@@ -215,13 +216,45 @@ def _competitor_hits(text: str) -> list[Hit]:
 
 
 _SENTENCE_END = re.compile(r"[.!?](?=\s|$)|\n")
+# "vs." / "e.g." / "i.e." / "approx." end a word, not a sentence ("Oral vs. topical").
+_ABBREVIATION_TAIL = re.compile(r"(?<![A-Za-z])(?:vs|e\.g|i\.e|approx)$", re.IGNORECASE)
+_WELLPEPS_RE = re.compile(r"wellpeps", re.IGNORECASE)
+# Brand voice ("our free guide", "our program") before the disclosure says who
+# is talking only after the fact; the disclosure has to come first.
+_BRAND_VOICE_RE = re.compile(
+    r"\bour\s+(?:\w+[\s-]+){0,3}?(?:programs?|guides?|membership|assessments?|services?|platform|team)\b",
+    re.IGNORECASE)
+
+
+def sentence_spans(text: str) -> list[tuple[int, int]]:
+    """(start, end) offsets of each sentence (or line) in the stripped text."""
+    body = (text or "").strip()
+    spans: list[tuple[int, int]] = []
+    start = 0
+    for found in _SENTENCE_END.finditer(body):
+        if found.group(0) != "\n" and _ABBREVIATION_TAIL.search(body[max(0, found.start() - 6):found.start()]):
+            continue
+        if body[start:found.end()].strip():
+            spans.append((start, found.end()))
+        start = found.end()
+    if body[start:].strip():
+        spans.append((start, len(body)))
+    return spans
 
 
 def first_sentence(text: str) -> str:
     """The reply's first sentence (or first line), stripped."""
     body = (text or "").strip()
-    end = _SENTENCE_END.search(body)
-    return body[:end.end()].strip() if end else body
+    spans = sentence_spans(body)
+    return body[spans[0][0]:spans[0][1]].strip() if spans else body
+
+
+def opening_sentences(text: str, count: int = 2) -> str:
+    """The reply's first ``count`` sentences, stripped: the window in which the
+    affiliation disclosure must appear (``disclosure.within_sentences``)."""
+    body = (text or "").strip()
+    spans = sentence_spans(body)
+    return body[:spans[min(count, len(spans)) - 1][1]].strip() if spans else body
 
 
 @lru_cache(maxsize=None)
@@ -234,34 +267,77 @@ def _forms_in(opening: str, forms) -> bool:
     return any(_form_rx(f.strip()).search(opening) for f in forms if f.strip())
 
 
+def _form_match(opening: str, forms) -> re.Match[str] | None:
+    """The earliest match of any of ``forms`` in ``opening``."""
+    found = [m for f in forms if f.strip() for m in [_form_rx(f.strip()).search(opening)] if m]
+    return min(found, key=lambda m: m.start()) if found else None
+
+
+def _window(text: str, disclosure: Disclosure) -> str:
+    return opening_sentences(text, disclosure.within_sentences)
+
+
+def _disclosure_match(text: str, disclosure: Disclosure) -> re.Match[str] | None:
+    """Where the first two sentences carry an approved form (an influencer /
+    ambassador form counts too; see R47), in the ``_window`` text."""
+    return _form_match(_window(text, disclosure), [*disclosure.forms, *disclosure.influencer_forms])
+
+
 def has_disclosure(text: str, disclosure: Disclosure | None = None) -> bool:
-    """The first sentence carries one of the approved disclosure forms
-    (an influencer / ambassador form counts too; see R47)."""
+    """The first two sentences (``disclosure.within_sentences``) carry one of
+    the approved disclosure forms, in a sentence of its own or woven into one."""
     disclosure = disclosure or knowledge.compliance_rules().disclosure
-    opening = first_sentence(text)
-    return _forms_in(opening, disclosure.forms) or _forms_in(opening, disclosure.influencer_forms)
+    return _disclosure_match(text, disclosure) is not None
 
 
 def _influencer_form_hits(text: str, disclosure: Disclosure) -> list[Hit]:
-    opening = first_sentence(text)
-    if disclosure.influencer_forms and _forms_in(opening, disclosure.influencer_forms) \
-            and not _forms_in(opening, disclosure.forms):
-        return [Hit("R47", "disclosure", _clip(opening),
+    window = _window(text, disclosure)
+    if disclosure.influencer_forms and _forms_in(window, disclosure.influencer_forms) \
+            and not _forms_in(window, disclosure.forms):
+        return [Hit("R47", "disclosure", _clip(window),
                     "Brand Ambassador / partner disclosure form: Pulse drafts as the official account "
                     "or an identified employee (\"I work with WellPeps.\")")]
     return []
 
 
-def _disclosure_hits(text: str, disclosure: Disclosure, toggles: dict[str, bool]) -> list[Hit]:
-    """R2/R3: a brand reply opens with the disclosure; without it, third-person
-    talk about WellPeps reads as astroturfing."""
-    if not disclosure.required or has_disclosure(text, disclosure):
+def _before_disclosure_hits(text: str, disclosure: Disclosure) -> list[Hit]:
+    """R3: WellPeps, its programs or a wellpeps.com / registry link named
+    before the disclosure (the reply may open with a reaction, nothing about
+    the brand)."""
+    window = _window(text, disclosure)
+    match = _disclosure_match(text, disclosure)
+    if match is None:
         return []
-    return [
-        Hit("R3", "disclosure", _clip(first_sentence(text)),
-            "no approved disclosure in the first sentence (e.g. \"Disclosure: I work with WellPeps\")"),
-        *_pattern_hits(text, disclosure.third_person, "disclosure", toggles),
-    ]
+    head = window[:match.start()]
+    early = _WELLPEPS_RE.search(head) or _BRAND_VOICE_RE.search(head) \
+        or next((u for u in links.find_links(head) if u.link is not None), None)
+    if early is None:
+        return []
+    shown = early.group(0) if hasattr(early, "group") else early.raw
+    return [Hit("R3", "disclosure", _clip(shown),
+                "WellPeps, its programs or a wellpeps.com link is mentioned before the disclosure: "
+                "disclose first, then talk about WellPeps")]
+
+
+def _disclosure_hits(text: str, disclosure: Disclosure, toggles: dict[str, bool], raw: str | None = None) -> list[Hit]:
+    """R2/R3: a brand reply carries the disclosure within its first two
+    sentences, before any other WellPeps mention; without it, third-person
+    talk about WellPeps reads as astroturfing. ``text`` has our registry links
+    masked; ``raw`` (the unmasked reply) is where a link before the disclosure is seen."""
+    if not disclosure.required:
+        return []
+    if not has_disclosure(text, disclosure):
+        return [
+            Hit("R3", "disclosure", _clip(_window(text, disclosure)),
+                f"no approved disclosure in the first {_count_word(disclosure.within_sentences)} sentences "
+                "(e.g. \"I work with WellPeps\", \"I'm part of the WellPeps team\")"),
+            *_pattern_hits(text, disclosure.third_person, "disclosure", toggles),
+        ]
+    return _before_disclosure_hits(text if raw is None else raw, disclosure)
+
+
+def _count_word(count: int) -> str:
+    return {1: "one", 2: "two", 3: "three"}.get(count, str(count))
 
 
 def _link_hits(text: str, claim_ids: list[str]) -> tuple[list[Hit], list[Hit]]:
@@ -285,15 +361,18 @@ _WORD_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9'’-]*")
 def naked_link(text: str, disclosure: Disclosure | None = None, min_words: int | None = None) -> bool:
     """R43: the reply carries a link but little else (Guide §14: "provide a
     useful answer rather than posting a naked link"). The disclosure sentence
-    and the link itself don't count as an answer."""
+    (wherever it sits in the first two sentences) and the link itself don't
+    count as an answer."""
     if not _LINK_RE.search(text or ""):
         return False
     disclosure = disclosure or knowledge.compliance_rules().disclosure
     minimum = min_words or knowledge.engagement_guide().link_rules.min_words_with_link
-    body = _LINK_RE.sub(" ", text)
-    opening = first_sentence(body)
-    if opening and (_forms_in(opening, disclosure.forms) or _forms_in(opening, disclosure.influencer_forms)):
-        body = body.strip()[len(opening):]
+    body = _LINK_RE.sub(" ", text).strip()
+    for start, end in sentence_spans(body)[:disclosure.within_sentences]:
+        sentence = body[start:end]
+        if _forms_in(sentence, disclosure.forms) or _forms_in(sentence, disclosure.influencer_forms):
+            body = body[:start] + " " + body[end:]
+            break
     return len(_WORD_RE.findall(body)) < minimum
 
 
@@ -391,7 +470,7 @@ def compliance_filter(
              if naked_link(text, rules.disclosure) else [])
     red = [
         *_claim_hits(claim_ids, require_publishable),
-        *_disclosure_hits(scan, rules.disclosure, toggles),
+        *_disclosure_hits(scan, rules.disclosure, toggles, raw=text),
         *_pattern_hits(scan, rules.prohibited, "prohibited", toggles),
         *_pattern_hits(scan, rules.patient_confirmation, "patient_confirmation", toggles),
         *(_medication_hits(scan, forbid_meds) if forbid_meds else []),
