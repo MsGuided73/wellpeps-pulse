@@ -1078,9 +1078,17 @@ async function loadDemoFlags() {
   document.getElementById('demo-sandbox-banner').classList.toggle('hidden', !DEMO.sandbox);
 }
 
+// Start once every <script> on the page has run: home.js, hq.js and knowledge.js
+// register TAB_LOAD after app.js, and a fast /api/me must not route before they do
+// (otherwise the Pulse tab could stay on "Checking what needs you…").
+function whenScriptsLoaded(start) {
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start, {once: true});
+  else start();
+}
+
 async function loadReviewCount() {
   const data = await api('/api/mentions?status=in_review&limit=1');
   if (data) navCount('nav-review', data.total, false);
 }
 
-init();
+whenScriptsLoaded(init);

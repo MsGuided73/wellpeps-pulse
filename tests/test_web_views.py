@@ -32,6 +32,15 @@ def test_view_scripts_load_after_app_js_in_dependency_order():
     assert positions == sorted(positions)
 
 
+def test_app_starts_only_after_every_view_script_has_registered():
+    # A cold load once routed before home.js set TAB_LOAD.pulse, leaving the Pulse tab
+    # on "Checking what needs you..." (2026-10-20). init must wait for DOMContentLoaded.
+    js = (WEB / "app.js").read_text(encoding="utf-8")
+    assert re.search(r"^whenScriptsLoaded\(init\);\s*$", js, re.M)
+    assert not re.search(r"^init\(\);", js, re.M)
+    assert "addEventListener('DOMContentLoaded', start" in js
+
+
 def test_page_has_landmarks_three_views_and_a_live_region():
     html = (WEB / "index.html").read_text(encoding="utf-8")
     assert 'class="skip-link"' in html and '<main id="main"' in html and "<header" in html and "<footer" in html
