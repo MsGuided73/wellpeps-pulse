@@ -12,7 +12,7 @@ from harvey.paths import PROJECT_ROOT
 
 CONFIG_DIR = PROJECT_ROOT / "config"
 YAML_FILES = ["competitors.yaml", "products.yaml", "keywords.yaml", "compliance_rules.yaml", "claims.yaml",
-              "links.yaml", "reply_examples.yaml", "engagement_guide.yaml", "communities.yaml", "guides.yaml"]
+              "links.yaml", "reply_examples.yaml", "engagement_guide.yaml", "communities.yaml", "guides.yaml", "insights.yaml"]
 # Smart Patient's Guide claims approved by WellPeps through the user's
 # instruction (2026-10-07; FINALIZE gated_download_disclosure resolved).
 USER_APPROVED_GUIDE_CLAIMS = {"CLM-EDU-GUIDES", "CLM-EDU-GUIDE-GLP-1-WEIGHT-LOSS", "CLM-EDU-GUIDE-SEXUAL-WELLNESS",
@@ -168,12 +168,13 @@ def test_missing_config_file_raises_knowledge_error(tmp_path, monkeypatch):
 
 def test_competitor_counts_and_tiers():
     comps = knowledge.competitors()
-    assert len(comps.competitors) == 46
+    assert len(comps.competitors) == 50  # 46 from the registry + 4 seen in live mentions (2026-10-19)
     assert len(comps.adjacent) == 18
     assert {c.tier for c in comps.adjacent} == {"lab"}
     assert "lab" not in {c.tier for c in comps.competitors}
     names = {c.name for c in comps.competitors}
     assert {"Hims & Hers", "Ro", "Henry Meds", "BlueChew", "Keeps", "Hone Health", "AgelessRx"} <= names
+    assert {"Gimme Care", "PreventiveMD", "Mondae", "Lavender Sky Health"} <= names
 
 
 def test_non_competitors_excluded():

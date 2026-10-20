@@ -231,6 +231,38 @@ competitors:
     handles: []
     complaint_themes: []
     tier: weight
+  # Added 2026-10-19 from Pulse live mentions (Reddit, collected 2026-10-09):
+  # named in compounded-GLP-1 price and pharmacy comparison posts. Websites
+  # and complaint themes not yet verified; complaints are tracked from
+  # mentions (language bank / brief), not written here.
+  - name: Gimme Care
+    aliases: [GimmeCare, Gimme Care Health]
+    categories: [weight]
+    website: null
+    handles: []
+    complaint_themes: []
+    tier: weight
+  - name: PreventiveMD
+    aliases: [Preventive MD, PreventiveMD weight loss]
+    categories: [weight]
+    website: null
+    handles: []
+    complaint_themes: []
+    tier: weight
+  - name: Mondae
+    aliases: [Mondae Health]
+    categories: [weight]
+    website: null
+    handles: []
+    complaint_themes: []
+    tier: weight
+  - name: Lavender Sky Health
+    aliases: [Lavender Sky, LavenderSky]
+    categories: [weight]
+    website: null
+    handles: []
+    complaint_themes: []
+    tier: weight
 
   # --- Tier C: sexual wellness --------------------------------------------
   - name: BlueChew
