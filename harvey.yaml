@@ -96,6 +96,13 @@ slack_query:
 # per run (max_items, max_charge_usd) and per calendar month
 # (monthly_budget_usd; the Apify account's own usage limit also applies).
 # Run once by hand: `pulse ingest --apify-reddit` (needs APIFY_TOKEN).
+# Relevance (R-17): `sort: relevance` keeps Reddit's search on the query ("new"
+# returned mostly unrelated posts: 9 of 14 on 2026-10-15). `require_keyword_match`
+# is a gate before storing: a result whose title+body has none of Pulse's
+# listening terms (config/keywords.yaml families, competitors.yaml, or
+# extra_terms below; whole words, case-insensitive) is dropped and counted as
+# "off-topic" in the ingest report, so it costs no triage call. Searches use
+# exact phrases and buying intent (R-11).
 collectors:
   apify_reddit:
     enabled: false
@@ -104,14 +111,17 @@ collectors:
     max_charge_usd: 0.25        # hard cap per run (Apify maxTotalChargeUsd)
     monthly_budget_usd: 4.0     # stop scheduling once this month's runs cost this
     lookback_hours: 48          # never older than this, even on the first run
-    searches:                   # Reddit-wide, newest first; exact phrases, buying intent (R-11)
+    sort: relevance             # relevance | new | top | hot | comments
+    require_keyword_match: true # drop results with none of the listening terms
+    extra_terms: [GLP-1, GLP1, telehealth, telemedicine, compounded, weight loss medication, hair loss, erectile dysfunction, peptide, peptides]
+    searches:                   # Reddit-wide; exact phrases, buying intent (R-11)
       - '"WellPeps"'
       - '"compounded tirzepatide" telehealth'
       - '"compounded semaglutide" telehealth'
       - '"GLP-1" telehealth price'
       - '"GLP-1" provider recommendation'
-      - '"switching" "GLP-1" provider'
-      - '"Henry Meds"'
-      - '"Hims" GLP-1'
+      - '"switching" telehealth semaglutide'
+      - '"Henry Meds" semaglutide'
+      - '"Hims" semaglutide'
 
 retention_days: 180

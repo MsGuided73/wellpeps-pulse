@@ -12,6 +12,73 @@ summary for discussion.
 
 ---
 
+## 2026-10-19: Reddit collection relevance
+
+### R-17. Tighter Reddit collection (Live)
+- **Before:** the Reddit search ran with `sort: new` over 8 searches, and every
+  result was stored and sent to triage. Measured 2026-10-15: of 14 posts
+  pulled, 9 were off-topic (r/atljobs, r/CAguns, r/Kingdom, r/BunaTV...), and
+  6 of those contained none of our terms at all. Apify bills per returned
+  item, and each junk post also cost a Claude triage call.
+- **After:**
+  - Searches are sorted by relevance (`collectors.apify_reddit.sort`, default
+    `relevance`; also `new`, `top`, `hot`, `comments`). The 48-hour lookback is
+    unchanged, so results stay recent.
+  - A keyword gate (`require_keyword_match`, on by default) drops any result
+    whose title and body contain none of Pulse's listening terms: the brand,
+    product, generic, brand-name, slang and misspelling lists in
+    `config/keywords.yaml`, competitors and aliases from
+    `config/competitors.yaml`, and `extra_terms` (GLP-1, GLP1, telehealth,
+    telemedicine, compounded, weight loss medication, hair loss, erectile
+    dysfunction, peptide, peptides). Whole words, case-insensitive ("find" is
+    not "fin", "nada" is not "NAD"). The same topic check triage already uses.
+  - Dropped posts are counted and shown in the ingest report, e.g.
+    "9 skipped (9 off-topic)".
+  - Searches rewritten to sharper exact-phrase, buying-intent queries (for
+    example "switching" telehealth semaglutide, "Henry Meds" semaglutide).
+    Caps unchanged: 30 items, $0.25 per run, $4.00 per month. Still off.
+- **Why:** 9 of 14 posts were off-topic on 2026-10-15; this saves Apify credit
+  and triage calls.
+- **Verify with one capped pull** (`pulse ingest --apify-reddit`) before
+  turning scheduled collection on, and check the off-topic count.
+
+## 2026-10-15: Owner decision on disclosure placement and voice
+
+### R-16. Disclosure placement and familiar voice (Live)
+- **Before:** every reply had to carry the WellPeps disclosure in its very
+  first sentence ("I work with WellPeps."), and the drafter always opened with
+  it. Replies read as formulaic; the provider-boundary line was appended
+  to most of them.
+- **After:**
+  - The disclosure must appear **within the first two sentences** and
+    **before any other mention of WellPeps, its programs or a wellpeps.com
+    link**. It is never only at the end, only in a profile, or after a "more"
+    fold. It can be its own sentence or woven into one ("I'm part of the
+    WellPeps team, so I'm biased, but here's what I'd check..."). The approved
+    phrases are unchanged.
+  - Drafts open by responding to the person (a short, specific reaction, not
+    canned empathy), then disclose, then answer, then one next step. They use
+    contractions and plain words, vary their openings and have no stock closing
+    line. The provider line ("A licensed healthcare provider determines...")
+    appears only for treatment choice, suitability, eligibility, results or
+    safety, worked into the answer. The guide's email gate can be phrased
+    naturally ("it's free, it just asks for an email").
+  - The deterministic filter (R3), the reviewer prompt, the rules list, the
+    five style examples and the Rules of Engagement are updated to match.
+    `boundary_only` replies (approved text posted verbatim) are unchanged and
+    still open with the disclosure.
+- **Why:** owner instruction 2026-10-15: "Please don't say I'm with WellPeps
+  1st... There is no requirement that it be first. It just needs to be obvious.
+  I want the messages to sound more familiar." WellPeps' own documents only ask
+  that the disclosure be easy to notice and not buried (Operations Manual
+  §4.3; Approved Messaging Guide §4; Competitor Protocol §7 "clear
+  in-message"). "First sentence" was a Pulse implementation choice, as already
+  told to Derek.
+- **Needs sign-off:** Derek (confirms placement within the first two sentences
+  is acceptable).
+
+---
+
 ## 2026-10-09: Changes from the first live data pull
 
 The first live Reddit pull (22 real posts) showed Pulse reviewing and paging

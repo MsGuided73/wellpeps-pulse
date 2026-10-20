@@ -5,6 +5,7 @@ import logging
 import os
 from datetime import time as _time
 from pathlib import Path
+from typing import Literal
 
 from urllib.parse import urlsplit
 
@@ -281,6 +282,14 @@ class SlackQueryConfig(BaseModel):
     per_user_per_hour: int = Field(default=20, ge=1, le=1000)
 
 
+REDDIT_SORTS = ("relevance", "new", "top", "hot", "comments")
+# Market words checked by the keyword gate on top of the keywords.yaml / competitors.yaml families.
+DEFAULT_REDDIT_EXTRA_TERMS = (
+    "GLP-1", "GLP1", "telehealth", "telemedicine", "compounded", "weight loss medication",
+    "hair loss", "erectile dysfunction", "peptide", "peptides",
+)
+
+
 class ApifyRedditConfig(BaseModel):
     """Live Reddit collection through Apify (harvey/collectors/apify.py).
 
@@ -296,6 +305,11 @@ class ApifyRedditConfig(BaseModel):
     monthly_budget_usd: float = Field(default=4.0, ge=0)
     lookback_hours: int = Field(default=48, ge=1, le=24 * 14)
     searches: list[str] = Field(default_factory=list)
+    # Reddit search order. "relevance" keeps results on the query; "new" is very loose.
+    sort: Literal["relevance", "new", "top", "hot", "comments"] = "relevance"
+    # Drop (and count as off-topic) results that contain none of Pulse's listening terms.
+    require_keyword_match: bool = True
+    extra_terms: list[str] = Field(default_factory=lambda: list(DEFAULT_REDDIT_EXTRA_TERMS))
 
 
 class CollectorsConfig(BaseModel):

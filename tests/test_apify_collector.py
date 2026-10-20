@@ -95,7 +95,7 @@ async def test_collector_runs_the_actor_with_caps_and_reports_cost():
     start = seen[0]
     assert start.url.params["maxItems"] == "10" and start.url.params["maxTotalChargeUsd"] == "0.20"
     body = json.loads(start.content)
-    assert body["searches"] == ["GLP-1 telehealth provider"] and body["sort"] == "new"
+    assert body["searches"] == ["GLP-1 telehealth provider"] and body["sort"] == "relevance"
     assert body["includeNSFW"] is False and body["skipComments"] is True
 
 
@@ -198,3 +198,109 @@ async def test_a_slow_run_is_aborted_but_its_paid_results_are_kept():
     out = [m async for m in c.collect(None)]
     assert [m.url for m in out] == [POST["url"]] and c.cost_usd == pytest.approx(0.1)
     assert ("POST", "/v2/actor-runs/run1/abort") in calls
+
+
+# --- relevance: sort + keyword gate (R-17) ---------------------------------------------------------------
+
+
+def _post(n, title, body="", community="misc"):
+    return {**POST, "id": f"t3_{n}", "url": f"https://www.reddit.com/r/{community}/comments/{n}/x/",
+            "title": title, "body": body, "parsedCommunityName": community}
+
+
+def _gated(items, **kw):
+    client = ApifyClient("apify_test", http=_fake_apify(items))
+    return ApifyRedditCollector(searches=["x"], max_items=10, client=client, **kw)
+
+
+def test_actor_input_sorts_by_relevance_by_default_and_honours_config():
+    assert ApifyRedditCollector(searches=["x"], client=ApifyClient("t")).actor_input(None)["sort"] == "relevance"
+    c = ApifyRedditCollector(searches=["x"], sort="top", client=ApifyClient("t"))
+    assert c.actor_input(None)["sort"] == "top"
+
+
+def test_unknown_sort_is_rejected_in_config_and_collector():
+    from pydantic import ValidationError
+
+    with pytest.raises(ValidationError):
+        PulseConfig(collectors={"apify_reddit": {"sort": "controversial"}})
+    with pytest.raises(ValueError, match="sort must be one of"):
+        ApifyRedditCollector(searches=["x"], sort="controversial", client=ApifyClient("t"))
+    for ok in ("relevance", "new", "top", "hot", "comments"):
+        assert PulseConfig(collectors={"apify_reddit": {"sort": ok}}).collectors.apify_reddit.sort == ok
+
+
+def test_config_defaults_and_repo_config_use_relevance_and_the_gate():
+    from harvey.config import load_config
+
+    default = PulseConfig().collectors.apify_reddit
+    assert default.sort == "relevance" and default.require_keyword_match is True
+    assert "GLP-1" in default.extra_terms and "peptides" in default.extra_terms
+    repo = load_config().collectors.apify_reddit
+    assert repo.sort == "relevance" and repo.require_keyword_match is True
+    assert repo.extra_terms == default.extra_terms
+    assert '"WellPeps"' in repo.searches and len(repo.searches) == 8
+    assert repo.max_items == 30 and repo.max_charge_usd == 0.25 and repo.monthly_budget_usd == 4.0
+
+
+def test_collect_passes_sort_gate_and_extra_terms_to_the_collector():
+    kwargs = collect.collector_settings(_config(sort="hot", require_keyword_match=False,
+                                                extra_terms=["foo"]))["apify_reddit"][1]
+    assert kwargs["sort"] == "hot" and kwargs["require_keyword_match"] is False
+    assert kwargs["extra_terms"] == ["foo"]
+
+
+@pytest.mark.asyncio
+async def test_gate_drops_off_topic_posts_and_counts_them():
+    on = [
+        _post(1, "Switching to compounded tirzepatide, any tips?"),
+        _post(2, "Has anyone used WellPeps?"),
+        _post(3, "Ozempic made me nauseous"),
+        _post(4, "Best GLP-1 provider for price"),
+    ]
+    off = [
+        _post(5, "Hiring warehouse staff in Atlanta", "great pay"),
+        _post(6, "Can't find my stick figure drawings"),
+        _post(7, "Nada left in the tank today"),
+    ]
+    c = _gated(on + off)
+    out = [m async for m in c.collect(None)]
+    assert sorted(m.external_id for m in out) == ["t3_1", "t3_2", "t3_3", "t3_4"]
+    assert c.off_topic == 3 and c.skipped == 3
+
+
+@pytest.mark.asyncio
+async def test_gate_matches_whole_words_only():
+    from harvey import knowledge
+
+    assert not knowledge.on_topic("I could not find nada")                    # not NAD, not fin
+    assert knowledge.on_topic("NAD+ shots anyone?")
+    c = _gated([_post(1, "where do I find it"), _post(2, "my fin broke"), _post(3, "telehealthy living")],
+               extra_terms=["fin", "telehealth"])
+    out = [m async for m in c.collect(None)]
+    assert [m.external_id for m in out] == ["t3_2"]                           # "find"/"telehealthy" are not terms
+    assert c.off_topic == 2
+
+
+@pytest.mark.asyncio
+async def test_gate_reads_the_body_and_extra_terms_case_insensitively():
+    c = _gated([_post(1, "Question", "my GLP1 plan"), _post(2, "Question", "Weight Loss Medication costs"),
+                _post(3, "Question", "just a question")])
+    out = [m async for m in c.collect(None)]
+    assert [m.external_id for m in out] == ["t3_1", "t3_2"] and c.off_topic == 1
+
+
+@pytest.mark.asyncio
+async def test_gate_off_keeps_everything():
+    c = _gated([_post(1, "Hiring warehouse staff"), _post(2, "Ozempic")], require_keyword_match=False)
+    out = [m async for m in c.collect(None)]
+    assert len(out) == 2 and c.off_topic == 0 and c.skipped == 0
+
+
+@pytest.mark.asyncio
+async def test_ingest_report_shows_the_off_topic_count(state):
+    c = _gated([_post(1, "compounded tirzepatide"), _post(2, "Hiring warehouse staff"),
+                _post(3, "stick figure art")])
+    report = await run_collectors(state, [c])
+    assert report.created == 1 and report.skipped == 2 and report.off_topic == 2
+    assert "1 created, 0 duplicates, 2 skipped (2 off-topic), 0 errors" in report.lines()[0]

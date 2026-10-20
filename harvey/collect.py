@@ -33,7 +33,9 @@ def collector_settings(config: PulseConfig) -> dict:
     return {
         "apify_reddit": (reddit, {"searches": list(reddit.searches), "max_items": reddit.max_items,
                                   "max_charge_usd": reddit.max_charge_usd,
-                                  "lookback_hours": reddit.lookback_hours}),
+                                  "lookback_hours": reddit.lookback_hours, "sort": reddit.sort,
+                                  "require_keyword_match": reddit.require_keyword_match,
+                                  "extra_terms": list(reddit.extra_terms)}),
     }
 
 

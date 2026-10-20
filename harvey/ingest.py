@@ -26,7 +26,8 @@ class CollectorResult:
     created: int = 0
     duplicates: int = 0
     errors: int = 0      # mentions that failed to store
-    skipped: int = 0     # raw rows the collector rejected (bad url, bad JSON)
+    skipped: int = 0     # raw rows the collector rejected (bad url, bad JSON, off-topic)
+    off_topic: int = 0   # of ``skipped``: dropped by a keyword gate (apify_reddit)
     error: str = ""      # set when the collector itself failed
     cost_usd: float = 0.0  # what a paid collector's run cost (Apify)
 
@@ -51,14 +52,20 @@ class IngestReport:
     def errors(self) -> int:
         return sum(r.errors for r in self.results)
 
+    @property
+    def skipped(self) -> int:
+        return sum(r.skipped for r in self.results)
+
+    @property
+    def off_topic(self) -> int:
+        return sum(r.off_topic for r in self.results)
+
     def lines(self) -> list[str]:
         """Human-readable summary, one line per collector."""
         out = []
         for r in self.results:
-            line = (
-                f"{r.name}: {r.created} created, {r.duplicates} duplicates, "
-                f"{r.skipped} skipped, {r.errors} errors"
-            )
+            skipped = f"{r.skipped} skipped" + (f" ({r.off_topic} off-topic)" if r.off_topic else "")
+            line = f"{r.name}: {r.created} created, {r.duplicates} duplicates, {skipped}, {r.errors} errors"
             if r.cost_usd:
                 line += f", cost ${r.cost_usd:.3f}"
             if r.error:
@@ -101,6 +108,7 @@ async def _run_one(
         logger.error(f"collector {name} failed: {failure}", exc_info=True)
 
     skipped = int(getattr(collector, "skipped", 0) or 0)
+    off_topic = int(getattr(collector, "off_topic", 0) or 0)
     # Paid collectors (Apify) report what the run cost; it feeds the monthly budget.
     cost = float(getattr(collector, "cost_usd", 0.0) or 0.0)
     if failure:
@@ -112,7 +120,7 @@ async def _run_one(
 
     return CollectorResult(
         name=name, run_id=run_id, created=created, duplicates=duplicates,
-        errors=errors, skipped=skipped, error=failure, cost_usd=cost,
+        errors=errors, skipped=skipped, off_topic=off_topic, error=failure, cost_usd=cost,
     )
 
 

@@ -4,6 +4,11 @@
 $0.004 per post on the Free plan plus a small start fee) over a short list of
 Reddit searches and maps each post to a Mention.
 
+Relevance: searches are sorted by relevance (``sort``; "new" was very loose and
+pulled mostly unrelated posts, R-17), and a keyword gate drops any result whose
+title and body contain none of Pulse's listening terms before it is stored or
+triaged (``require_keyword_match``).
+
 Cost controls, in this order:
 - ``max_items`` per run (Apify stops saving results there);
 - ``max_charge_usd`` per run (Apify's own hard cap, ``maxTotalChargeUsd``);
@@ -27,7 +32,8 @@ import httpx
 from pydantic import ValidationError
 
 from harvey.collectors.base import Collector, register
-from harvey.config import env_setting
+from harvey import knowledge
+from harvey.config import DEFAULT_REDDIT_EXTRA_TERMS, REDDIT_SORTS, env_setting
 from harvey.models import Mention, Platform
 
 logger = logging.getLogger("harvey.collectors.apify")
@@ -41,6 +47,14 @@ _WS_RX = re.compile(r"[ \t\r\f\v]+")
 
 class ApifyError(RuntimeError):
     pass
+
+
+def _extra_terms_rx(terms) -> re.Pattern[str] | None:
+    """Whole-word, case-insensitive match for the configured extra terms."""
+    names = sorted({t.strip() for t in terms if isinstance(t, str) and t.strip()}, key=len, reverse=True)
+    if not names:
+        return None
+    return re.compile(r"(?<!\w)(?:" + "|".join(re.escape(n) for n in names) + r")(?!\w)", re.IGNORECASE)
 
 
 def _naive_utc(value) -> datetime | None:
@@ -148,14 +162,28 @@ class ApifyRedditCollector(Collector):
     cost_note = "Apify pay-per-result (trudax/reddit-scraper-lite, ~$0.004/post + start fee), capped per run"
 
     def __init__(self, searches: list[str] | None = None, max_items: int = 30, max_charge_usd: float = 0.25,
-                 lookback_hours: int = 48, token: str | None = None, client: ApifyClient | None = None):
+                 lookback_hours: int = 48, token: str | None = None, client: ApifyClient | None = None,
+                 sort: str = "relevance", require_keyword_match: bool = True,
+                 extra_terms: list[str] | tuple[str, ...] | None = None):
+        if sort not in REDDIT_SORTS:
+            raise ValueError(f"apify_reddit sort must be one of {', '.join(REDDIT_SORTS)}; got {sort!r}")
         self.searches = [s.strip() for s in (searches or []) if s and s.strip()]
         self.max_items = int(max_items)
         self.max_charge_usd = float(max_charge_usd)
         self.lookback_hours = int(lookback_hours)
         self._client = client or ApifyClient(token if token is not None else env_setting(TOKEN_ENV))
-        self.skipped = 0
+        self.sort = sort
+        self.require_keyword_match = bool(require_keyword_match)
+        self._extra_rx = _extra_terms_rx(DEFAULT_REDDIT_EXTRA_TERMS if extra_terms is None else extra_terms)
+        self.skipped = 0       # all results not stored (not a post, duplicate, off-topic)
+        self.off_topic = 0     # of those, dropped by the keyword gate
         self.cost_usd = 0.0
+
+    def is_on_topic(self, mention: Mention) -> bool:
+        """The keyword gate: Pulse's listening terms (keywords.yaml families and
+        competitors.yaml via knowledge.on_topic) or one of ``extra_terms``."""
+        text = f"{mention.title}\n{mention.text}"
+        return knowledge.on_topic(text) or bool(self._extra_rx and self._extra_rx.search(text))
 
     def actor_input(self, since: datetime | None) -> dict:
         floor = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(hours=self.lookback_hours)
@@ -163,7 +191,7 @@ class ApifyRedditCollector(Collector):
         per_search = max(1, self.max_items // max(1, len(self.searches)))
         return {
             "searches": self.searches, "searchPosts": True, "searchComments": False,
-            "searchCommunities": False, "searchUsers": False, "sort": "new",
+            "searchCommunities": False, "searchUsers": False, "sort": self.sort,
             "skipComments": True, "skipUserPosts": True, "skipCommunity": True,
             "ignoreStartUrls": True, "includeNSFW": False,
             "maxItems": self.max_items, "maxPostCount": per_search,
@@ -173,6 +201,7 @@ class ApifyRedditCollector(Collector):
 
     async def collect(self, since: datetime | None = None) -> AsyncIterator[Mention]:
         self.skipped = 0
+        self.off_topic = 0
         self.cost_usd = 0.0
         if not self.searches:
             logger.warning("apify_reddit: no searches configured; nothing to collect")
@@ -187,6 +216,10 @@ class ApifyRedditCollector(Collector):
             mention = reddit_item_to_mention(item) if isinstance(item, dict) else None
             if mention is None or mention.url in seen:
                 self.skipped += 1
+                continue
+            if self.require_keyword_match and not self.is_on_topic(mention):
+                self.skipped += 1
+                self.off_topic += 1
                 continue
             seen.add(mention.url)
             yield mention

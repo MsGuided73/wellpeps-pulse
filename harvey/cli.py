@@ -249,7 +249,8 @@ def _ingest_live(name: str):
             return
         for line in report.lines():
             print(f"  {line}")
-        print(f"  total: {report.created} created, {report.duplicates} duplicates")
+        print(f"  total: {report.created} created, {report.duplicates} duplicates, "
+              f"{report.skipped} skipped ({report.off_topic} off-topic)")
         print("  Next: `pulse run` triages and drafts them.\n")
 
     run_async(_run())
