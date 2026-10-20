@@ -3,8 +3,9 @@
 The heartbeat calls ``run_due_collectors`` every cycle (before triage). A
 collector runs when it is enabled in harvey.yaml (``collectors:``), its
 interval has passed since its last run started, and its runs this calendar
-month (UTC) have cost less than its monthly budget. ``pulse ingest --apify``
-runs one on demand (still within the monthly budget).
+month (UTC) have cost less than its monthly budget and, when set, its runs
+today (UTC) less than its daily budget. ``pulse ingest --apify`` runs one on
+demand (still within both budgets).
 
 Collection never calls a model; triage picks the new mentions up next.
 """
@@ -27,6 +28,10 @@ def month_start(now: datetime) -> datetime:
     return now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
 
 
+def day_start(now: datetime) -> datetime:
+    return now.replace(hour=0, minute=0, second=0, microsecond=0)
+
+
 def collector_settings(config: PulseConfig) -> dict:
     """name -> (settings model, kwargs for the collector)."""
     reddit = config.collectors.apify_reddit
@@ -46,6 +51,11 @@ async def blocked_reason(state, name: str, settings, now: datetime, *, scheduled
     spent = await state.run_cost_since(name, month_start(now))
     if spent >= settings.monthly_budget_usd:
         return f"monthly budget reached (${spent:.2f} of ${settings.monthly_budget_usd:.2f})"
+    daily = getattr(settings, "daily_budget_usd", None)
+    if daily is not None:
+        today = await state.run_cost_since(name, day_start(now))
+        if today >= daily:
+            return f"daily budget reached (${today:.2f} of ${daily:.2f})"
     if scheduled:
         last = await state.last_run_started(name)
         if last is not None and now - last < timedelta(minutes=settings.interval_minutes):

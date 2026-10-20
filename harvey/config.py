@@ -309,8 +309,10 @@ DEFAULT_REDDIT_EXTRA_TERMS = (
 class ApifyRedditConfig(BaseModel):
     """Live Reddit collection through Apify (harvey/collectors/apify.py).
 
-    Off by default: scraping still needs WellPeps' legal sign-off
-    (docs/PLAN.md), and every run costs Apify credit."""
+    Off by default (every run costs Apify credit); harvey.yaml turns it on.
+    WellPeps legal approved scraping under the current guardrails on
+    2026-10-20 (docs/HANDOFF.md). Budgets: ``max_charge_usd`` per run, then
+    ``daily_budget_usd`` (UTC day, optional) and ``monthly_budget_usd``."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -319,6 +321,7 @@ class ApifyRedditConfig(BaseModel):
     max_items: int = Field(default=30, ge=1, le=500)
     max_charge_usd: float = Field(default=0.25, gt=0, le=5)
     monthly_budget_usd: float = Field(default=4.0, ge=0)
+    daily_budget_usd: float | None = Field(default=None, ge=0)   # None: only the monthly budget
     lookback_hours: int = Field(default=48, ge=1, le=24 * 14)
     searches: list[str] = Field(default_factory=list)
     # Reddit search order. "relevance" keeps results on the query; "new" is very loose.

@@ -12,6 +12,28 @@ summary for discussion.
 
 ---
 
+## 2026-10-20: Scheduled Reddit collection
+
+### R-23. Daily Reddit collection with a daily spend cap (Live)
+- **Before:** live Reddit collection (R-9, R-17) was off pending WellPeps legal
+  sign-off; pulls were manual, at most $0.25 per run and $4.00 a month.
+- **After:** `collectors.apify_reddit.enabled: true`, once a day
+  (`interval_minutes: 1440`). Caps: 30 posts and $0.25 per run (Apify's own
+  hard cap), a new **daily budget** of $5.00 (`daily_budget_usd`: no run,
+  scheduled or manual, starts once today's runs (UTC) cost that much) and
+  $155 a month as a backstop. The relevance sort and keyword gate (R-17) are
+  unchanged. At today's settings a run costs about $0.12 to $0.25, so actual
+  spend is far below the cap unless `max_items` is raised.
+- **Why:** owner, 2026-10-20: "switch on daily Reddit collection. Let's limit
+  the spend to $5.00 per day."
+- **Legal:** scraping approved under the current guardrails (public posts
+  only, minimal author info, a permalink on every mention, capped runs) for
+  Reddit, Facebook groups and competitors' Trustpilot pages. Mark St. Pierre
+  received oral approval from counsel; **written confirmation to follow**.
+- **Note:** scheduled runs need the worker heartbeat running (Operator HQ →
+  Start, or `pulse run`). Deployed, triage of the new posts bills the
+  Anthropic API key.
+
 ## 2026-10-20: Questions we couldn't answer
 
 ### R-22. Recurring unanswered questions listed for the team (Live)

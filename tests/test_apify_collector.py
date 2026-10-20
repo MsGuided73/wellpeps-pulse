@@ -165,11 +165,45 @@ async def test_manual_run_ignores_enabled_and_interval_but_not_budget(state):
     assert report is not None and report.created == 1
 
 
-def test_repo_config_keeps_live_collection_off_until_legal_sign_off():
+@pytest.mark.asyncio
+async def test_daily_budget_stops_scheduled_and_manual_runs_for_the_rest_of_the_day(state):
+    run_id = await state.start_run(stage="apify_reddit", provider="collector")
+    await state.finish_run(run_id, cost_usd=0.30)
+    cfg = _config(interval_minutes=30, monthly_budget_usd=100.0, daily_budget_usd=0.25)
+    later = datetime.utcnow() + timedelta(minutes=45)
+    if later.date() != datetime.utcnow().date():
+        pytest.skip("too close to midnight UTC for a same-day check")
+
+    assert await collect.run_due_collectors(state, cfg, now=later, build=_builder()) == []
+    assert await collect.run_collector(state, cfg, "apify_reddit", scheduled=False, build=_builder()) is None
+    why = await collect.blocked_reason(state, "apify_reddit", cfg.collectors.apify_reddit, later, scheduled=True)
+    assert why.startswith("daily budget reached ($0.30 of $0.25)")
+
+
+@pytest.mark.asyncio
+async def test_daily_budget_counts_only_today_utc(state):
+    run_id = await state.start_run(stage="apify_reddit", provider="collector")
+    await state.finish_run(run_id, cost_usd=0.30)
+    cfg = _config(interval_minutes=30, monthly_budget_usd=100.0, daily_budget_usd=0.25)
+    tomorrow = datetime.utcnow() + timedelta(days=1)
+
+    assert await collect.blocked_reason(state, "apify_reddit", cfg.collectors.apify_reddit, tomorrow,
+                                        scheduled=True) == ""
+
+
+def test_no_daily_budget_means_only_the_monthly_one_applies():
+    assert _config().collectors.apify_reddit.daily_budget_usd is None
+
+
+def test_repo_config_collects_reddit_daily_within_the_owners_caps():
+    # Legal approved scraping under the current guardrails (owner, 2026-10-20: Mark St. Pierre,
+    # oral approval from counsel); the owner set daily collection and a $5.00-a-day cap.
     from harvey.config import load_config
 
     reddit = load_config().collectors.apify_reddit
-    assert reddit.enabled is False and reddit.searches and reddit.max_charge_usd <= 0.5
+    assert reddit.enabled is True and reddit.searches and reddit.interval_minutes == 1440
+    assert reddit.max_charge_usd <= 0.5 and reddit.daily_budget_usd == 5.0
+    assert reddit.require_keyword_match is True
 
 
 def test_collector_is_registered():
@@ -240,7 +274,8 @@ def test_config_defaults_and_repo_config_use_relevance_and_the_gate():
     assert repo.sort == "relevance" and repo.require_keyword_match is True
     assert repo.extra_terms == default.extra_terms
     assert '"WellPeps"' in repo.searches and len(repo.searches) == 8
-    assert repo.max_items == 30 and repo.max_charge_usd == 0.25 and repo.monthly_budget_usd == 4.0
+    assert repo.max_items == 30 and repo.max_charge_usd == 0.25
+    assert repo.daily_budget_usd == 5.0 and repo.monthly_budget_usd == 155.0   # owner, 2026-10-20
 
 
 def test_collect_passes_sort_gate_and_extra_terms_to_the_collector():

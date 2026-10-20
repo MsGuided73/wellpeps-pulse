@@ -111,11 +111,15 @@ rewrite:
 # exact phrases and buying intent (R-11).
 collectors:
   apify_reddit:
-    enabled: false
-    interval_minutes: 720       # twice a day
+    # On since 2026-10-20: legal approved scraping under the current guardrails
+    # (Mark St. Pierre, oral approval from counsel; written confirmation to follow).
+    # Owner: daily collection, at most $5.00 a day.
+    enabled: true
+    interval_minutes: 1440      # once a day
     max_items: 30               # ~$0.004 per post on the Apify Free plan
     max_charge_usd: 0.25        # hard cap per run (Apify maxTotalChargeUsd)
-    monthly_budget_usd: 4.0     # stop scheduling once this month's runs cost this
+    daily_budget_usd: 5.0       # owner's cap: no run starts once today's (UTC) runs cost this
+    monthly_budget_usd: 155.0   # backstop: 31 days x the daily cap
     lookback_hours: 48          # never older than this, even on the first run
     sort: relevance             # relevance | new | top | hot | comments
     require_keyword_match: true # drop results with none of the listening terms

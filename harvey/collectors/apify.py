@@ -13,7 +13,8 @@ Cost controls, in this order:
 - ``max_items`` per run (Apify stops saving results there);
 - ``max_charge_usd`` per run (Apify's own hard cap, ``maxTotalChargeUsd``);
 - the collector's monthly budget (harvey/collect.py stops scheduling a
-  collector whose runs this month already cost ``monthly_budget_usd``);
+  collector whose runs this month already cost ``monthly_budget_usd``, or
+  today ``daily_budget_usd`` when set);
 - the Apify account's own monthly usage limit.
 
 Privacy (harvey/collectors/__init__.py rules): public posts only; the author
