@@ -170,6 +170,8 @@
 .doc-head .name { font-weight: 600; overflow-wrap: anywhere; min-width: 0; }
 .doc-head .size { color: var(--muted); }
 .doc-head .btn { margin-left: auto; }
+.kn-edit { margin-top: 16px; }
+.kn-edit .field textarea.kn-text { min-height: 320px; line-height: 1.5; }
 .ext { font-size: 14px; text-transform: uppercase; color: var(--action-hover); border: 1px solid var(--action); padding: 0 8px; border-radius: 4px; font-weight: 600; }
 .fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px 24px; }
 .wide { grid-column: 1 / -1; }

@@ -12,7 +12,10 @@
 // created_at, ...}]}; POST /api/knowledge/documents {filename,
 // content_base64, kind, authority, programs, approved_by, effective_date,
 // supersedes_id, note}; POST /api/knowledge/documents/{id}/approve|reject
-// (admin). Errors arrive as {detail}. A 404 shows "Not available yet".
+// (admin); GET /api/knowledge/documents/{id}/text -> {id, text}; POST
+// /api/knowledge/documents/{id}/edit {text?, kind, authority, programs,
+// approved_by, effective_date, note} (reviewer and up: a new version in
+// review). Errors arrive as {detail}. A 404 shows "Not available yet".
 
 const Knowledge = (() => {
   const KINDS = [
@@ -30,8 +33,11 @@ const Knowledge = (() => {
   const BYTES_PER_MB = 1024 * 1024;
   const BYTES_PER_KB = 1024;
   const MUST_FOLLOW_KINDS = ['compliance_rule', 'approved_messaging', 'voice_style', 'community_rules'];
+  const EDITABLE = ['active', 'in_review', 'rejected'];
+  const MAX_EDIT_CHARS = 1000000;
 
   let docs = [];
+  let editing = null;        // {id, text} while the edit form is open
   let filter = 'all';
   let rejecting = null;      // document id awaiting "Yes, reject"
   let seq = 0;
@@ -51,15 +57,25 @@ const Knowledge = (() => {
     return d.status === 'rejected' || d.status === 'superseded';
   }
 
+  const pendingEditOf = d => docs.find(x => x.supersedes_id === d.id && x.status === 'in_review');
+
+  function editCell(d) {
+    if (!can('review') || !EDITABLE.includes(d.status)) return '';
+    const pending = pendingEditOf(d);
+    if (pending) return '<span class="cell-sub">An edit is waiting for review</span>';
+    return '<div class="row"><button type="button" class="btn btn-ghost" data-kn="edit" data-id="' + d.id + '"' +
+      (editing && editing.id === d.id ? ' aria-expanded="true"' : '') + '>Edit</button></div>';
+  }
+
   function actionsCell(d) {
-    if (!isReviewing(d) || !can('admin')) return '';
+    if (!isReviewing(d) || !can('admin')) return editCell(d);
     if (rejecting === d.id) {
       return '<span class="cell-sub">Reject this document?</span><div class="row">' +
         '<button type="button" class="btn btn-danger" data-kn="reject-go" data-id="' + d.id + '">Yes, reject</button>' +
         '<button type="button" class="btn btn-ghost" data-kn="reject-cancel" data-id="' + d.id + '">Cancel</button></div>';
     }
     return '<div class="row"><button type="button" class="btn btn-primary" data-kn="approve" data-id="' + d.id + '">Approve</button>' +
-      '<button type="button" class="btn btn-secondary" data-kn="reject" data-id="' + d.id + '">Reject</button></div>';
+      '<button type="button" class="btn btn-secondary" data-kn="reject" data-id="' + d.id + '">Reject</button></div>' + editCell(d);
   }
 
   function rowHtml(d) {
@@ -114,6 +130,104 @@ const Knowledge = (() => {
     rejecting = null;
     if (r.ok) showToast(verb === 'approve' ? 'Approved. The agent uses it from now on.' : 'Rejected. The agent will not use it.', 'success');
     await loadLibrary();
+  }
+
+  // ── Edit ──
+  // An edit is stored as a new version in review that replaces this one. The
+  // current version stays in use until an admin approves the edit.
+
+  function editFormHtml(d, text) {
+    const id = 'ke';
+    const progs = d.programs || [];
+    const pending = d.extraction === 'pending' && !text;
+    const inUse = d.status === 'active';
+    return '<article class="doc kn-edit" aria-labelledby="ke-h">' +
+      '<div class="doc-head"><span class="name" id="ke-h">Edit ' + escHtml(d.filename) + '</span>' +
+      '<button type="button" class="btn btn-ghost" data-kn="edit-cancel">Close</button></div>' +
+      '<p class="note">' + (inUse
+        ? 'Your edit is saved as a new version and waits for an admin’s approval. Until then the agent keeps using the current version.'
+        : 'Your edit is saved as a new version and waits for an admin’s approval.') + '</p>' +
+      '<div class="fields">' +
+      '<div class="field wide"><label for="ke-text">Text the agent reads</label>' +
+        (pending ? '<span class="hint" id="ke-text-hint">Pulse couldn’t read this PDF’s text. Paste it here so the agent can use it.</span>' : '') +
+        '<textarea id="ke-text" class="kn-text" maxlength="' + MAX_EDIT_CHARS + '"' + (pending ? ' aria-describedby="ke-text-hint"' : '') + '>' +
+        escHtml(text) + '</textarea></div>' +
+      '<div class="field"><label for="' + id + '-kind">What kind of document is this?</label><select id="' + id + '-kind">' +
+        KINDS.map(k => '<option value="' + k[0] + '"' + (k[0] === d.kind ? ' selected' : '') + '>' + escHtml(k[1]) + '</option>').join('') + '</select></div>' +
+      '<div class="field"><span class="flabel" id="' + id + '-auth-l">How should the agent treat it?</span>' +
+        '<div class="seg-radio" role="radiogroup" aria-labelledby="' + id + '-auth-l">' +
+        Object.entries({must_follow: 'Must follow', reference: 'Reference', example: 'Example only'}).map(([v, l]) =>
+          '<label><input type="radio" name="' + id + '-auth" value="' + v + '"' + (d.authority === v ? ' checked' : '') + '>' + l + '</label>').join('') +
+        '</div><span class="hint">If you change the words of a "Must follow" document, put the name of whoever signed off this version.</span></div>' +
+      '<div class="field wide"><span class="flabel" id="' + id + '-prog-l">Which programs does it apply to?</span>' +
+        '<div class="chips" role="group" aria-labelledby="' + id + '-prog-l">' + PROGRAMS.map((p, i) =>
+          '<label><input type="checkbox" value="' + escHtml(p) + '"' + ((i === 0 ? !progs.length : progs.includes(p)) ? ' checked' : '') + '>' +
+          escHtml(p) + '</label>').join('') + '</div></div>' +
+      '<div class="field"><label for="' + id + '-by">Approved by</label><input type="text" id="' + id + '-by" maxlength="120" autocomplete="off" value="' +
+        escHtml(d.approved_by || '') + '"></div>' +
+      '<div class="field"><label for="' + id + '-date">Takes effect</label><input type="date" id="' + id + '-date" value="' + escHtml(d.effective_date || '') + '"></div>' +
+      '<div class="field wide"><label for="' + id + '-note">Anything the agent should know about it? (optional)</label>' +
+        '<textarea id="' + id + '-note" maxlength="1000">' + escHtml(d.note || '') + '</textarea></div></div>' +
+      '<div class="doc-foot"><button type="button" class="btn btn-primary" data-kn="edit-send">Send edit for review</button>' +
+      '<button type="button" class="btn btn-ghost" data-kn="edit-cancel">Cancel</button>' +
+      '<span class="field-err hidden" id="ke-err" role="alert"></span></div></article>';
+  }
+
+  async function openEdit(docId) {
+    const d = docs.find(x => x.id === docId);
+    if (!d) return;
+    const r = await request('/api/knowledge/documents/' + encodeURIComponent(docId) + '/text');
+    if (!r.ok) { showToast("Couldn't load this document's text. Try again.", 'error'); return; }
+    editing = {id: docId, text: (r.data && r.data.text) || ''};
+    $('kn-edit').innerHTML = editFormHtml(d, editing.text);
+    renderLibrary();
+    $('ke-text').focus();
+  }
+
+  function closeEdit() {
+    const id = editing && editing.id;
+    editing = null;
+    $('kn-edit').innerHTML = '';
+    renderLibrary();
+    const btn = id && document.querySelector('[data-kn="edit"][data-id="' + id + '"]');
+    if (btn) btn.focus();
+  }
+
+  async function sendEdit() {
+    const d = docs.find(x => x.id === (editing && editing.id));
+    if (!d) return;
+    const err = $('ke-err');
+    err.classList.add('hidden');
+    const authority = document.querySelector('input[name="ke-auth"]:checked').value;
+    const text = $('ke-text').value;
+    const by = $('ke-by');
+    if (authority === 'must_follow' && !by.value.trim()) {
+      err.textContent = 'Add who approved it, or choose Reference.';
+      err.classList.remove('hidden');
+      by.setAttribute('aria-invalid', 'true');
+      by.focus();
+      return;
+    }
+    const programs = [...document.querySelectorAll('.kn-edit .chips input:checked')].map(x => x.value).filter(p => p !== PROGRAMS[0]);
+    const body = {kind: $('ke-kind').value, authority, programs, approved_by: by.value.trim(),
+      effective_date: $('ke-date').value, note: $('ke-note').value.trim()};
+    if (text !== editing.text) body.text = text;
+    const btn = document.querySelector('[data-kn="edit-send"]');
+    btn.disabled = true;
+    btn.textContent = 'Sending…';
+    const r = await request('/api/knowledge/documents/' + encodeURIComponent(d.id) + '/edit', {method: 'POST', body});
+    btn.disabled = false;
+    btn.textContent = 'Send edit for review';
+    if (!r.ok) {
+      err.textContent = (r.data && r.data.detail && String(r.data.detail)) || "That didn't save. Check your connection and try again.";
+      err.classList.remove('hidden');
+      return;
+    }
+    editing = null;
+    $('kn-edit').innerHTML = '';
+    showToast('Edit sent for review. The agent uses it once an admin approves it.', 'success');
+    await loadLibrary();
+    $('lib-h').focus();
   }
 
   // ── Upload ──
@@ -274,6 +388,9 @@ const Knowledge = (() => {
       else if (act === 'reject') { rejecting = id; renderLibrary(); const go = document.querySelector('[data-kn="reject-go"]'); if (go) go.focus(); }
       else if (act === 'reject-cancel') { rejecting = null; renderLibrary(); }
       else if (act === 'reject-go') decide(id, 'reject');
+      else if (act === 'edit') openEdit(id);
+      else if (act === 'edit-cancel') closeEdit();
+      else if (act === 'edit-send') sendEdit();
     });
   }
 

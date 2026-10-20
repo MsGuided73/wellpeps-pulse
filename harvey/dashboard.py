@@ -628,6 +628,20 @@ async def get_knowledge_document(doc_id: int, user: dict = VIEW):
     return await knowledge_docs.get_document(await get_state(), doc_id)
 
 
+@app.get("/api/knowledge/documents/{doc_id}/text")
+async def get_knowledge_document_text(doc_id: int, user: dict = VIEW):
+    """The document's whole stored text (``{"id", "text"}``), for the edit form."""
+    return await knowledge_docs.get_text(await get_state(), doc_id)
+
+
+@app.post("/api/knowledge/documents/{doc_id}/edit")
+async def edit_knowledge_document(doc_id: int, request: Request, user: dict = REVIEW):
+    """Edit a document's text and/or details. Stored as a new version in review that
+    supersedes this one; the current version stays in use until an admin approves it."""
+    body = await _json_object(request, DOCUMENT_BODY_MAX_BYTES)
+    return await knowledge_docs.edit_document(await get_state(), doc_id, body, user["email"])
+
+
 @app.post("/api/knowledge/documents/{doc_id}/approve")
 async def approve_knowledge_document(doc_id: int, user: dict = ADMIN):
     return await knowledge_docs.decide(await get_state(), doc_id, True, user["email"])

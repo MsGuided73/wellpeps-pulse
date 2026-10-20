@@ -298,6 +298,88 @@ async def create_document(state, body: dict, uploaded_by: str) -> dict:
     return doc
 
 
+async def get_text(state, doc_id: int) -> dict:
+    """``{"id", "text"}``: the whole stored text, for the edit form."""
+    rows = await _fetch(state, "SELECT id, text FROM knowledge_docs WHERE id = ?", (int(doc_id),))
+    if not rows:
+        raise DocError(404, "document not found")
+    return {"id": rows[0]["id"], "text": rows[0]["text"] or ""}
+
+
+EDITABLE = ("active", "in_review", "rejected")
+_EDIT_FIELDS = ("kind", "authority", "programs", "approved_by", "effective_date", "note")
+
+
+def _edited_text(value) -> str:
+    if not isinstance(value, str) or not value.strip():
+        raise DocError(400, "text must be the document's words (it can't be empty)")
+    if len(value) > MAX_TEXT_CHARS:
+        raise DocError(413, f"the text is longer than {MAX_TEXT_CHARS:,} characters")
+    return _clean(value)
+
+
+def _edited_fields(body: dict, source: dict) -> dict:
+    """The new version's details: each field the body leaves out keeps the source's value."""
+    fields = {
+        "kind": _choice(body.get("kind", source["kind"]), KINDS, "kind"),
+        "authority": _choice(body.get("authority", source["authority"]), AUTHORITIES, "authority"),
+        "programs": _programs(body.get("programs", source["programs"])),
+        "approved_by": _text_field(body.get("approved_by", source["approved_by"]), "approved_by", MAX_APPROVER_CHARS),
+        "effective_date": _effective_date(body.get("effective_date", source["effective_date"])),
+        "note": _text_field(body.get("note", source["note"]), "note", MAX_NOTE_CHARS),
+    }
+    if fields["authority"] == "must_follow" and not fields["approved_by"]:
+        raise DocError(400, "a must-follow document needs approved_by: who signed this version off")
+    return fields
+
+
+async def edit_document(state, doc_id: int, body: dict, edited_by: str) -> dict:
+    """Store an edit as a new version ``in_review`` that supersedes ``doc_id``.
+
+    The original is never changed in place: an active original stays in use
+    until an admin approves the edit (``decide`` then marks it superseded); an
+    original still in review is superseded at once (nobody approved it yet); a
+    rejected one stays rejected. ``body`` may carry ``text`` and any of the
+    upload's details; anything left out is copied. One pending edit per document."""
+    if not isinstance(body, dict):
+        raise DocError(400, "expected a JSON object")
+    source = await get_document(state, doc_id)
+    if source["status"] not in EDITABLE:
+        raise DocError(409, "this document was replaced by a newer version; edit that one instead")
+    pending = await _fetch(state, "SELECT id FROM knowledge_docs WHERE supersedes_id = ? AND status = 'in_review'",
+                           (source["id"],))
+    if pending:
+        raise DocError(409, f"an edit of this document is already waiting for review (document {pending[0]['id']}); "
+                            "edit that one instead")
+    old_text = (await get_text(state, doc_id))["text"]
+    text = _edited_text(body["text"]) if "text" in body else old_text
+    fields = _edited_fields(body, source)
+    changed = [f for f in _EDIT_FIELDS if fields[f] != source[f]] + (["text"] if text != old_text else [])
+    if not changed:
+        raise DocError(400, "nothing changed: edit the text or a detail first")
+    extraction = ("done" if text else "empty") if "text" in changed else source["extraction"]
+    size = len(text.encode("utf-8")) if "text" in changed else source["size_bytes"]
+    now = sql_utc(_utcnow())
+    async with state.connect() as db:
+        cursor = await db.execute(
+            "INSERT INTO knowledge_docs (filename, kind, authority, programs_json, approved_by, effective_date, "
+            "supersedes_id, note, status, text, extraction, size_bytes, uploaded_by, created_at) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'in_review', ?, ?, ?, ?, ?) RETURNING id",
+            (source["filename"], fields["kind"], fields["authority"], json.dumps(fields["programs"]),
+             fields["approved_by"], fields["effective_date"], source["id"], fields["note"], text, extraction,
+             size, edited_by, now),
+        )
+        (new_id,) = await cursor.fetchone()
+        if source["status"] == "in_review":
+            await db.execute("UPDATE knowledge_docs SET status = 'superseded', decided_by = ?, decided_at = ? "
+                             "WHERE id = ? AND status = 'in_review'", (edited_by, now, source["id"]))
+        await db.commit()
+    doc = await get_document(state, new_id)
+    await _audit(state, edited_by, "edited", doc, source_id=source["id"], changed=changed, text_length=len(text))
+    doc.pop("text_preview", None)
+    return doc
+
+
 async def decide(state, doc_id: int, approve: bool, decided_by: str) -> dict:
     """Approve (-> active; the document it supersedes becomes superseded) or reject."""
     doc = await get_document(state, doc_id)

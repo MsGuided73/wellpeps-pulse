@@ -12,6 +12,27 @@ summary for discussion.
 
 ---
 
+## 2026-10-20: Editing Knowledge documents
+
+### R-24. Edit documents in the Knowledge library (Live)
+- **Before:** a library document could only be replaced by uploading a new
+  file; its words and details could not be changed in the dashboard.
+- **After:** reviewers and admins see **Edit** on each document that is in
+  use, in review or rejected. The form shows the whole text and the details
+  (kind, must follow / reference / example, programs, approved by, takes
+  effect, note). **Send edit for review** stores a *new version* in review
+  that replaces the original; nothing changes in place. The version in use
+  stays in use, and stays what the drafter reads, until an admin approves the
+  edit; approving retires the old version ("Replaced"). Editing a document
+  still in review replaces it at once; a rejected document can be fixed and
+  sent again. One edit at a time per document. A must-follow document still
+  needs a named approver for the new version. A PDF whose text could not be
+  read can be made usable by pasting its text. Each edit is in the audit log
+  (who, which document, which fields changed; never the text). Routes:
+  `GET /api/knowledge/documents/{id}/text`, `POST /api/knowledge/documents/{id}/edit`.
+- **Why:** owner, 2026-10-20: "please allow me to edit the Documents in the
+  Library within the Agent's knowledge base".
+
 ## 2026-10-20: Scheduled Reddit collection
 
 ### R-23. Daily Reddit collection with a daily spend cap (Live)
