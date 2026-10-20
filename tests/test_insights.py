@@ -46,6 +46,12 @@ def test_matching_ignores_case_spaces_punctuation_and_accents(community):
     assert insights.attribute_competitor(row)[0] == "Ivím Health"
 
 
+def test_yourmd_community_is_attributed():
+    row = _row(url="https://www.reddit.com/r/yourmdonline/comments/1/weekly_pricing/")
+
+    assert insights.attribute_competitor(row) == ("YourMD Online", "community")
+
+
 def test_unrelated_community_is_not_attributed():
     row = _row(url="https://www.reddit.com/r/tressless/comments/1/x/")
 

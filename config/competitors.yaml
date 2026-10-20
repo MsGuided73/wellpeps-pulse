@@ -263,6 +263,24 @@ competitors:
     handles: []
     complaint_themes: []
     tier: weight
+  # Added 2026-10-19 from Pulse live mentions: Riovie Health advertising a
+  # "one simple price" GLP-1 plan; YourMD Online runs a weekly GLP-1 pricing
+  # thread in its own subreddit (r/yourmdonline). No bare "Your MD" alias:
+  # it would match "your MD" meaning someone's own doctor.
+  - name: Riovie Health
+    aliases: [Riovie, RiovieHealth, Riovie-health]
+    categories: [weight]
+    website: null
+    handles: []
+    complaint_themes: []
+    tier: weight
+  - name: YourMD Online
+    aliases: [YourMD, yourmdonline, Your MD Online]
+    categories: [weight]
+    website: null
+    handles: []
+    complaint_themes: []
+    tier: weight
 
   # --- Tier C: sexual wellness --------------------------------------------
   - name: BlueChew
