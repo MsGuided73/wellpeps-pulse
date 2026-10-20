@@ -15,7 +15,8 @@
 // (admin); GET /api/knowledge/documents/{id}/text -> {id, text}; POST
 // /api/knowledge/documents/{id}/edit {text?, kind, authority, programs,
 // approved_by, effective_date, note} (reviewer and up: a new version in
-// review). Errors arrive as {detail}. A 404 shows "Not available yet".
+// review); POST /api/knowledge/documents/{id}/remove (admin) -> {removed: [ids]}
+// deletes it, its older versions and pending edits. Errors arrive as {detail}. A 404 shows "Not available yet".
 
 const Knowledge = (() => {
   const KINDS = [
@@ -40,6 +41,7 @@ const Knowledge = (() => {
   let editing = null;        // {id, text} while the edit form is open
   let filter = 'all';
   let rejecting = null;      // document id awaiting "Yes, reject"
+  let removing = null;       // document id awaiting "Yes, remove"
   let seq = 0;
   const staged = new Map();  // card id -> File
 
@@ -67,15 +69,45 @@ const Knowledge = (() => {
       (editing && editing.id === d.id ? ' aria-expanded="true"' : '') + '>Edit</button></div>';
   }
 
+  // Remove deletes the document for good (and its older versions and any
+  // waiting edit), so it asks first. Admins only.
+  function removeCell(d) {
+    if (!can('admin')) return '';
+    if (removing === d.id) {
+      return '<span class="cell-sub" id="kr-' + d.id + '">Remove it for good? The agent stops using it now, and its older versions ' +
+        'and any edit waiting for review go too. This can’t be undone.</span><div class="row">' +
+        '<button type="button" class="btn btn-danger" data-kn="remove-go" data-id="' + d.id + '" aria-describedby="kr-' + d.id + '">Yes, remove</button>' +
+        '<button type="button" class="btn btn-ghost" data-kn="remove-cancel" data-id="' + d.id + '">Cancel</button></div>';
+    }
+    return '<div class="row"><button type="button" class="btn btn-ghost" data-kn="remove-doc" data-id="' + d.id + '">Remove</button></div>';
+  }
+
   function actionsCell(d) {
-    if (!isReviewing(d) || !can('admin')) return editCell(d);
+    return decisionCell(d) + editCell(d) + removeCell(d);
+  }
+
+  function decisionCell(d) {
+    if (!isReviewing(d) || !can('admin')) return '';
     if (rejecting === d.id) {
       return '<span class="cell-sub">Reject this document?</span><div class="row">' +
         '<button type="button" class="btn btn-danger" data-kn="reject-go" data-id="' + d.id + '">Yes, reject</button>' +
         '<button type="button" class="btn btn-ghost" data-kn="reject-cancel" data-id="' + d.id + '">Cancel</button></div>';
     }
     return '<div class="row"><button type="button" class="btn btn-primary" data-kn="approve" data-id="' + d.id + '">Approve</button>' +
-      '<button type="button" class="btn btn-secondary" data-kn="reject" data-id="' + d.id + '">Reject</button></div>' + editCell(d);
+      '<button type="button" class="btn btn-secondary" data-kn="reject" data-id="' + d.id + '">Reject</button></div>';
+  }
+
+  async function removeDoc(id) {
+    const r = await send('/api/knowledge/documents/' + encodeURIComponent(id) + '/remove');
+    removing = null;
+    if (r.ok) {
+      const n = ((r.data && r.data.removed) || []).length;
+      if (editing && ((r.data && r.data.removed) || []).includes(editing.id)) { editing = null; $('kn-edit').innerHTML = ''; }
+      showToast(n > 1 ? 'Removed, with ' + (n - 1) + (n === 2 ? ' older or waiting version.' : ' older or waiting versions.')
+        : 'Removed. The agent no longer uses it.', 'success');
+    }
+    await loadLibrary();
+    $('lib-h').focus();
   }
 
   function rowHtml(d) {
@@ -385,9 +417,12 @@ const Knowledge = (() => {
       if (act === 'remove') { staged.delete(b.dataset.card); $(b.dataset.card).remove(); }
       else if (act === 'send') sendCard(b.dataset.card);
       else if (act === 'approve') decide(id, 'approve');
-      else if (act === 'reject') { rejecting = id; renderLibrary(); const go = document.querySelector('[data-kn="reject-go"]'); if (go) go.focus(); }
+      else if (act === 'reject') { rejecting = id; removing = null; renderLibrary(); const go = document.querySelector('[data-kn="reject-go"]'); if (go) go.focus(); }
       else if (act === 'reject-cancel') { rejecting = null; renderLibrary(); }
       else if (act === 'reject-go') decide(id, 'reject');
+      else if (act === 'remove-doc') { removing = id; rejecting = null; renderLibrary(); const go = document.querySelector('[data-kn="remove-go"]'); if (go) go.focus(); }
+      else if (act === 'remove-cancel') { removing = null; renderLibrary(); const b = document.querySelector('[data-kn="remove-doc"][data-id="' + id + '"]'); if (b) b.focus(); }
+      else if (act === 'remove-go') removeDoc(id);
       else if (act === 'edit') openEdit(id);
       else if (act === 'edit-cancel') closeEdit();
       else if (act === 'edit-send') sendEdit();

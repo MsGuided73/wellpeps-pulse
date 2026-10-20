@@ -33,6 +33,20 @@ summary for discussion.
 - **Why:** owner, 2026-10-20: "please allow me to edit the Documents in the
   Library within the Agent's knowledge base".
 
+### R-25. Remove documents from the Knowledge library (Live)
+- **After:** admins see **Remove** on every document. After a "Yes, remove"
+  confirmation the document is **deleted**, together with its older versions
+  (replaced or rejected) and any edit of it still waiting for review; no other
+  document keeps a "Replaces" link to it. The agent stops using it at once.
+  There is no restore: upload the file again if it is needed later. Removing a
+  waiting edit alone keeps the version in use. The append-only audit log keeps
+  one "removed" event (who, which document, its previous status; never the
+  text), as it does for every change. Route:
+  `POST /api/knowledge/documents/{id}/remove` (admin).
+- **Why:** owner, 2026-10-20: "I want to be able to REMOVE any docs that are no
+  longer relevant or in use" and "I don't want reference to a doc that I have
+  chosen to remove".
+
 ## 2026-10-20: Scheduled Reddit collection
 
 ### R-23. Daily Reddit collection with a daily spend cap (Live)

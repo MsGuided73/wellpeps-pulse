@@ -642,6 +642,13 @@ async def edit_knowledge_document(doc_id: int, request: Request, user: dict = RE
     return await knowledge_docs.edit_document(await get_state(), doc_id, body, user["email"])
 
 
+@app.post("/api/knowledge/documents/{doc_id}/remove")
+async def remove_knowledge_document(doc_id: int, user: dict = ADMIN):
+    """Delete a document, its older versions and pending edits (``{"removed": [ids]}``).
+    The agent stops using it at once; only the audit log keeps a record."""
+    return await knowledge_docs.remove_document(await get_state(), doc_id, user["email"])
+
+
 @app.post("/api/knowledge/documents/{doc_id}/approve")
 async def approve_knowledge_document(doc_id: int, user: dict = ADMIN):
     return await knowledge_docs.decide(await get_state(), doc_id, True, user["email"])

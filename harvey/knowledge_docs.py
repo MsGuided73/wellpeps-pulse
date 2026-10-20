@@ -380,6 +380,46 @@ async def edit_document(state, doc_id: int, body: dict, edited_by: str) -> dict:
     return doc
 
 
+_DEAD_VERSIONS = ("superseded", "rejected")
+
+
+async def _removal_set(state, doc: dict) -> list[int]:
+    """The document, its older versions (replaced or rejected, following
+    ``supersedes_id`` back) and every edit of it still waiting for review."""
+    rows = await _fetch(state, "SELECT id, supersedes_id, status FROM knowledge_docs")
+    by_id = {r["id"]: r for r in rows}
+    ids = [doc["id"]]
+    back = by_id[doc["id"]]["supersedes_id"]
+    while back in by_id and back not in ids and by_id[back]["status"] in _DEAD_VERSIONS:
+        ids.append(back)
+        back = by_id[back]["supersedes_id"]
+    frontier = [doc["id"]]
+    while frontier:
+        parent = frontier.pop()
+        for r in rows:
+            if r["supersedes_id"] == parent and r["status"] == "in_review" and r["id"] not in ids:
+                ids.append(r["id"])
+                frontier.append(r["id"])
+    return ids
+
+
+async def remove_document(state, doc_id: int, removed_by: str) -> dict:
+    """Delete a document for good (owner, 2026-10-20: no reference to a removed
+    document): it, its older versions and its pending edits are deleted, and no
+    remaining document keeps a ``supersedes_id`` pointing at them. The drafter
+    reads only active rows, so it stops using the document at once. The
+    append-only audit log keeps one "removed" event (never the text)."""
+    doc = await get_document(state, doc_id)
+    ids = await _removal_set(state, doc)
+    marks = ", ".join("?" for _ in ids)
+    async with state.connect() as db:
+        await db.execute(f"UPDATE knowledge_docs SET supersedes_id = NULL WHERE supersedes_id IN ({marks})", tuple(ids))
+        await db.execute(f"DELETE FROM knowledge_docs WHERE id IN ({marks})", tuple(ids))
+        await db.commit()
+    await _audit(state, removed_by, "removed", doc, previous_status=doc["status"], removed_ids=ids)
+    return {"removed": ids}
+
+
 async def decide(state, doc_id: int, approve: bool, decided_by: str) -> dict:
     """Approve (-> active; the document it supersedes becomes superseded) or reject."""
     doc = await get_document(state, doc_id)
