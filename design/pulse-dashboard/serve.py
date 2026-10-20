@@ -15,8 +15,10 @@ from __future__ import annotations
 import json
 import os
 import shutil
+import sqlite3
 import subprocess
 import sys
+from datetime import datetime
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
@@ -44,6 +46,37 @@ Follow the requested change (tone, length, clarity) while keeping these rules:
 - Never claim to be a customer, patient or clinician.
 - Sound like a friendly, knowledgeable person: plain words, contractions, no corporate phrases, no emoji, no hashtags, no em dashes.
 - Keep roughly the same length unless asked to shorten or expand."""
+
+
+def live_db_path() -> Path | None:
+    """Pulse's live database: PULSE_LIVE_DB, else the repo's data/live.db when this
+    file sits in design/pulse-dashboard/, else the default checkout location."""
+    candidates = [os.environ.get("PULSE_LIVE_DB"), ROOT.parents[1] / "data" / "live.db",
+                  Path("C:/dev/wellpeps-pulse/data/live.db")]
+    for candidate in candidates:
+        if candidate and Path(candidate).is_file():
+            return Path(candidate)
+    return None
+
+
+def month_spend(now: datetime | None = None) -> dict:
+    """Month-to-date spend from Pulse's own records, read-only: Claude calls
+    (usage_events.cost_usd, by agent) and Apify runs (runs.cost_usd)."""
+    path = live_db_path()
+    if path is None:
+        raise RuntimeError("Pulse's live database wasn't found. Set PULSE_LIVE_DB.")
+    now = now or datetime.now()
+    start = now.strftime("%Y-%m-01")
+    with sqlite3.connect(f"file:{path.as_posix()}?mode=ro", uri=True) as db:
+        by_agent = {agent or "other": round(total or 0.0, 4) for agent, total in db.execute(
+            "SELECT agent, SUM(cost_usd) FROM usage_events WHERE created_at >= ? GROUP BY agent", (start,))}
+        apify_total, apify_runs = db.execute(
+            "SELECT COALESCE(SUM(cost_usd), 0), COUNT(*) FROM runs WHERE started_at >= ?", (start,)).fetchone()
+    claude_total = round(sum(by_agent.values()), 4)
+    return {"ok": True, "month": now.strftime("%Y-%m"), "month_label": now.strftime("%B"),
+            "claude": {"total": claude_total, "by_agent": by_agent, "billing": "subscription (estimate)"},
+            "apify": {"total": round(apify_total, 4), "runs": apify_runs},
+            "total": round(claude_total + apify_total, 4)}
 
 
 def run_rewrite(passage: str, instruction: str, context: str) -> str:
@@ -87,6 +120,15 @@ class Handler(SimpleHTTPRequestHandler):
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
         self.wfile.write(body)
+
+    def do_GET(self):  # noqa: N802 (http.server naming)
+        if self.path.split("?")[0] != "/api/spend":
+            return super().do_GET()
+        try:
+            return self._json(200, month_spend())
+        except (RuntimeError, sqlite3.Error) as exc:
+            print(f"[spend] failed: {exc}", file=sys.stderr)
+            return self._json(503, {"ok": False, "error": "Spend isn't available right now."})
 
     def do_POST(self):  # noqa: N802 (http.server naming)
         if self.path != "/api/rewrite":
