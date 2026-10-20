@@ -108,9 +108,23 @@ const Hq = (() => {
     return link || '<span class="pp-quote">“' + escHtml(e.quote) + '”</span>';
   }
 
+  // Recurring questions Pulse skipped or held for lack of an approved answer:
+  // ideas for guides, web pages and Knowledge documents. Calm on purpose.
+  function gapsBlock(gaps) {
+    if (!gaps.length) return '';
+    const rows = gaps.slice(0, 5).map(g =>
+      '<li><div class="pp-row"><span>' + escHtml(g.label) + '</span><span class="pp-n">' + num(g.count) +
+      (g.count === 1 ? ' post' : ' posts') + ' · ' + escHtml(g.kind_label) + '</span></div>' +
+      quoteLink((g.examples || [])[0]) + '</li>').join('');
+    return '<div class="pp-col pp-gaps"><h3>Questions we couldn’t answer</h3>' +
+      '<p class="note">Asked more than once, with no approved answer yet. Ideas for a guide, a web page or a Knowledge document.</p>' +
+      '<ul class="pp-comp">' + rows + '</ul></div>';
+  }
+
   function renderInsights(r) {
     const body = $('pp-body');
-    const has = r && ((r.pain_points || []).length || (r.competitor_complaints || []).length || (r.segments || []).length);
+    const has = r && ((r.pain_points || []).length || (r.competitor_complaints || []).length || (r.segments || []).length ||
+      (r.knowledge_gaps || []).length);
     $('pp-window').textContent = r ? 'Last ' + INSIGHT_DAYS + ' days · ' + (r.mentions || 0) + ' relevant posts' : '';
     if (!r) { body.innerHTML = na('Could not load this just now. Try Refresh.'); return; }
     if (!has) {
@@ -134,6 +148,7 @@ const Hq = (() => {
       '<div class="pp-col"><h3>Top pain points</h3>' + (pains ? '<ol class="pp-list">' + pains + '</ol>' : '<p class="note">None this week.</p>') + '</div>' +
       '<div class="pp-col"><h3>Complaints about other providers</h3>' + (comps ? '<ul class="pp-comp">' + comps + '</ul>' : '<p class="note">None this week.</p>') + '</div>' +
       '<div class="pp-col"><h3>Emerging customer types</h3>' + (segs ? '<ul class="pp-icp">' + segs + '</ul>' : '<p class="note">None this week.</p>') + '</div></div>' +
+      gapsBlock(r.knowledge_gaps || []) +
       '<p class="note">For the full tables and trends, open <a href="#briefs">Briefs and live trends</a>.</p>';
     applyWidths(body);
   }

@@ -137,7 +137,8 @@ function insightRow(title, meta, status, examples) {
 }
 
 function insightsSection(r, note) {
-  if (!r || !((r.pain_points || []).length || (r.competitor_complaints || []).length || (r.segments || []).length)) {
+  if (!r || !((r.pain_points || []).length || (r.competitor_complaints || []).length || (r.segments || []).length ||
+      (r.knowledge_gaps || []).length)) {
     return block('Pain points & emerging ICPs', '<p class="muted">Nothing reached the minimum count of ' +
       escHtml(String((r && r.min_count) || 2)) + ' mentions in this window.</p>');
   }
@@ -150,13 +151,18 @@ function insightsSection(r, note) {
     null, c.example ? [c.example] : [])).join('');
   const segs = (r.segments || []).map(sg => insightRow(sg.label,
     '· ' + sg.count + ' mention(s) (before: ' + sg.prev_count + ')', sg.status, sg.examples)).join('');
+  const gaps = (r.knowledge_gaps || []).map(g => insightRow(g.label,
+    '· ' + g.count + ' mention(s) (before: ' + g.prev_count + ') · ' + g.kind_label, null, g.examples)).join('');
   return (note ? '<p class="lede">' + escHtml(note) + '</p>' : '') + '<div class="pulse-grid">' +
     block('Top pain points', pains || '<p class="muted">None above the minimum count.</p>',
       'Mentions by the need people state; complaint-like ones count twice for ranking.') +
     block('Competitor complaints', comps || '<p class="muted">None above the minimum count.</p>',
       'Named by triage, or inferred from the community (r/<competitor>).') +
     block('Emerging ICP signals', segs || '<p class="muted">None above the minimum count.</p>',
-      'Customer types from the rules in config/insights.yaml, against the previous window.') + '</div>';
+      'Customer types from the rules in config/insights.yaml, against the previous window.') +
+    block('Questions we couldn’t answer', gaps || '<p class="muted">None above the minimum count.</p>',
+      'Skipped (no approved answer) or held (the WellPeps fact is not approved yet): ideas for guides, web pages and Knowledge documents.') +
+    '</div>';
 }
 
 // ── Brief view ──

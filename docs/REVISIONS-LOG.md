@@ -12,6 +12,35 @@ summary for discussion.
 
 ---
 
+## 2026-10-20: Questions we couldn't answer
+
+### R-22. Recurring unanswered questions listed for the team (Live)
+- **Before:** when Pulse skipped a question because no approved answer exists
+  (Selection Module "skip or flag a knowledge gap") or held a direct WellPeps
+  question because its central fact is not approved yet (R-20 HOLD), the
+  reason was stored with the post but nobody could see the pattern.
+- **After:** the Pain points roll-up (`harvey/insights.py`) has a fourth group,
+  **Questions we couldn't answer**, grouped by topic (the need people state,
+  else the medication) and by kind: "No approved answer" or "WellPeps fact not
+  approved yet". Same privacy rules as pain points: a topic is listed only
+  when at least 2 posts raise it in the window; up to 2 short quotes (no
+  handles, links or e-mails) with a link to the post; compared with the
+  previous window. Shown in Operator HQ (Pain points panel), the Briefs page,
+  `pulse brief` output, one line of labels in the Slack brief, and
+  `GET /api/insights/pain-points` (`knowledge_gaps`). Claude never sees this
+  list; the brief prompt is unchanged. Limit: `top_knowledge_gaps` in
+  `config/insights.yaml`.
+- **Live data today:** empty. Posts triaged before R-20 (Oct 20) carry no skip
+  reason, and none of the older "nothing useful to add" posts is a real
+  question (they are safety escalations, complaints or ads). The list fills
+  as new posts are triaged.
+- **Why:** owner, 2026-10-20 ("Yes, please do this").
+- **Source:** "Community Engagement – Why and When to Engage": "collect
+  recurring skipped questions that lack approved answers. Those are useful
+  signals for future eBooks, website content and Knowledge Base updates."
+- **Use:** Derek / marketing read it to decide which approved answers, guide
+  chapters or Knowledge documents to add next.
+
 ## 2026-10-20: Review desk APIs
 
 ### R-21. Review desk APIs: AI rewrite, knowledge documents, community permissions, spend (Live)

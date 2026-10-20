@@ -143,6 +143,8 @@
 .pp-n { color: var(--muted); font-variant-numeric: tabular-nums; }
 .pp-quote { display: block; overflow-wrap: anywhere; }
 .pp-icp p { color: var(--muted); }
+.pp-gaps { margin: 24px 0 16px; padding-top: 20px; border-top: 1px solid var(--divider); }
+.pp-gaps .note { margin: 0; }
 .bar { height: 8px; background: var(--action-soft); border-radius: 99px; overflow: hidden; }
 .bar span { display: block; height: 100%; background: var(--action); border-radius: 99px; }
 .bar-gradient span { background: var(--brand-gradient); }

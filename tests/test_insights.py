@@ -396,3 +396,109 @@ def test_a_config_dir_without_insights_yaml_falls_back_to_the_bundled_file(tmp_p
     finally:
         monkeypatch.delenv("PULSE_CONFIG_DIR")
         knowledge.reload()
+
+
+# ── Questions we couldn't answer (Why and When to Engage: "collect recurring skipped questions") ──
+
+GAP = "relevant question; gate:not_worth_it:knowledge_gap"
+HOLD = "direct question; gate:hold_unverified_fact"
+
+
+async def _seed_gaps(state):
+    """Window: sermorelin no-answer x2, approval-time HOLD x2, one-off no-answer, a price_only skip x2.
+    Previous window: one sermorelin no-answer."""
+    await add_triaged(state, "g1", text="does sermorelin help sleep", posted_at=IN_WINDOW, author=HANDLE,
+                      drug="sermorelin", useful_contribution=0, urgency_reason=GAP,
+                      phrases=["does sermorelin actually help with deep sleep", f"@{HANDLE} asked"])
+    await add_triaged(state, "g2", text="sermorelin and recovery", posted_at=IN_WINDOW + timedelta(hours=1),
+                      drug="sermorelin", useful_contribution=0, urgency_reason=GAP,
+                      phrases=["is sermorelin worth it for recovery"])
+    await add_triaged(state, "g3", text="wellpeps approval time", posted_at=IN_WINDOW + timedelta(hours=2),
+                      subject_type="wellpeps", unmet_need="care_process", intents=["wellpeps_question"],
+                      urgency_reason=HOLD, phrases=["how long does wellpeps approval take"])
+    await add_triaged(state, "g4", text="wellpeps review speed", posted_at=IN_WINDOW + timedelta(hours=3),
+                      subject_type="wellpeps", unmet_need="care_process", intents=["wellpeps_question"],
+                      urgency_reason=HOLD, phrases=["how fast does the provider review happen"])
+    await add_triaged(state, "g5", text="a one-off nad question", posted_at=IN_WINDOW + timedelta(hours=4),
+                      drug="nad_plus", useful_contribution=0, urgency_reason=GAP,
+                      phrases=["can nad shots replace coffee"])
+    for key in ("s1", "s2"):
+        await add_triaged(state, key, text="who beats 99", posted_at=IN_WINDOW + timedelta(hours=5),
+                          intents=["price_only"], urgency_reason="price; gate:not_worth_it:price_only",
+                          phrases=["who can beat ninety nine"])
+    await add_triaged(state, "gp", text="older sermorelin question", posted_at=IN_PREVIOUS, drug="sermorelin",
+                      useful_contribution=0, urgency_reason=GAP, phrases=["older sermorelin sleep question"])
+
+
+def test_gap_kind_reads_the_recorded_gate():
+    assert insights.gap_kind(GAP) == "no_answer"
+    assert insights.gap_kind(HOLD) == "unapproved_fact"
+    assert insights.gap_kind("price; gate:not_worth_it:price_only") == ""
+    assert insights.gap_kind("") == "" and insights.gap_kind(None) == ""
+
+
+def test_gap_markers_match_the_engagement_gates():
+    from harvey import engagement
+
+    assert insights.GAP_NO_ANSWER_MARK == f"{engagement.GATE_NOT_WORTH_IT}:{engagement.SKIP_KNOWLEDGE_GAP}"
+    assert insights.GAP_UNAPPROVED_MARK == engagement.GATE_HOLD_FACT
+
+
+@pytest.mark.asyncio
+async def test_recurring_unanswered_questions_are_grouped_by_topic_with_a_floor(tmp_path):
+    state = await fresh_state(tmp_path)
+    await _seed_gaps(state)
+
+    result = await insights.compute_insights(state, START, END)
+
+    gaps = {g["id"]: g for g in result["knowledge_gaps"]}
+    assert set(gaps) == {"no_answer:drug:sermorelin", "unapproved_fact:care_process"}
+    serm = gaps["no_answer:drug:sermorelin"]
+    assert (serm["count"], serm["prev_count"], serm["status"], serm["kind"]) == (2, 1, "growing", "no_answer")
+    assert serm["label"] == "Questions about sermorelin"
+    hold = gaps["unapproved_fact:care_process"]
+    assert hold["kind_label"] == "WellPeps fact not approved yet" and hold["status"] == "new"
+    assert result["suppressed"]["knowledge_gaps"] == 1          # the one-off NAD+ question
+    assert [g["count"] for g in result["knowledge_gaps"]] == sorted(
+        (g["count"] for g in result["knowledge_gaps"]), reverse=True)
+
+
+@pytest.mark.asyncio
+async def test_unanswered_question_examples_are_quotable_and_anonymous(tmp_path):
+    state = await fresh_state(tmp_path)
+    await _seed_gaps(state)
+
+    result = await insights.compute_insights(state, START, END, min_count=1)
+
+    blob = json.dumps(result["knowledge_gaps"])
+    assert HANDLE not in blob and "who can beat ninety nine" not in blob
+    for gap in result["knowledge_gaps"]:
+        for e in gap["examples"]:
+            assert len(e["quote"]) <= 120 and "@" not in e["quote"] and "http" not in e["quote"]
+
+
+@pytest.mark.asyncio
+async def test_unanswered_questions_never_reach_the_model(tmp_path):
+    state = await fresh_state(tmp_path)
+    await _seed_gaps(state)
+    result = await insights.compute_insights(state, START, END)
+
+    payload = json.dumps(insights.model_payload(result))
+
+    assert "knowledge_gaps" not in payload and "sermorelin" not in payload
+
+
+@pytest.mark.asyncio
+async def test_only_unanswered_questions_still_counts_as_content(tmp_path):
+    state = await fresh_state(tmp_path)
+    await _seed_gaps(state)
+    result = await insights.compute_insights(state, START, END)
+    only_gaps = {**result, "pain_points": [], "competitor_complaints": [], "segments": []}
+
+    assert insights.has_content(only_gaps)
+    lines = insights.slack_lines(only_gaps)
+    assert len(lines) == 1 and lines[0].startswith("Questions we couldn't answer: ")
+    assert "Questions about sermorelin (2)" in lines[0]
+    assert all("http" not in line and "deep sleep" not in line for line in lines)
+    text = insights.render_markdown(only_gaps)
+    assert "**Questions we couldn't answer**" in text and "does sermorelin actually help" in text

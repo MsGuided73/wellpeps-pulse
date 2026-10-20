@@ -27,6 +27,7 @@ min_count: 2
 top_pain_points: 8
 top_competitors: 8
 top_segments: 8
+top_knowledge_gaps: 8   # "Questions we couldn't answer": recurring questions with no approved answer
 examples_per_item: 2
 max_quote_chars: 120
 

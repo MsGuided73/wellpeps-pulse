@@ -159,6 +159,9 @@ deterministic compliance filter (`harvey/compliance.py`) exist.
   competitor attribution without rewriting triage, pain points by unmet need, competitor complaints, ICP
   segments new/growing vs the previous window), rules in `config/insights.yaml`, a section in the brief
   (`data.insights`; the prompt gets counts and labels only, never quotes), `GET /api/insights/pain-points`.
+  `knowledge_gaps` ("Questions we couldn't answer", R-22): recurring posts whose recorded gate is
+  `gate:not_worth_it:knowledge_gap` or `gate:hold_unverified_fact`, by topic; floor 2; never in
+  `model_payload`.
 
 Later phases add everything else. Don't build ahead of the phase you've
 been asked to do.

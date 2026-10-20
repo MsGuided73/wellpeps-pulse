@@ -61,7 +61,7 @@ async def fetch_insight_rows(state, start: datetime, end: datetime) -> list[dict
     return await _rows(state, (
         f"SELECT m.id, m.url, m.title, m.text, m.engagement_json, {MENTION_TIME} AS at, "
         "t.subject_type, t.competitor, t.drug, t.category, t.sentiment, t.sentiment_score, "
-        "t.phrases_json, t.protocol_json "
+        "t.phrases_json, t.protocol_json, t.urgency_reason "
         "FROM mentions m JOIN triage t ON t.mention_id = m.id "
         f"WHERE {RELEVANT_WHERE} AND {MENTION_TIME} >= ? AND {MENTION_TIME} < ? "
         f"ORDER BY {MENTION_TIME} DESC, m.id DESC"

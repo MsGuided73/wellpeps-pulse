@@ -21,6 +21,13 @@ live in ``config/insights.yaml`` so the team can edit them.
   categories, keywords, "a competitor is named" and "reads as a complaint".
   Each segment is compared with the previous window of equal length: new,
   growing, steady or declining.
+- **Questions we couldn't answer** (``knowledge_gaps``): relevant posts the
+  Selection Module skipped because no approved answer exists
+  (``gate:not_worth_it:knowledge_gap``) or held because the central WellPeps
+  fact is not approved yet (``gate:hold_unverified_fact``), grouped by topic.
+  Ideas for guides, web content and Knowledge updates ("Why and When to
+  Engage": "collect recurring skipped questions that lack approved answers").
+  Never in ``model_payload``.
 - Privacy: nothing below ``min_count`` mentions is listed on its own (it is
   only counted under ``suppressed``). ``model_payload`` is the only part a
   prompt may see: counts and labels, never quotes, links or mention ids.
@@ -44,6 +51,12 @@ EMERGING_STATUSES = (NEW, GROWING)
 MIN_QUOTE_WORDS = 3
 MAX_TEXT_CHARS = trends.MAX_TEXT_CHARS
 MODEL_COMPETITORS = 3
+# The review gates harvey.engagement records in triage.urgency_reason (a test
+# keeps these equal to engagement's constants; no import: engagement imports us).
+GAP_NO_ANSWER, GAP_UNAPPROVED = "no_answer", "unapproved_fact"
+GAP_NO_ANSWER_MARK = "gate:not_worth_it:knowledge_gap"
+GAP_UNAPPROVED_MARK = "gate:hold_unverified_fact"
+GAP_KIND_LABELS = {GAP_NO_ANSWER: "No approved answer", GAP_UNAPPROVED: "WellPeps fact not approved yet"}
 _APOSTROPHE = re.compile(r"['’‘`]")
 _NON_ALNUM = re.compile(r"[^a-z0-9]")
 
@@ -123,6 +136,8 @@ class Item:
     phrases: tuple[tuple[str, str], ...]   # (verbatim, normalised)
     segments: tuple[str, ...] = field(default=())
     competitor_complaint: bool = False   # competitor named AND a real complaint signal
+    drug: str = ""
+    gap: str = ""                        # GAP_NO_ANSWER | GAP_UNAPPROVED | ""
 
 
 def is_competitor_complaint(category: str, score: float, intents, haystack: str, rule) -> bool:
@@ -140,6 +155,16 @@ def is_complaint_like(category: str, sentiment: str, score: float, intents, rule
     """Negative sentiment, a complaint-type category, or a complaint intent."""
     return (category in rule.categories or (sentiment or "").lower() in rule.sentiments
             or float(score or 0.0) <= rule.sentiment_max or bool(set(intents) & set(rule.intents)))
+
+
+def gap_kind(urgency_reason: str | None) -> str:
+    """Why Pulse had no approved answer for a post, from its recorded review
+    gate: ``no_answer``, ``unapproved_fact`` or "" (answered, or skipped for
+    another reason such as a price-only request)."""
+    reason = urgency_reason or ""
+    if GAP_UNAPPROVED_MARK in reason:
+        return GAP_UNAPPROVED
+    return GAP_NO_ANSWER if GAP_NO_ANSWER_MARK in reason else ""
 
 
 def _phrase_list(raw) -> tuple[tuple[str, str], ...]:
@@ -184,6 +209,7 @@ def to_item(row: dict, cfg: InsightsFile, index: dict[str, str]) -> Item:
         haystack=haystack, phrases=phrases,
         competitor_complaint=bool(competitor) and is_competitor_complaint(
             category, score, intents, haystack, cfg.competitor_complaint),
+        drug=(row.get("drug") or "").strip(), gap=gap_kind(row.get("urgency_reason")),
     )
 
 
@@ -393,6 +419,44 @@ def segments(current: list[Item], previous: list[Item], bank: dict[str, int], cf
     return rows[:cfg.top_segments], hidden
 
 
+def gap_topic(item: Item, cfg: InsightsFile) -> tuple[str, str]:
+    """(key, label) of an unanswered question's topic: the stated need, else
+    the medication, else "Other questions"."""
+    if item.need and item.need != "other":
+        return item.need, pain_label(item.need, cfg)
+    if item.drug:
+        return f"drug:{item.drug}", f"Questions about {item.drug.replace('_', ' ')}"
+    return "other", "Other questions"
+
+
+def knowledge_gaps(current: list[Item], previous: list[Item], bank: dict[str, int], cfg: InsightsFile,
+                   min_count: int) -> tuple[list[dict], int]:
+    """Recurring questions Pulse could not answer, by kind and topic."""
+    def key_of(item: Item) -> str:
+        return f"{item.gap}:{gap_topic(item, cfg)[0]}"
+
+    groups: dict[str, list[Item]] = defaultdict(list)
+    for item in current:
+        if item.gap:
+            groups[key_of(item)].append(item)
+    before = Counter(key_of(i) for i in previous if i.gap)
+    rows, hidden = [], 0
+    for key, items in groups.items():
+        if len(items) < min_count:
+            hidden += 1
+            continue
+        kind = items[0].gap
+        rows.append({
+            "id": key, "kind": kind, "kind_label": GAP_KIND_LABELS[kind],
+            "label": gap_topic(items[0], cfg)[1], "count": len(items),
+            "prev_count": before[key], "delta": len(items) - before[key],
+            "status": _status(len(items), before[key], cfg),
+            "examples": pick_examples(items, bank, cfg),
+        })
+    rows.sort(key=lambda r: (-r["count"], r["kind"], r["label"]))
+    return rows[:cfg.top_knowledge_gaps], hidden
+
+
 def build_rollup(current_rows: list[dict], previous_rows: list[dict], bank: dict[str, int] | None = None, *,
                  start: datetime, end: datetime, min_count: int | None = None,
                  cfg: InsightsFile | None = None) -> dict:
@@ -409,6 +473,7 @@ def build_rollup(current_rows: list[dict], previous_rows: list[dict], bank: dict
     # Public posts about companies: their own (lower) floor, owner's decision 2026-10-19.
     comps, hidden_comps = competitor_complaints(cur, prev, bank, cfg, min(floor, cfg.competitor_complaint.min_count))
     segs, hidden_segs = segments(cur, prev, bank, cfg, floor)
+    gaps, hidden_gaps = knowledge_gaps(cur, prev, bank, cfg, floor)
     return {
         "window": {"start": start.isoformat(), "end": end.isoformat(),
                    "days": round((end - start).total_seconds() / 86400, 3)},
@@ -417,9 +482,9 @@ def build_rollup(current_rows: list[dict], previous_rows: list[dict], bank: dict
         "complaint_like_mentions": sum(i.complaint for i in cur),
         "competitor_mentions": sum(1 for i in cur if i.competitor),
         "community_attributed": sum(1 for i in cur if i.source == SOURCE_COMMUNITY),
-        "pain_points": pains, "competitor_complaints": comps, "segments": segs,
+        "pain_points": pains, "competitor_complaints": comps, "segments": segs, "knowledge_gaps": gaps,
         "suppressed": {"pain_points": hidden_pains, "competitor_complaints": hidden_comps,
-                       "segments": hidden_segs},
+                       "segments": hidden_segs, "knowledge_gaps": hidden_gaps},
     }
 
 
@@ -443,7 +508,9 @@ async def compute_insights(state, start: datetime, end: datetime, *, min_count: 
 
 
 def model_payload(rollup: dict) -> dict:
-    """What a prompt may see: counts and labels. Never quotes, links or ids."""
+    """What a prompt may see: counts and labels. Never quotes, links or ids,
+    and never the unanswered questions (they are for the team, not for the
+    brief's interpretation note)."""
     return {
         "min_count": rollup["min_count"],
         "mentions_considered": rollup["mentions"],
@@ -462,11 +529,11 @@ def model_payload(rollup: dict) -> dict:
 
 def has_content(rollup: dict | None) -> bool:
     return bool(rollup and (rollup.get("pain_points") or rollup.get("competitor_complaints")
-                            or rollup.get("segments")))
+                            or rollup.get("segments") or rollup.get("knowledge_gaps")))
 
 
 def slack_lines(rollup: dict | None, top: int = 2) -> list[str]:
-    """Up to two lines of labels and counts for the Slack brief (none when empty)."""
+    """Up to three lines of labels and counts for the Slack brief (none when empty)."""
     if not has_content(rollup):
         return []
     lines = []
@@ -476,6 +543,9 @@ def slack_lines(rollup: dict | None, top: int = 2) -> list[str]:
     emerging = [s for s in rollup["segments"] if s["emerging"]]
     if emerging:
         lines.append("Emerging ICPs: " + ", ".join(f"{s['label']} ({s['status']})" for s in emerging[:top]))
+    gaps = rollup.get("knowledge_gaps") or []
+    if gaps:
+        lines.append("Questions we couldn't answer: " + ", ".join(f"{g['label']} ({g['count']})" for g in gaps[:top]))
     return lines
 
 
@@ -513,6 +583,12 @@ def render_markdown(rollup: dict | None, note: str = "") -> str:
         for s in rollup["segments"]:
             lines.append(f"- {s['label']}: {s['count']} mention(s) (previous {s['prev_count']}, {s['status']})")
             lines += [f"  - {_example_md(e)}" for e in s["examples"]]
+    if rollup.get("knowledge_gaps"):
+        lines += ["", "**Questions we couldn't answer**"]
+        for g in rollup["knowledge_gaps"]:
+            lines.append(f"- {g['label']} ({g['kind_label']}): {g['count']} mention(s) "
+                         f"(previous {g['prev_count']}, {g['status']})")
+            lines += [f"  - {_example_md(e)}" for e in g["examples"]]
     return "\n".join(lines)
 
 

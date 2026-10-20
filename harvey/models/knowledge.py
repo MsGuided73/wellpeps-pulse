@@ -666,6 +666,7 @@ class InsightsFile(_Strict):
     top_pain_points: int = Field(default=8, ge=1, le=50)
     top_competitors: int = Field(default=8, ge=1, le=50)
     top_segments: int = Field(default=8, ge=1, le=50)
+    top_knowledge_gaps: int = Field(default=8, ge=1, le=50)
     examples_per_item: int = Field(default=2, ge=0, le=5)
     max_quote_chars: int = Field(default=120, ge=20, le=200)
     growth_ratio: float = Field(default=1.5, gt=1.0)
