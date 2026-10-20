@@ -87,6 +87,42 @@ const Home = (() => {
     return '';
   }
 
+  // Why Pulse picked this post: the situation, the Selection Module's decision
+  // and reason, what still holds posting, and planning warnings. Calm on
+  // purpose: approval blockers are already listed in the amber "needs" box.
+  const HELD_PERMISSIONS = {
+    unknown: "This community's rules aren't recorded yet.",
+    permission_missing: "This community needs a moderator's permission first.",
+    prohibited: "This community doesn't allow brand replies.",
+  };
+
+  function pickHtml(card) {
+    const e = card.d && card.d.engagement;
+    const sel = e && e.selection;
+    if (!sel || !sel.engagement_decision) return '';
+    const situation = e.situation && e.situation.label;
+    const reason = label('pickReason', sel.reason_code);
+    let text = (situation ? escHtml(situation) + '. ' : '') + escHtml(label('pick', sel.engagement_decision)) +
+      (reason ? ': ' + escHtml(reason) : '') + '.' + (sel.priority === 'high' ? ' High priority.' : '');
+    if (sel.engagement_decision === 'ROUTE') {
+      if (e.handoff && e.handoff.acked) text += ' The care team has acknowledged it.';
+      if (e.situation && e.situation.reply === 'boundary_only' && card.d.latest_draft) {
+        text += ' Only the approved safety reply may be posted' +
+          (e.clinical_approval_required ? ', and a clinician or admin must approve it.' : '.');
+      }
+    }
+    const held = HELD_PERMISSIONS[sel.public_permission];
+    if (held && sel.posting_hold) {
+      const already = ['RULES_UNKNOWN', 'PERMISSION_MISSING', 'PARTICIPATION_PROHIBITED'].includes(sel.reason_code);
+      text += ' ' + (already ? '' : escHtml(held) + ' ') + (sel.public_permission === 'prohibited' ? '' :
+        'Record the rules or permission in <a href="#communities">Operator HQ › Communities</a> before posting.');
+    }
+    const warns = (e.warnings || []).map(w => '<li>' + escHtml(String(w).replace(/^[a-z0-9 ]+:\s*/i, '')) + '</li>').join('');
+    return '<div class="pick" title="' + escHtml(sel.engagement_decision + ' ' + sel.reason_code) + '">' +
+      '<p><b>Why this post:</b> ' + text + '</p>' +
+      (warns ? '<p class="pick-h">Heads-up</p><ul>' + warns + '</ul>' : '') + '</div>';
+  }
+
   function check(kind, text) {
     return '<span class="chk' + (kind ? ' ' + kind : '') + '">' + escHtml(text) + '</span>';
   }
@@ -208,14 +244,14 @@ const Home = (() => {
     const when = timeHtml(m.posted_at || m.collected_at);
     const url = extLink(m.url, 'View on ' + platformName(card) + ' ↗', 'open');
     const body = card.d ? card.d.mention.text : m.text;
-    const note = '<p class="human-note"><b>A WellPeps rep posts this one.</b> ' +
-      (comm ? escHtml(comm) + ' doesn\'t allow agents to interact with community members, so Pulse only drafts.' : 'Pulse only drafts.') +
-      ' Read the post on ' + platform + ', then post the reply yourself.</p>';
+    const note = '<p class="human-note"><b>A WellPeps rep posts this one.</b> Pulse only drafts. Read the post on ' +
+      platform + ', then post the reply yourself.</p>';
     const done = card.phase === 'posted' || card.phase === 'discarded';
     return '<article class="item' + (done ? ' is-done' : '') + '" id="card-' + id + '" data-id="' + id + '" aria-labelledby="ct-' + id + '">' +
       '<div class="src"><b>' + platform + '</b>' + (where ? '<span>' + where + '</span>' : '') + '<span>' + when + '</span>' + url + '</div>' +
       '<h3 id="ct-' + id + '">' + (extLink(m.url, m.title || snippet(m.text).slice(0, 90), 'post-title') || escHtml(m.title || 'Untitled post')) + '</h3>' +
-      '<p class="quote">“' + escHtml(snippet(body)) + '”</p>' + (done ? '' : note) +
+      '<p class="quote">“' + escHtml(snippet(body)) + '”</p>' + (card.phase === 'review' ? pickHtml(card) : '') +
+      (done ? '' : note) +
       (card.d ? draftBox(card) : '<div class="draft"><p class="note">Loading the draft…</p></div>') +
       (card.phase === 'review' ? guideChip(card) : '') + checksHtml(card) + (card.phase === 'review' ? needsHtml(card) : '') +
       actionsHtml(card) + '</article>';

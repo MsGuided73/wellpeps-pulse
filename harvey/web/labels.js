@@ -54,6 +54,32 @@ const LABELS = {
     keyword: 'Keyword rule', safety_screen: 'Safety check', severe_category: 'Triage',
     model: 'Triage', triage_failed: 'Triage failed', manual: 'Manual',
   },
+  // Why Pulse picked a post (engagement.selection, Selection Module V1 §2/§5).
+  pick: {RESPOND: 'Worth a reply', HOLD: 'Held for now', SKIP: 'Pulse would skip this', ROUTE: 'Safety first'},
+  pickReason: {
+    DIRECT_INTEREST: 'someone is asking about WellPeps directly',
+    ALTERNATIVES_FIT: 'someone is looking for another provider, and WellPeps fits what they need',
+    EDUCATION_FIT: 'a question where clear, general education helps',
+    PROVIDER_SELECTION: 'someone is comparing providers or deciding where to start',
+    RULES_UNKNOWN: "this community's rules aren't recorded yet",
+    PERMISSION_MISSING: "this community needs a moderator's permission, and none is recorded",
+    UNVERIFIED_FACT: "the answer depends on a WellPeps fact that isn't approved yet",
+    HOLD_CONTEXT: 'the post is unclear; read the thread before replying',
+    NOT_TRIAGED: "Pulse hasn't checked this post yet",
+    OFF_TOPIC: "it isn't about anything WellPeps covers",
+    COMPETITOR_COMMUNITY: "it's another provider's own community, where Pulse only listens",
+    PARTICIPATION_PROHIBITED: "this community doesn't allow brand replies",
+    DO_NOT_ENGAGE: "the competitor protocol says not to engage",
+    PRICE_ONLY: "it's only about the cheapest price or a coupon",
+    NO_ADDED_VALUE: 'the thread already has a good answer',
+    SATISFIED_PROVIDER: "they're happy with their current provider",
+    KNOWLEDGE_GAP: "there's no approved answer for this yet",
+    NO_OPENING: "there's no question or need to answer",
+    CLINICAL_ROUTE: 'a health or safety concern goes to the care team',
+    LEGAL_ROUTE: 'a legal concern goes to the right person',
+    PRIVACY_ROUTE: 'a privacy concern goes to the right person',
+    SUPPORT_ROUTE: 'a billing or service issue goes to support',
+  },
   // Password dialogs (password.js). pwError keys are the server's `error`
   // codes plus a few client-side checks.
   pwError: {

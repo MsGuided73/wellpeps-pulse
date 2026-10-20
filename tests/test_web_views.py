@@ -41,6 +41,35 @@ def test_app_starts_only_after_every_view_script_has_registered():
     assert "addEventListener('DOMContentLoaded', start" in js
 
 
+def _selection_codes() -> set[str]:
+    from pathlib import Path
+
+    from harvey import engagement
+
+    src = Path(engagement.__file__).read_text(encoding="utf-8")
+    block = src.split("# --- Conversation selection record", 1)[1].split("# --- Drafter guidance", 1)[0]
+    codes = set(re.findall(r'"([A-Z][A-Z_]{3,})"', block)) - {"RESPOND", "SKIP", "HOLD", "ROUTE"}
+    codes |= {getattr(engagement, n).upper() for n in dir(engagement) if n.startswith("SKIP_")}
+    return codes
+
+
+def test_every_selection_reason_has_plain_wording_on_the_review_card():
+    labels = (WEB / "labels.js").read_text(encoding="utf-8")
+    pick_reason = labels.split("pickReason: {", 1)[1].split("},", 1)[0]
+    missing = sorted(c for c in _selection_codes() if not re.search(rf"\b{c}:", pick_reason))
+    assert not missing, f"add plain wording to LABELS.pickReason in labels.js: {missing}"
+    for decision in ("RESPOND", "HOLD", "SKIP", "ROUTE"):
+        assert re.search(rf"\b{decision}: '", labels.split("pick: {", 1)[1].split("},", 1)[0])
+
+
+def test_review_card_shows_why_this_post_and_no_false_community_claim():
+    js = (WEB / "home.js").read_text(encoding="utf-8")
+    assert "function pickHtml(card)" in js and "Why this post:" in js
+    assert "card.phase === 'review' ? pickHtml(card)" in js
+    assert "doesn't allow agents" not in js and "doesn\\'t allow agents" not in js
+    assert 'href="#communities"' in js
+
+
 def test_page_has_landmarks_three_views_and_a_live_region():
     html = (WEB / "index.html").read_text(encoding="utf-8")
     assert 'class="skip-link"' in html and '<main id="main"' in html and "<header" in html and "<footer" in html
