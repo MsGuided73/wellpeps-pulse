@@ -155,6 +155,11 @@ deterministic compliance filter (`harvey/compliance.py`) exist.
   protocol `resource` = the guide link. FINALIZE gated_download_disclosure resolved by the user's
   instruction; links stay `live: false` until the site deploys.
 
+- Pain points & emerging ICPs (2026-10-19): `harvey/insights.py` (deterministic roll-up: community ->
+  competitor attribution without rewriting triage, pain points by unmet need, competitor complaints, ICP
+  segments new/growing vs the previous window), rules in `config/insights.yaml`, a section in the brief
+  (`data.insights`; the prompt gets counts and labels only, never quotes), `GET /api/insights/pain-points`.
+
 Later phases add everything else. Don't build ahead of the phase you've
 been asked to do.
 

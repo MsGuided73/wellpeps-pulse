@@ -1,0 +1,90 @@
+# Source: owner request 2026-10-19 ("track complaints to identify ongoing pain
+# points and emerging ICPs"); segment wording is Pulse's own, edit freely.
+# Generated: 2026-10-19 for WellPeps Pulse (pain points & emerging ICPs).
+# Pain points & emerging ICPs (harvey/insights.py). Public consumer language
+# only: do not add internal costs or partner names. This file is read by
+# deterministic code only and is never put in a prompt.
+#
+# The roll-up works on relevant, triaged mentions in the brief's window and
+# compares each count with the previous window of the same length.
+#
+# Segment rules: a mention is in a segment when EVERY clause matches (AND).
+# A clause matches when ANY of its conditions holds (OR):
+#   intents:        a protocol intent tag the triage model set
+#   needs:          the protocol unmet-need the triage model set
+#   categories:     the triage category
+#   keywords:       a whole word / phrase in the title, text or triage phrases
+#                   (case-insensitive; apostrophes ignored: "won't" = "wont")
+#   competitor:     true = a competitor is named by triage or the community
+#   complaint_like: true = the mention reads as a complaint (see `complaint`)
+# Known intents / needs / categories are validated when the file loads.
+
+version: 1
+
+# Nothing seen in fewer mentions than this is listed on its own (the Phase 8
+# privacy floor). Counts below it are reported only as "suppressed".
+min_count: 2
+top_pain_points: 8
+top_competitors: 8
+top_segments: 8
+examples_per_item: 2
+max_quote_chars: 120
+
+# A segment is "new" when it has no mention in the previous window and reaches
+# min_count now; "growing" when it is at least this many times the previous count.
+growth_ratio: 1.5
+
+# A mention reads as a complaint when ANY of these holds.
+complaint:
+  sentiment_max: -0.2          # sentiment_score at or below this
+  sentiments: [negative]       # or the triage sentiment label is one of these
+  categories: [complaint, billing_fraud, legal_regulatory]
+  intents: [wellpeps_complaint]
+
+# Pain-point label for a complaint-like mention with no stated need.
+category_pain:
+  complaint: General complaints
+  billing_fraud: Billing and fraud concerns
+  legal_regulatory: Legal and regulatory issues
+  unclassified: Negative experience (need not classified)
+
+# A subreddit / group is attributed to a competitor when its name equals the
+# competitor's name or an alias (case, spaces, punctuation and accents ignored)
+# and has at least this many letters/digits ...
+community_min_chars: 4
+# ... and is not one of these everyday words (competitor names that double as
+# ordinary words: r/found, r/eden ...). Written in the same normalised form.
+community_ambiguous: [found, eden, fridays, willow, emerge, form, sesame, keeps, maximus, novos, elysium, fountain, sequence, hone, rex, rise, hair, hers, henry, hymns, roman, mochi, defy, strut, superpower, calibrate, orderly, marek, blokes, fella]
+
+segments:
+  - id: insurance_dropout
+    label: Insurance drop-out
+    description: Lost or never had GLP-1 coverage and is looking for a cash-pay route.
+    all_of:
+      - keywords: [insurance, coverage, covered, covers, prior auth, prior authorization, formulary]
+      - keywords: [stopped, dropped, denied, stopped covering, no longer cover, no longer covered, wont cover, doesnt cover, not covered, lost coverage, lost my insurance, coverage ended, out of pocket, cash pay, self pay, self-pay]
+      - keywords: [glp-1, glp1, wegovy, zepbond, ozempic, mounjaro, semaglutide, tirzepatide, weight loss]
+
+  - id: price_comparer
+    label: Price comparer
+    description: Shopping providers on price and total cost before committing.
+    all_of:
+      - intents: [comparison_request]
+      - needs: [price_clarity]
+        keywords: [cheapest, cheaper, lowest price, compare price, price comparison, cost per month, total cost]
+
+  - id: safety_first_seeker
+    label: Safety-first seeker
+    description: Wants a real clinician review, labs and a trustworthy pharmacy before starting.
+    all_of:
+      - needs: [care_process, lab_testing_terms]
+        keywords: [clinician, real provider, provider review, licensed, board certified, blood test, lab work, labs, 503a, pharmacy, legit, legitimate, reputable, is it safe]
+
+  - id: unhappy_with_provider
+    label: Unhappy with current provider
+    description: Venting about, or looking to leave, a provider they already use.
+    all_of:
+      - intents: [alternatives_requested, venting_only]
+        keywords: [switching, switched, switch from, leaving, left them, cancel my, fed up, ghosted, overcharged, terrible experience]
+      - competitor: true
+      - complaint_like: true

@@ -22,7 +22,13 @@ count, share_pct, prev_share_pct, delta_pp in percentage points),
 `sentiment` (mean score from -1 to 1 per WellPeps / competitor / drug, with
 the previous window), `category_mix` and `drug_mix` (counts with deltas),
 `complaint_themes` (top complaint terms per competitor), `language_bank`
-(verbatim consumer phrases with counts).
+(verbatim consumer phrases with counts), and, when present,
+`pain_points_and_icps`: `pain_points` (what people struggle with: label,
+count, complaint_count, prev_count, status new/growing/steady/declining,
+competitors involved), `competitor_complaints` (competitor, count,
+main_pain, worst_sentiment) and `segments` (customer types showing up:
+label, count, prev_count, status). The team sees the quotes and links for
+these separately; you only get counts and labels.
 
 ## Rules
 
@@ -58,6 +64,10 @@ Return one JSON object with exactly these fields:
   - `urgency`: one of `this_week`, `this_month`, `watch`
   - `evidence_terms`: the terms or subjects from the data this card rests on
 - `watchlist`: terms from the data worth watching next period.
+- `pain_points_note` (optional string, at most two short sentences): only
+  when `pain_points_and_icps` is present, say what the pain points and
+  segments suggest for WellPeps. Use only numbers that appear in that object,
+  no quotes, no links, no medical claims. Leave it out when the data is thin.
 
 BEGIN_UNTRUSTED_AGGREGATES {{nonce}}
 {{data}}

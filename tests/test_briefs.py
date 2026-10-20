@@ -265,3 +265,95 @@ async def test_payload_json_has_no_example_ids_or_links(tmp_path):
     raw = json.dumps(payload)
     assert "example" not in raw and "http" not in raw
     assert payload["emerging_terms"][0]["term"]
+
+
+# --- Pain points & emerging ICPs section --------------------------------------------------------
+
+QUOTE = "the price doubled after the first month"
+
+
+async def _seed_pain(state, n=3, unique=False):
+    for i in range(n):
+        await add_triaged(state, f"pp{i}", text="my price doubled after the first month", competitor="Henry Meds",
+                          posted_at=IN_WINDOW + timedelta(minutes=i), subject_type="competitor",
+                          category="complaint", sentiment="negative", sentiment_score=-0.6,
+                          unmet_need="price_clarity", intents=["venting_only"],
+                          phrases=[f"zqxquote number {i} about the doubled price" if unique else QUOTE])
+
+
+@pytest.mark.asyncio
+async def test_brief_stores_the_pain_point_roll_up_and_a_verified_note(tmp_path):
+    state = await fresh_state(tmp_path)
+    await _seed_pain(state)
+    note = "Price clarity is the main pain point with 3 mentions. Pricing pages deserve a look. Third."
+    brain = FakeBrain([good_answer(pain_points_note=note)])
+
+    brief = await briefs.build_brief(state, brain, "daily", config=_config(), now=NOW)
+
+    section = brief["data"]["insights"]
+    assert section["pain_points"][0]["id"] == "price_clarity" and section["pain_points"][0]["count"] == 3
+    assert section["pain_points"][0]["examples"][0]["quote"] == QUOTE
+    assert section["competitor_complaints"][0]["competitor"] == "Henry Meds"
+    assert brief["data"]["insights_note"] == "Price clarity is the main pain point with 3 mentions. Pricing pages deserve a look."
+
+
+@pytest.mark.asyncio
+async def test_prompt_carries_counts_and_labels_but_no_quotes_or_links(tmp_path):
+    state = await fresh_state(tmp_path)
+    await _seed_pain(state, unique=True)     # unique phrases stay out of the (existing) language bank payload
+    brain = FakeBrain([good_answer()])
+
+    brief = await briefs.build_brief(state, brain, "daily", config=_config(), now=NOW)
+
+    prompt = brain.prompts[0]
+    assert brief["data"]["insights"]["pain_points"][0]["examples"]        # the section has quotes ...
+    assert "pain_points_and_icps" in prompt and "Price and cancellation clarity" in prompt
+    assert "zqxquote" not in prompt and "reddit.com" not in prompt and "mention_id" not in prompt  # ... the prompt not
+
+
+@pytest.mark.asyncio
+async def test_note_with_an_invented_number_is_dropped(tmp_path):
+    state = await fresh_state(tmp_path)
+    await _seed_pain(state)
+    brain = FakeBrain([good_answer(pain_points_note="Price complaints jumped 480% overnight.")])
+
+    brief = await briefs.build_brief(state, brain, "daily", config=_config(), now=NOW)
+
+    assert brief["data"]["insights_note"] == ""
+    assert brief["data"]["insights"]["pain_points"]    # the deterministic section is unaffected
+
+
+@pytest.mark.asyncio
+async def test_fallback_brief_still_has_the_pain_point_section(tmp_path):
+    state = await fresh_state(tmp_path)
+    await _seed_pain(state)
+
+    brief = await briefs.build_brief(state, FakeBrain(["nope", "nope"]), "daily", config=_config(), now=NOW)
+
+    assert brief["status"] == "fallback"
+    assert brief["data"]["insights"]["pain_points"][0]["id"] == "price_clarity"
+    assert brief["data"]["insights_note"] == ""
+
+
+@pytest.mark.asyncio
+async def test_slack_message_gets_label_lines_but_never_quotes_or_links(tmp_path):
+    state = await fresh_state(tmp_path)
+    await _seed_pain(state)
+    notifier = FakeNotifier()
+
+    await briefs.build_brief(state, FakeBrain([good_answer()]), "daily", config=_config(), now=NOW, notifier=notifier)
+
+    text = notifier.sent[0]
+    assert "Top pain points: Price and cancellation clarity (3)" in text
+    assert QUOTE not in text and "reddit.com" not in text
+
+
+@pytest.mark.asyncio
+async def test_brief_without_mentions_in_the_roll_up_floor_has_an_empty_section(tmp_path):
+    state = await fresh_state(tmp_path)
+    await _seed_pain(state, n=1)          # one post is below the floor of 2
+
+    brief = await briefs.build_brief(state, FakeBrain([good_answer()]), "daily", config=_config(), now=NOW)
+
+    assert brief["data"]["insights"]["pain_points"] == []
+    assert brief["data"]["insights"]["suppressed"]["pain_points"] == 1

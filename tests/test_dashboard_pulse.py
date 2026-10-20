@@ -43,7 +43,7 @@ def pulse_app(tmp_path, monkeypatch):
     teardown_app()
 
 
-GETS = ["/api/briefs", "/api/trends", "/api/language-bank"]
+GETS = ["/api/briefs", "/api/trends", "/api/language-bank", "/api/insights/pain-points"]
 
 
 @pytest.mark.parametrize("path", GETS)
@@ -171,3 +171,29 @@ def test_unused_store_helpers_are_consistent(pulse_app):
     page = run(pulse_store.search_language_bank(state, limit=1))
     assert page["limit"] == 1 and len(page["items"]) == 1
     assert briefs.PERIODS == ("daily", "weekly")
+
+
+def test_pain_points_api_returns_the_roll_up_without_claude(pulse_app):
+    _, brain, _ = pulse_app
+    client, _ = client_for(VIEWER)
+
+    data = client.get("/api/insights/pain-points?days=7").json()
+
+    assert brain.calls == []
+    assert set(data) >= {"window", "min_count", "mentions", "previous_mentions", "pain_points",
+                         "competitor_complaints", "segments", "suppressed", "community_attributed"}
+    assert data["mentions"] == 4 and data["min_count"] == 2
+    assert data["competitor_complaints"][0]["competitor"] == "Hims & Hers"
+    assert data["competitor_complaints"][0]["count"] == 4
+    assert {"id", "label", "count", "complaint_count", "prev_count", "status", "examples"} <= set(
+        data["pain_points"][0]) if data["pain_points"] else True
+    assert client.get("/api/insights/pain-points?days=0").status_code == 422
+    assert client.get("/api/insights/pain-points?days=91").status_code == 422
+    assert client.get("/api/insights/pain-points?min_count=0").status_code == 422
+    assert client.get("/api/insights/pain-points?min_count=1").json()["min_count"] == 1
+
+
+def test_pain_points_api_is_read_only(pulse_app):
+    client, csrf = client_for(VIEWER)
+
+    assert post(client, csrf, "/api/insights/pain-points", {}).status_code == 405

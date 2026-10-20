@@ -14,9 +14,16 @@ Safety rails around the model:
 - one brief per (period, window_start): a rerun returns the stored brief
   unless ``force=True``.
 
-Slack gets the headline, the top three action-card titles and a dashboard
-link only, scrubbed of URLs, handles and language-bank phrases
-(``build_brief_message`` is the one place that message is composed).
+Pain points & emerging ICPs (``harvey.insights``) are a deterministic
+roll-up stored in ``data["insights"]``. The prompt gets its counts and labels
+only (no quotes, links or mention ids) and may add a two-sentence
+``pain_points_note``; quotes, links and numbers in the rendered section come
+from the roll-up, never from the model.
+
+Slack gets the headline, the top three action-card titles, one line of
+pain-point / ICP labels and a dashboard link only, scrubbed of URLs, handles
+and language-bank phrases (``build_brief_message`` is the one place that
+message is composed).
 """
 
 import inspect
@@ -30,7 +37,7 @@ from typing import Literal
 import pytz
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 
-from harvey import pulse_store, trends
+from harvey import insights, pulse_store, trends
 from harvey.agents import prompting
 from harvey.config import WEEKDAYS, PulseConfig
 
@@ -78,6 +85,12 @@ class BriefAnswer(BaseModel):
     summary_md: str = Field(min_length=1, max_length=4000)
     action_cards: list[ActionCard] = Field(min_length=1, max_length=12)
     watchlist: list[str] = Field(default_factory=list, max_length=30)
+    pain_points_note: str = ""
+
+    @field_validator("pain_points_note", mode="before")
+    @classmethod
+    def _note_is_text(cls, v) -> str:
+        return v if isinstance(v, str) else ""
 
     @field_validator("summary_md")
     @classmethod
@@ -125,9 +138,20 @@ def window_for(period: str, now: datetime, tz_name: str) -> tuple[datetime, date
 # ── Payload and prompt ──
 
 
-def build_payload(report: trends.TrendReport, phrases: list[dict], period: str) -> dict:
+def _insights_payload(rollup: dict | None) -> dict | None:
+    """The roll-up's counts and labels for the prompt, below-floor items cut."""
+    if not insights.has_content(rollup):
+        return None
+    data = insights.model_payload(rollup)
+    for key in ("pain_points", "competitor_complaints", "segments"):
+        data[key] = [row for row in data[key] if row["count"] >= MIN_PROMPT_COUNT]
+    return data if any(data[k] for k in ("pain_points", "competitor_complaints", "segments")) else None
+
+
+def build_payload(report: trends.TrendReport, phrases: list[dict], period: str,
+                  rollup: dict | None = None) -> dict:
     """The only data the model sees: aggregate tables, rounded for citing."""
-    return {
+    payload = {
         "period": period,
         "market": "US",
         "window": {"start": report.window_start.isoformat(), "end": report.window_end.isoformat(),
@@ -160,6 +184,10 @@ def build_payload(report: trends.TrendReport, phrases: list[dict], period: str) 
             if p["count"] >= MIN_PROMPT_COUNT and not trends.has_identifier(p["phrase"])
         ][:PAYLOAD_PHRASES],
     }
+    extra = _insights_payload(rollup)
+    if extra is not None:
+        payload["pain_points_and_icps"] = extra
+    return payload
 
 
 def _r2(value):
@@ -244,6 +272,15 @@ def fallback_fields(report: trends.TrendReport) -> dict:
 # ── build_brief ──
 
 
+async def _rollup(state, start: datetime, end: datetime) -> dict | None:
+    """The pain-point / ICP roll-up; a failure here never costs the brief."""
+    try:
+        return await insights.compute_insights(state, start, end)
+    except Exception as exc:
+        logger.warning(f"pain-point roll-up failed: {type(exc).__name__}")
+        return None
+
+
 async def build_brief(state, brain, period: str, *, config: PulseConfig | None = None,
                       now: datetime | None = None, force: bool = False, notifier=None) -> dict:
     """Build (or return the stored) brief for the window ``period`` ends at ``now``."""
@@ -259,8 +296,10 @@ async def build_brief(state, brain, period: str, *, config: PulseConfig | None =
     report = await trends.compute_trends(state, start, end, baseline_days=settings.baseline_days,
                                          min_count=settings.min_count, top_n=settings.top_terms)
     phrases = await pulse_store.top_phrases(state, since=start, limit=PAYLOAD_PHRASES * 2)
-    payload = build_payload(report, phrases, period)
-    data = {**report.to_dict(), "language_bank": payload["language_bank"], "verification": {"stripped": []}}
+    rollup = await _rollup(state, start, end)
+    payload = build_payload(report, phrases, period, rollup)
+    data = {**report.to_dict(), "language_bank": payload["language_bank"], "verification": {"stripped": []},
+            "insights": rollup, "insights_note": ""}
 
     answer = await _ask(brain, payload) if brain is not None else None
     if answer is None:
@@ -268,6 +307,8 @@ async def build_brief(state, brain, period: str, *, config: PulseConfig | None =
     else:
         kept, stripped = verify_cards([c.model_dump() for c in answer.action_cards], payload)
         data["verification"]["stripped"] = [c["title"] for c in stripped]
+        data["insights_note"] = insights.clean_note(
+            answer.pain_points_note, numbers_in(json.dumps(payload)), numbers_in) if "pain_points_and_icps" in payload else ""
         fields = {"status": "ok", "headline": answer.headline, "summary_md": answer.summary_md,
                   "action_cards": kept, "watchlist": answer.watchlist}
 
@@ -310,6 +351,7 @@ def build_brief_message(brief: dict, config) -> tuple[str, list[dict]]:
     if actions:
         body.append("Top actions:")
         body += [f"{i}. {a}" for i, a in enumerate(actions, start=1)]
+    body += [_scrub(line, phrases) for line in insights.slack_lines((brief.get("data") or {}).get("insights"))]
     dashboard = config.notify.dashboard_url.strip().rstrip("/")
     link = f"{dashboard}/#pulse-brief-{brief['id']}" if dashboard else ""
     if link:

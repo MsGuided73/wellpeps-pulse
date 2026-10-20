@@ -116,7 +116,51 @@ function renderTables(data, terms) {
     '</div>';
 }
 
+// ── Pain points & emerging ICPs (GET /api/insights/pain-points, or a brief's data.insights) ──
+
+const STATUS_BADGE = {new: 'note', growing: 'bad', steady: 'idle', declining: 'good'};
+
+function statusBadge(status) {
+  return toneBadge(String(status || 'steady'), STATUS_BADGE[status] || 'idle');
+}
+
+function quoteList(examples) {
+  if (!examples || !examples.length) return '';
+  return '<ul class="quote-list">' + examples.map(e => '<li>&ldquo;' + escHtml(e.quote) + '&rdquo; ' +
+    (e.competitor ? '<span class="muted">' + escHtml(e.competitor) + '</span> ' : '') +
+    (extLink(e.url, 'open #' + e.mention_id) || '') + '</li>').join('') + '</ul>';
+}
+
+function insightRow(title, meta, status, examples) {
+  return '<div class="theme"><div class="theme-head">' + escHtml(title) + ' ' + (status ? statusBadge(status) : '') +
+    ' <span class="muted">' + escHtml(meta) + '</span></div>' + quoteList(examples) + '</div>';
+}
+
+function insightsSection(r, note) {
+  if (!r || !((r.pain_points || []).length || (r.competitor_complaints || []).length || (r.segments || []).length)) {
+    return block('Pain points & emerging ICPs', '<p class="muted">Nothing reached the minimum count of ' +
+      escHtml(String((r && r.min_count) || 2)) + ' mentions in this window.</p>');
+  }
+  const pains = (r.pain_points || []).map(p => insightRow(p.label,
+    '· ' + p.count + ' mention(s), ' + p.complaint_count + ' complaint-like (before: ' + p.prev_count + ')' +
+    (p.competitors.length ? ' · ' + p.competitors.map(c => c.name).join(', ') : ''), p.status, p.examples)).join('');
+  const comps = (r.competitor_complaints || []).map(c => insightRow(c.competitor,
+    '· ' + c.count + ' complaint(s)' + (c.main_pain ? ', mainly ' + c.main_pain.label : '') +
+    ', worst sentiment ' + fmtNum(c.worst_sentiment, 2) + (c.sources && c.sources.community ? ' · incl. community-attributed' : ''),
+    null, c.example ? [c.example] : [])).join('');
+  const segs = (r.segments || []).map(sg => insightRow(sg.label,
+    '· ' + sg.count + ' mention(s) (before: ' + sg.prev_count + ')', sg.status, sg.examples)).join('');
+  return (note ? '<p class="lede">' + escHtml(note) + '</p>' : '') + '<div class="pulse-grid">' +
+    block('Top pain points', pains || '<p class="muted">None above the minimum count.</p>',
+      'Mentions by the need people state; complaint-like ones count twice for ranking.') +
+    block('Competitor complaints', comps || '<p class="muted">None above the minimum count.</p>',
+      'Named by triage, or inferred from the community (r/<competitor>).') +
+    block('Emerging ICP signals', segs || '<p class="muted">None above the minimum count.</p>',
+      'Customer types from the rules in config/insights.yaml, against the previous window.') + '</div>';
+}
+
 // ── Brief view ──
+
 
 function actionCard(c) {
   return '<div class="action-card"><div class="ac-title">' + escHtml(c.title) + '</div>' +
@@ -145,6 +189,7 @@ function renderBrief(detail) {
   if ((detail.watchlist || []).length) {
     html += '<div class="subhead">Watchlist</div><div class="tag-row">' + detail.watchlist.map(t => '<span class="tag">' + termCell(t) + '</span>').join('') + '</div>';
   }
+  if (data.insights) html += '<div class="subhead">Pain points &amp; emerging ICPs</div>' + insightsSection(data.insights, data.insights_note);
   html += '<div class="subhead">The numbers behind it</div>' + renderTables(data, detail.trend_terms || data.terms);
   return html;
 }
@@ -189,8 +234,11 @@ async function loadLiveView() {
   const days = document.getElementById('pulse-days').value;
   const data = await api('/api/trends?days=' + encodeURIComponent(days));
   if (!data) { el.innerHTML = offlineState(); return; }
+  const found = await api('/api/insights/pain-points?days=' + encodeURIComponent(days));
   el.innerHTML = '<p class="muted">' + escHtml(String(data.mentions)) + ' triaged mention(s) in the window, ' +
-    escHtml(String(data.previous_mentions)) + ' in the window before. Computed now; no Claude call.</p>' + renderTables(data, data.terms);
+    escHtml(String(data.previous_mentions)) + ' in the window before. Computed now; no Claude call.</p>' +
+    (found ? '<div class="subhead">Pain points &amp; emerging ICPs</div>' + insightsSection(found, '') : '') +
+    renderTables(data, data.terms);
   applyWidths(el);
 }
 

@@ -12,6 +12,52 @@ summary for discussion.
 
 ---
 
+## 2026-10-19: Pain points & emerging ICPs
+
+### R-18. Pain points & emerging ICPs (Live)
+- **Before:** Pulse stored per mention the competitor, category, sentiment,
+  the unmet need and intents (protocol record) and verbatim phrases, but
+  nothing rolled them up for the team. A post in r/IVIMHEALTH whose triage left
+  the competitor empty counted for nobody.
+- **After:**
+  - **Community attribution:** when triage names no competitor but the
+    mention's community (the subreddit in the collected data, or the `/r/<name>/`
+    in the link) is named like a competitor or one of its aliases (case,
+    spaces, punctuation and accents ignored: r/IVIMHEALTH is Ivím Health,
+    r/Noom is Noom Med), the roll-up attributes it to that competitor
+    with source "community". Short names (under 4 letters) and everyday words
+    (Found, Eden, Roman, Mochi ...) never match on their own.
+    Stored triage rows are not changed.
+  - **Roll-up** (`harvey/insights.py`, no Claude): for the brief's window,
+    against the window before it. *Pain points:* mentions by the need people
+    state (complaints with no stated need by category), ranked with
+    complaint-like mentions counted twice, 1-2 verbatim phrases each (at most
+    120 characters, no links or handles) with mention id and permalink and the
+    competitors involved. *Competitor complaints:* per competitor (named or
+    community-attributed): count, main pain, worst sentiment, one example.
+    *Emerging ICP signals:* four segments (Insurance drop-out, Price
+    comparer, Safety-first seeker, Unhappy with current provider), each
+    flagged new, growing, steady or declining against the previous window.
+  - **Rules are editable** in `config/insights.yaml`: the complaint
+    definition, the minimum count (2: nothing seen in fewer mentions is listed),
+    the segment rules (AND of clauses; each clause is an OR of intents,
+    needs, categories, keywords, "a competitor is named", "reads as a
+    complaint") and the community name rules.
+  - **Brief:** a "Pain points & emerging ICPs" section in the stored brief
+    and the Pulse tab (also under Live trends), one line of labels in the
+    Slack brief and the `pulse brief` output. The model sees counts and
+    labels only (no quotes, links or ids) and may add at most two sentences of
+    interpretation; a sentence with a number that is not in the data drops the
+    note. Quotes, links and numbers come from the roll-up.
+  - **API:** `GET /api/insights/pain-points?days=7` (any signed-in role,
+    read-only, same shape as the brief section).
+- **Why:** owner, 2026-10-19: "We are tracking complaints to identify
+  ongoing pain points and emerging ICPs."
+- **Review:** the segment keywords are a first draft; WellPeps marketing
+  should read `config/insights.yaml` and adjust them. Counts are small while
+  collection is capped, so most segments will show "new" until a second window
+  exists.
+
 ## 2026-10-19: Reddit collection relevance
 
 ### R-17. Tighter Reddit collection (Live)

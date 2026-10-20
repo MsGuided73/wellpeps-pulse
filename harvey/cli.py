@@ -393,7 +393,10 @@ def brief_lines(brief: dict) -> list[str]:
         lines.append(f"{i}. {card['title']}  [{card.get('owner_hint', '')}, {card.get('urgency', '')}]")
     if not brief.get("action_cards"):
         lines.append("No action cards.")
-    return lines
+    from harvey import insights
+
+    signals = insights.slack_lines((brief.get("data") or {}).get("insights"))
+    return lines + ([""] + signals if signals else [])
 
 
 def cmd_brief(args):

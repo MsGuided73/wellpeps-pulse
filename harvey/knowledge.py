@@ -37,6 +37,7 @@ from harvey.models.knowledge import (
     CompetitorsFile,
     EngagementGuideFile,
     GuidesFile,
+    InsightsFile,
     ComplianceRulesFile,
     KeywordsFile,
     LinksFile,
@@ -366,8 +367,29 @@ def _communities(directory: Path) -> tuple[CommunityEntry, ...]:
     return tuple(data.communities)
 
 
+@lru_cache(maxsize=None)
+def _insights(directory: Path) -> InsightsFile:
+    # A custom config dir (tests, demo copies) may predate insights.yaml:
+    # fall back to the bundled file rather than failing every brief.
+    if not (directory / "insights.yaml").is_file():
+        directory = PROJECT_ROOT / "config"
+    data = _load(directory, "insights.yaml", InsightsFile)
+    ids = [s.id for s in data.segments]
+    if len(ids) != len(set(ids)):
+        raise KnowledgeError("insights.yaml: duplicate segment ids")
+    bad = sorted({i for s in data.segments for c in s.all_of for i in c.intents} - set(PROTOCOL_INTENTS)
+                 | {i for i in data.complaint.intents if i not in PROTOCOL_INTENTS})
+    bad += sorted({n for s in data.segments for c in s.all_of for n in c.needs} - set(PROTOCOL_NEEDS))
+    cats = {c.value for c in Category}
+    bad += sorted(({k for s in data.segments for c in s.all_of for k in c.categories}
+                   | set(data.complaint.categories) | set(data.category_pain)) - cats - {"unclassified"})
+    if bad:
+        raise KnowledgeError(f"insights.yaml: unknown intents / needs / categories {bad}")
+    return data
+
+
 _CACHED = (
-    _competitors, _products, _keywords, _compliance_rules, _claims_file, _claims, _links, _reply_examples,
+    _insights, _competitors, _products, _keywords, _compliance_rules, _claims_file, _claims, _links, _reply_examples,
     _engagement_guide, _communities, _guides,
     _competitor_lookup, _product_lookup, _urgent_patterns, _drug_lookup,
     _wellpeps_rx,
@@ -414,6 +436,11 @@ def claims_policy() -> ClaimsPolicy:
 def engagement_guide() -> EngagementGuideFile:
     """WellPeps' rules of engagement, machine part (config/engagement_guide.yaml)."""
     return _engagement_guide(config_dir())
+
+
+def insights() -> InsightsFile:
+    """Pain-point / ICP roll-up settings and segment rules (config/insights.yaml)."""
+    return _insights(config_dir())
 
 
 def communities() -> tuple[CommunityEntry, ...]:

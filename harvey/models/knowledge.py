@@ -613,3 +613,54 @@ class CommunityEntry(_Strict):
 
 class CommunitiesFile(_Strict):
     communities: list[CommunityEntry] = Field(default_factory=list)
+
+
+# --- insights.yaml ----------------------------------------------------------
+
+
+class SegmentClause(_Strict):
+    """One AND-clause of a segment rule: matches when ANY listed condition holds."""
+
+    intents: list[str] = Field(default_factory=list)
+    needs: list[str] = Field(default_factory=list)
+    categories: list[str] = Field(default_factory=list)
+    keywords: list[str] = Field(default_factory=list)
+    competitor: bool = False
+    complaint_like: bool = False
+
+    @model_validator(mode="after")
+    def _has_a_condition(self) -> "SegmentClause":
+        if not (self.intents or self.needs or self.categories or self.keywords
+                or self.competitor or self.complaint_like):
+            raise ValueError("a segment clause needs at least one condition")
+        return self
+
+
+class Segment(_Strict):
+    id: str = Field(pattern=r"^[a-z][a-z0-9_]*$")
+    label: str = Field(min_length=1, max_length=60)
+    description: str = ""
+    all_of: list[SegmentClause] = Field(min_length=1)
+
+
+class ComplaintRule(_Strict):
+    sentiment_max: float = Field(default=-0.2, ge=-1.0, le=1.0)
+    sentiments: list[str] = Field(default_factory=list)
+    categories: list[str] = Field(default_factory=list)
+    intents: list[str] = Field(default_factory=list)
+
+
+class InsightsFile(_Strict):
+    version: int = 1
+    min_count: int = Field(default=2, ge=1, le=20)
+    top_pain_points: int = Field(default=8, ge=1, le=50)
+    top_competitors: int = Field(default=8, ge=1, le=50)
+    top_segments: int = Field(default=8, ge=1, le=50)
+    examples_per_item: int = Field(default=2, ge=0, le=5)
+    max_quote_chars: int = Field(default=120, ge=20, le=200)
+    growth_ratio: float = Field(default=1.5, gt=1.0)
+    complaint: ComplaintRule = Field(default_factory=ComplaintRule)
+    category_pain: dict[str, str] = Field(default_factory=dict)
+    community_min_chars: int = Field(default=4, ge=1, le=20)
+    community_ambiguous: list[str] = Field(default_factory=list)
+    segments: list[Segment] = Field(default_factory=list)

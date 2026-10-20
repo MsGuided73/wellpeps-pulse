@@ -370,6 +370,18 @@ tr td:first-child { box-shadow: none; }
 .human-note { font-size: .9375rem; line-height: 1.5rem; color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: var(--r-control); padding: 12px 16px; max-width: 72ch; }
 .human-note b { font-weight: 600; }
 .item.done .act .btn { opacity: 1; }
+
+/* ---- pain points & emerging ICPs (Operator HQ) ---- */
+.pp-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 24px; }
+.pp-col { display: grid; gap: 12px; align-content: start; min-width: 0; }
+.pp-col h3 { font-size: 1rem; font-weight: 600; }
+.pp-list, .pp-comp, .pp-icp { list-style: none; margin: 0; padding: 0; display: grid; gap: 16px; }
+.pp-list li, .pp-comp li, .pp-icp li { display: grid; gap: 6px; }
+.pp-row { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.pp-n { font-size: .875rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+.pp-quote { font-size: .875rem; line-height: 1.25rem; color: var(--accent); text-decoration: underline; text-underline-offset: 3px; overflow-wrap: anywhere; }
+.pp-icp p { font-size: .875rem; line-height: 1.25rem; color: var(--muted); }
+.pp-foot { font-size: .9375rem; padding-top: 12px; border-top: 1px solid var(--line); }
 </style>
 </head>
 <body>
@@ -584,6 +596,48 @@ tr td:first-child { box-shadow: none; }
       </section>
     </div>
   </div>
+
+  <section class="panel" id="insights" aria-labelledby="pp-h">
+    <div class="section-head">
+      <h2 id="pp-h">What people are struggling with</h2>
+      <span class="label">Reddit · Oct 9–15 · 19 relevant posts</span>
+    </div>
+    <p class="note">Pulse tracks complaints and questions so you can spot ongoing pain points and new kinds of customers. Every quote links to the original post.</p>
+    <div class="pp-grid">
+      <div class="pp-col">
+        <h3>Top pain points</h3>
+        <ol class="pp-list">
+          <li><div class="pp-row"><span>Price clarity</span><span class="pp-n">6 posts</span></div><div class="bar"><span style="width:100%"></span></div>
+            <a class="pp-quote" href="https://www.reddit.com/r/compoundedtirzepatide/comments/1x1exa2/what_should_i_check_first_when_picking_the_best/" target="_blank" rel="noopener">"some show a low first month but don't say what it costs once the dose goes up"</a></li>
+          <li><div class="pp-row"><span>Is it real care?</span><span class="pp-n">4 posts</span></div><div class="bar"><span style="width:67%"></span></div>
+            <a class="pp-quote" href="https://www.reddit.com/r/TeleMedicine/comments/1x6gy7s/im_confused_on_how_to_get_compounded_semaglutide/" target="_blank" rel="noopener">"Is there a review by a clinician, or do you fill out a form and pay?"</a></li>
+          <li><div class="pp-row"><span>Shipping and fulfillment</span><span class="pp-n">2 posts</span></div><div class="bar"><span style="width:33%"></span></div>
+            <a class="pp-quote" href="https://www.reddit.com/r/telehealth/comments/1x1c4f5/is_it_possible_to_switch_pharmacies_without/" target="_blank" rel="noopener">"My last two orders came 6 and 9 days late"</a></li>
+        </ol>
+      </div>
+      <div class="pp-col">
+        <h3>Complaints about other providers</h3>
+        <ul class="pp-comp">
+          <li><b>Noom Med</b> <span class="pp-n">prescription never sent</span>
+            <a class="pp-quote" href="https://www.reddit.com/r/Noom/comments/1x6tvki/noom_med_told_me_my_wegovy_prescription_was_sent/" target="_blank" rel="noopener">"What exactly am I paying $387 for"</a></li>
+          <li><b>Ivím Health</b> <span class="pp-n">via r/IVIMHEALTH · surprise prepay</span>
+            <a class="pp-quote" href="https://www.reddit.com/r/IVIMHEALTH/comments/1x1i8mn/what_is_the_cheapest_glp1_telehealth_provider/" target="_blank" rel="noopener">"my first charge was close to $600, not $199"</a></li>
+          <li><b>Unnamed provider</b> <span class="pp-n">membership on top of meds</span>
+            <a class="pp-quote" href="https://www.reddit.com/r/SemaglutideCompound/comments/1x1ifpg/what_is_the_cheapest_telehealth_company_to_start/" target="_blank" rel="noopener">"that's about $180, not $79"</a></li>
+        </ul>
+      </div>
+      <div class="pp-col">
+        <h3>Emerging customer types</h3>
+        <ul class="pp-icp">
+          <li><div class="pp-row"><b>Price comparers</b><span class="pp-n">6</span></div><p>Collect several quotes and want a fair way to compare total cost.</p></li>
+          <li><div class="pp-row"><b>Safety-first seekers</b><span class="pp-n">4</span></div><p>Want proof of a clinician's review, labs and which pharmacy fills it.</p></li>
+          <li><div class="pp-row"><b>Unhappy with current provider</b><span class="pp-n">2 <span class="pill">New</span></span></div><p>Like their doctor or plan, let down by operations. Most likely to switch.</p></li>
+          <li><div class="pp-row"><b>Insurance drop-outs</b><span class="pp-n">1 <span class="pill">New</span></span></div><p>Lost Wegovy or Zepbound coverage and moving to compounded options.</p></li>
+        </ul>
+      </div>
+    </div>
+    <p class="pp-foot">The top pain point lines up with your GLP-1 guide chapter <b>"What's actually included in the price."</b></p>
+  </section>
 
   <section class="panel" aria-labelledby="cm-h">
     <div class="section-head">

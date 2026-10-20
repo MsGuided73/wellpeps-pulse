@@ -126,6 +126,14 @@ Steps 4–6 respect quiet hours and budget; 1–3 do not (triage has budget prio
   absent from the payload are stripped and logged.
 - Slack gets the headline + top 3 card titles + dashboard link, with URLs,
   handles, e-mails and any banked phrase scrubbed out.
+- Brief contents also include "Pain points & emerging ICPs" (2026-10-19,
+  `harvey/insights.py`, rules in `config/insights.yaml`): top pain points
+  with verbatim examples, competitor complaints (named or attributed from the
+  community), and ICP segments new / growing against the previous window. It
+  is a deterministic roll-up stored in the brief's `data`; the prompt gets
+  counts and labels only plus an optional two-sentence note. Slack carries
+  one line of labels. `GET /api/insights/pain-points?days=N` serves the same
+  roll-up live.
 - Migration v5 rebuilds the unused v1 `briefs`, `trend_terms`,
   `language_bank` tables (never written before Phase 8) and adds
   `language_bank_mentions` so banking is idempotent per mention.

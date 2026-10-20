@@ -54,6 +54,26 @@ async def fetch_rows(state, start: datetime, end: datetime) -> list[dict]:
     ), (_ts(start), _ts(end)))
 
 
+async def fetch_insight_rows(state, start: datetime, end: datetime) -> list[dict]:
+    """Relevant triaged mentions in [start, end), newest first, with what the
+    pain-point / ICP roll-up reads: text, link, community, phrases and the
+    protocol blob. Used in memory only; handles are never selected."""
+    return await _rows(state, (
+        f"SELECT m.id, m.url, m.title, m.text, m.engagement_json, {MENTION_TIME} AS at, "
+        "t.subject_type, t.competitor, t.drug, t.category, t.sentiment, t.sentiment_score, "
+        "t.phrases_json, t.protocol_json "
+        "FROM mentions m JOIN triage t ON t.mention_id = m.id "
+        f"WHERE {RELEVANT_WHERE} AND {MENTION_TIME} >= ? AND {MENTION_TIME} < ? "
+        f"ORDER BY {MENTION_TIME} DESC, m.id DESC"
+    ), (_ts(start), _ts(end)))
+
+
+async def phrase_counts(state) -> dict[str, int]:
+    """Language-bank use count per normalised phrase (all scopes summed)."""
+    rows = await _rows(state, "SELECT phrase_norm, SUM(count) AS n FROM language_bank GROUP BY phrase_norm")
+    return {r["phrase_norm"]: int(r["n"] or 0) for r in rows}
+
+
 async def count_relevant(state, start: datetime, end: datetime) -> int:
     rows = await _rows(state, (
         "SELECT COUNT(*) AS n FROM mentions m JOIN triage t ON t.mention_id = m.id "

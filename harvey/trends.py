@@ -370,6 +370,9 @@ def _parse_at(value) -> datetime | None:
     return parsed
 
 
+parse_at = _parse_at   # public name for the other Pulse modules
+
+
 async def compute_trends(state, window_start: datetime, window_end: datetime,
                          baseline_days: int = 28, min_count: int = 3, top_n: int = 25) -> TrendReport:
     """Every Pulse aggregate for [window_start, window_end) (naive UTC)."""

@@ -35,7 +35,7 @@ from fastapi import Depends, FastAPI, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse, RedirectResponse, Response
 from pydantic import BaseModel, Field
 
-from harvey import analytics, auth, briefs, health, knowledge, pulse_store, reply_analytics, review, sandbox, trends
+from harvey import analytics, auth, briefs, health, insights, knowledge, pulse_store, reply_analytics, review, sandbox, trends
 from harvey.config import ConfigFileNotFoundError, PulseConfig, load_config, load_env
 from harvey.escalation import ack as ack_escalation
 from harvey.models import MentionStatus
@@ -610,6 +610,17 @@ async def get_trends(days: int = Query(7, ge=1, le=90), user: dict = VIEW,
         min_count=config.pulse.min_count, top_n=config.pulse.top_terms,
     )
     return report.to_dict()
+
+
+@app.get("/api/insights/pain-points")
+async def get_pain_points(days: int = Query(7, ge=1, le=90), min_count: int | None = Query(None, ge=1, le=10),
+                          user: dict = VIEW):
+    """Pain points, competitor complaints and emerging ICP segments for the
+    last ``days`` days against the days before: deterministic, no Claude call
+    (harvey/insights.py; rules in config/insights.yaml). Read-only."""
+    end = datetime.now(timezone.utc).replace(tzinfo=None)
+    return await insights.compute_insights(await get_state(), end - timedelta(days=days), end,
+                                           min_count=min_count)
 
 
 @app.get("/api/language-bank")
