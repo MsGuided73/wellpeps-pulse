@@ -122,6 +122,18 @@ class Item:
     haystack: str
     phrases: tuple[tuple[str, str], ...]   # (verbatim, normalised)
     segments: tuple[str, ...] = field(default=())
+    competitor_complaint: bool = False   # competitor named AND a real complaint signal
+
+
+def is_competitor_complaint(category: str, score: float, intents, haystack: str, rule) -> bool:
+    """The caller has a competitor. True when the post also shows a real
+    complaint signal: a complaint-type category, a venting / alternatives
+    intent, clearly negative sentiment, or concrete complaint wording. A
+    neutral price comparison that just lists the provider is not one."""
+    if category in rule.categories or set(intents) & set(rule.intents) or float(score or 0.0) <= rule.sentiment_max:
+        return True
+    rx = _keyword_rx(tuple(rule.keywords))
+    return bool(rx and rx.search(haystack))
 
 
 def is_complaint_like(category: str, sentiment: str, score: float, intents, rule) -> bool:
@@ -163,12 +175,15 @@ def to_item(row: dict, cfg: InsightsFile, index: dict[str, str]) -> Item:
     score = float(row.get("sentiment_score") or 0.0)
     category = row.get("category") or ""
     phrases = _phrase_list(row.get("phrases_json"))
+    haystack = _haystack(row, phrases)
     return Item(
         id=int(row["id"]), url=row.get("url") or "", at=trends.parse_at(row.get("at")),
         competitor=competitor, source=source, category=category, sentiment_score=score, need=need,
         intents=intents, complaint=is_complaint_like(category, row.get("sentiment") or "", score, intents,
                                                      cfg.complaint),
-        haystack=_haystack(row, phrases), phrases=phrases,
+        haystack=haystack, phrases=phrases,
+        competitor_complaint=bool(competitor) and is_competitor_complaint(
+            category, score, intents, haystack, cfg.competitor_complaint),
     )
 
 
@@ -329,10 +344,10 @@ def competitor_complaints(current: list[Item], previous: list[Item], bank: dict[
     for item in current:
         if item.competitor:
             by_comp[item.competitor].append(item)
-    before = Counter(i.competitor for i in previous if i.competitor and i.complaint)
+    before = Counter(i.competitor for i in previous if i.competitor_complaint)
     rows, hidden = [], 0
     for name, items in by_comp.items():
-        complaints = [i for i in items if i.complaint]
+        complaints = [i for i in items if i.competitor_complaint]
         if not complaints:
             continue
         if len(complaints) < min_count:
@@ -391,7 +406,8 @@ def build_rollup(current_rows: list[dict], previous_rows: list[dict], bank: dict
     prev = tag_segments([to_item(r, cfg, index) for r in previous_rows], cfg)
     bank = bank or {}
     pains, hidden_pains = pain_points(cur, prev, bank, cfg, floor)
-    comps, hidden_comps = competitor_complaints(cur, prev, bank, cfg, floor)
+    # Public posts about companies: their own (lower) floor, owner's decision 2026-10-19.
+    comps, hidden_comps = competitor_complaints(cur, prev, bank, cfg, min(floor, cfg.competitor_complaint.min_count))
     segs, hidden_segs = segments(cur, prev, bank, cfg, floor)
     return {
         "window": {"start": start.isoformat(), "end": end.isoformat(),

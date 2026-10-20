@@ -41,6 +41,23 @@ complaint:
   categories: [complaint, billing_fraud, legal_regulatory]
   intents: [wellpeps_complaint]
 
+# Competitor complaints are stricter than the rule above (owner, 2026-10-19).
+# A competitor must be named by triage or attributed from its own community,
+# AND the post must show at least ONE real complaint signal below. A neutral
+# price comparison that merely lists a provider is not a complaint about it.
+# These are public posts about companies, so a single complaint is listed
+# (min_count 1); pain points and segments keep the privacy floor above.
+competitor_complaint:
+  min_count: 1
+  categories: [complaint, billing_fraud, legal_regulatory]
+  intents: [venting_only, alternatives_requested, legal_media_privacy]
+  sentiment_max: -0.4          # clearly negative, not mildly
+  keywords: [charged me, first charge, double charged, overcharged, hidden fee, hidden fees, surprise charge,
+             paid up front, up front, upfront, prepay, auto-renew, auto renewed, refund, no refund,
+             couldnt cancel, cant cancel, wont let me cancel, never sent, never arrived, never shipped,
+             days late, arrived late, shipped late, lost my order, no response, ghosted, wont respond,
+             no one answers, misleading, bait and switch, scam]
+
 # Pain-point label for a complaint-like mention with no stated need.
 category_pain:
   complaint: General complaints

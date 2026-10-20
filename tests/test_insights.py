@@ -185,7 +185,58 @@ async def test_competitor_complaints_include_community_attribution(tmp_path):
     assert ivim["example"]["mention_id"] and ivim["example"]["url"].endswith("/cheapest/")
     assert result["community_attributed"] == 2
     assert [c["competitor"] for c in result["competitor_complaints"]][0] in {"Ivím Health"}
-    assert "Henry Meds" not in by_name            # a single complaint is under the floor
+    assert by_name["Henry Meds"]["count"] == 1     # public posts about companies: a single complaint is listed
+    assert result["suppressed"]["competitor_complaints"] == 0
+
+
+async def _seed_competitor(state, key, **kw):
+    base = dict(text="", posted_at=IN_WINDOW, category="question", sentiment="neutral", sentiment_score=0.0,
+                competitor="Henry Meds", unmet_need="price_clarity", intents=["comparison_request"], phrases=[])
+    return await add_triaged(state, key, **{**base, **kw})
+
+
+@pytest.mark.asyncio
+async def test_neutral_comparison_naming_a_competitor_is_not_a_complaint(tmp_path):
+    state = await fresh_state(tmp_path)
+    await _seed_competitor(state, "c1", text="got quotes from Henry Meds and others, which is cheapest overall?",
+                           sentiment="negative", sentiment_score=-0.25)
+
+    result = await insights.compute_insights(state, START, END)
+
+    assert result["competitor_complaints"] == []
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("signal", [
+    dict(category="complaint"),
+    dict(intents=["comparison_request", "alternatives_requested"]),
+    dict(sentiment_score=-0.5),
+    dict(text="they charged me three months up front without saying so"),
+    dict(phrases=["my prescription was never sent"]),
+])
+async def test_one_real_signal_makes_a_competitor_complaint(tmp_path, signal):
+    state = await fresh_state(tmp_path)
+    await _seed_competitor(state, "c1", **signal)
+
+    result = await insights.compute_insights(state, START, END)
+
+    assert [c["competitor"] for c in result["competitor_complaints"]] == ["Henry Meds"]
+
+
+@pytest.mark.asyncio
+async def test_complaint_signal_without_a_competitor_is_not_a_competitor_complaint(tmp_path):
+    state = await fresh_state(tmp_path)
+    await _seed_competitor(state, "c1", competitor="", category="complaint", sentiment_score=-0.8)
+
+    result = await insights.compute_insights(state, START, END)
+
+    assert result["competitor_complaints"] == []
+
+
+def test_competitor_complaint_rule_defaults_from_config():
+    rule = knowledge.insights().competitor_complaint
+    assert rule.min_count == 1 and rule.sentiment_max == -0.4
+    assert "alternatives_requested" in rule.intents and "never sent" in rule.keywords
 
 
 # ── Segments ──

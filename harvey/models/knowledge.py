@@ -650,6 +650,16 @@ class ComplaintRule(_Strict):
     intents: list[str] = Field(default_factory=list)
 
 
+class CompetitorComplaintRule(_Strict):
+    """Stricter than ComplaintRule: a competitor must be named or community-
+    attributed AND the post must show one real complaint signal (ANY of)."""
+    min_count: int = Field(default=1, ge=1, le=20)
+    sentiment_max: float = Field(default=-0.4, ge=-1.0, le=1.0)
+    categories: list[str] = Field(default_factory=list)
+    intents: list[str] = Field(default_factory=list)
+    keywords: list[str] = Field(default_factory=list)
+
+
 class InsightsFile(_Strict):
     version: int = 1
     min_count: int = Field(default=2, ge=1, le=20)
@@ -660,6 +670,7 @@ class InsightsFile(_Strict):
     max_quote_chars: int = Field(default=120, ge=20, le=200)
     growth_ratio: float = Field(default=1.5, gt=1.0)
     complaint: ComplaintRule = Field(default_factory=ComplaintRule)
+    competitor_complaint: CompetitorComplaintRule = Field(default_factory=CompetitorComplaintRule)
     category_pain: dict[str, str] = Field(default_factory=dict)
     community_min_chars: int = Field(default=4, ge=1, le=20)
     community_ambiguous: list[str] = Field(default_factory=list)

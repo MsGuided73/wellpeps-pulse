@@ -378,11 +378,13 @@ def _insights(directory: Path) -> InsightsFile:
     if len(ids) != len(set(ids)):
         raise KnowledgeError("insights.yaml: duplicate segment ids")
     bad = sorted({i for s in data.segments for c in s.all_of for i in c.intents} - set(PROTOCOL_INTENTS)
-                 | {i for i in data.complaint.intents if i not in PROTOCOL_INTENTS})
+                 | {i for i in data.complaint.intents if i not in PROTOCOL_INTENTS}
+                 | {i for i in data.competitor_complaint.intents if i not in PROTOCOL_INTENTS})
     bad += sorted({n for s in data.segments for c in s.all_of for n in c.needs} - set(PROTOCOL_NEEDS))
     cats = {c.value for c in Category}
     bad += sorted(({k for s in data.segments for c in s.all_of for k in c.categories}
-                   | set(data.complaint.categories) | set(data.category_pain)) - cats - {"unclassified"})
+                   | set(data.complaint.categories) | set(data.competitor_complaint.categories)
+                   | set(data.category_pain)) - cats - {"unclassified"})
     if bad:
         raise KnowledgeError(f"insights.yaml: unknown intents / needs / categories {bad}")
     return data

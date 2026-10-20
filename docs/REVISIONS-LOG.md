@@ -14,6 +14,22 @@ summary for discussion.
 
 ## 2026-10-19: Pain points & emerging ICPs
 
+### R-19. Stricter competitor complaints, listed from one post (Live)
+- **Before:** a competitor "complaint" was any mention naming a competitor that
+  read as mildly negative (sentiment -0.2 or the "negative" label), so a neutral
+  price comparison listing Henry Meds counted as a complaint about Henry Meds;
+  and competitor complaints shared the privacy floor of 2, hiding single ones.
+- **After:** `insights.yaml competitor_complaint`: the competitor must be named
+  by triage or attributed from its own community AND the post must show one
+  real complaint signal: a complaint / billing / legal category, a venting,
+  alternatives-requested or legal intent, sentiment -0.4 or lower, or concrete
+  complaint wording ("charged me", "up front", "never sent", "refund",
+  "couldn't cancel"...). Competitor complaints list from 1 post; pain points
+  and segments keep the floor of 2. On live data (14 days): Ivim Health and
+  Noom Med listed with quotes; the Henry Meds price comparison no longer counts.
+- **Why:** owner, 2026-10-19: "lower the public posts for competitor tracking
+  to 1" and "tighten the rules with regard to competitor complaints".
+
 ### R-18. Pain points & emerging ICPs (Live)
 - **Before:** Pulse stored per mention the competitor, category, sentiment,
   the unmet need and intents (protocol record) and verbatim phrases, but
