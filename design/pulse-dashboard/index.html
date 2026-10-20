@@ -1,0 +1,1241 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<link rel="icon" href="favicon.ico" sizes="any">
+<link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="favicon-16.png">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>WellPeps Pulse</title>
+<style>
+/* Layout: app shell — top bar with view switch; client Pulse reads top-down (one thing → agent → approvals → harvest → value); operator HQ is a triage table. */
+:root {
+  /* Pulse Brand Style Guide v1.0 (Oct 2026), applied palette + type. Light-only: the guide defines no dark palette. */
+  --bg: #F4F8FB; --surface: #FFFFFF; --ink: #01264C; --muted: #516C8C;
+  --line: #D9E4ED; --input-border: #6B7F95;
+  --accent: #005FCC; --accent-hover: #004DA6; --accent-press: #003B80; --accent-soft: #E8F1FC; --accent-ink: #FFFFFF;
+  --ok: #137A53; --ok-soft: #E4F3EC; --warn: #8A5700; --warn-soft: #FBF1DF; --bad: #B42318; --bad-soft: #FCEAE8;
+  --info: #005FCC; --info-soft: #E8F1FC; --code-bg: #EEF3F8; --logo-bg: transparent;
+  --brand-gradient: linear-gradient(90deg, #02CCCE 0%, #028BEA 55%, #0571EB 100%);
+  --f-display: "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+  --f-body: var(--f-display);
+  --f-mono: var(--f-display);
+  --r: 12px; --r-control: 8px;
+  color-scheme: light;
+}
+
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body { background: var(--bg); color: var(--ink); font-family: var(--f-body); font-size: 16px; line-height: 1.5; padding-inline: 16px; padding-block: 0 48px; }
+.wrap { max-width: 1080px; margin-inline: auto; display: grid; gap: 20px; }
+h1, h2, h3 { font-family: var(--f-display); text-wrap: balance; margin: 0; line-height: 1.15; }
+h2 { font-size: 1.5rem; line-height: 2rem; font-weight: 600; }
+p { margin: 0; }
+.label { font-size: .72rem; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+.mono, .num { font-family: var(--f-mono); font-variant-numeric: tabular-nums; }
+button { font: inherit; cursor: pointer; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; box-shadow: 0 0 0 2px #FFFFFF; }
+
+/* Top bar */
+.top { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; background: var(--bg); border-bottom: 1px solid var(--line); margin-inline: -16px; padding: 12px 16px; }
+.top-in { max-width: 1080px; margin-inline: auto; display: flex; flex-wrap: wrap; align-items: center; gap: 12px 20px; }
+.brand { display: flex; align-items: center; gap: 10px; font-family: var(--f-display); font-weight: 700; font-size: 1.1rem; }
+.logo { display: inline-flex; background: var(--logo-bg); border-radius: 6px; padding: 3px 6px; }
+.logo img { height: 26px; width: auto; display: block; }
+.prod { display: inline-flex; align-items: center; gap: 7px; font-family: var(--f-display); font-weight: 600; font-size: 1.05rem; color: var(--ink); padding-left: 10px; border-left: 1px solid var(--line); }
+.prod img { width: 26px; height: 26px; display: block; }
+/* Operator HQ */
+.hq-grid { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); gap: 20px; }
+@media (max-width: 860px) { .hq-grid { grid-template-columns: 1fr; } }
+.agents { display: grid; gap: 12px; }
+.agent { border: 1px solid var(--line); border-radius: 8px; padding: 14px 16px; display: grid; gap: 10px; }
+.agent.sev-warn { border-left: 4px solid var(--warn); }
+.agent.sev-ok { border-left: 4px solid var(--ok); }
+.agent-top { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+.agent-top h3 { font-size: 1rem; }
+.agent-top .row { margin-left: auto; }
+.facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 8px 16px; font-size: .85rem; }
+.facts dt { font-size: .7rem; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+.facts dd { margin: 0; }
+.mode { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; font-size: .8rem; }
+.mode button { border: 0; border-right: 1px solid var(--line); background: var(--surface); color: var(--muted); padding: 5px 10px; }
+.mode button:last-child { border-right: 0; }
+.mode button[aria-pressed="true"] { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+.target { display: grid; gap: 6px; }
+.target .bar { height: 8px; }
+.target .t { display: flex; justify-content: space-between; font-size: .85rem; }
+.rules { margin: 0; padding: 0; list-style: none; display: grid; gap: 8px; font-size: .88rem; }
+.rules li { display: grid; grid-template-columns: 18px minmax(0, 1fr); gap: 8px; }
+.rules li::before { content: "✓"; color: var(--ok); font-weight: 700; }
+.rules li.hold::before { content: "!"; color: var(--warn); }
+.switch { margin-left: auto; display: inline-flex; background: var(--surface); border: 1px solid var(--line); border-radius: 99px; padding: 3px; }
+.switch button { border: 0; background: transparent; color: var(--muted); padding: 6px 14px; border-radius: 99px; font-weight: 500; font-size: .88rem; }
+.switch button[aria-selected="true"] { background: var(--accent); color: var(--accent-ink); }
+
+/* Pulse header */
+.hello { display: flex; flex-wrap: wrap; align-items: end; justify-content: space-between; gap: 8px 24px; padding-top: 28px; }
+.hello h1 { font-size: clamp(1.7rem, 4vw, 2.3rem); font-weight: 700; }
+.hello .meta { color: var(--muted); font-size: .9rem; }
+
+/* The one thing */
+.onething { background: var(--surface); border: 1px solid var(--line); border-left: 4px solid var(--warn); border-radius: var(--r); padding: 18px 20px; display: grid; gap: 10px; }
+.onething p.big { font-family: var(--f-display); font-size: 1.25rem; font-weight: 500; line-height: 1.3; }
+.onething .actions { display: flex; flex-wrap: wrap; gap: 8px; }
+
+.btn { border: 1px solid var(--line); background: var(--surface); color: var(--ink); padding: 7px 14px; border-radius: 8px; font-weight: 500; font-size: .88rem; }
+.btn:hover { border-color: var(--accent); }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.btn.ghost { border-color: transparent; background: transparent; color: var(--muted); }
+.btn.ghost:hover { color: var(--bad); }
+
+/* Agent card */
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 20px; display: grid; gap: 18px; min-width: 0; }
+.agent-head { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; }
+.agent-head .sub { color: var(--muted); font-size: .9rem; flex-basis: 100%; }
+.pill { display: inline-flex; align-items: center; gap: 6px; font-size: .78rem; font-weight: 600; padding: 3px 10px; border-radius: 99px; white-space: nowrap; }
+.pill::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+.pill.ok { color: var(--ok); background: var(--ok-soft); }
+.pill.warn { color: var(--warn); background: var(--warn-soft); }
+.pill.bad { color: var(--bad); background: var(--bad-soft); }
+.lastrun { font-size: .92rem; }
+.lastrun b { font-weight: 600; }
+
+.kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.kpi { background: var(--surface); padding: 12px 14px; display: grid; gap: 2px; }
+.kpi .v { font-family: var(--f-mono); font-variant-numeric: tabular-nums; font-size: 1.45rem; font-weight: 500; }
+.kpi .d { font-size: .78rem; color: var(--muted); }
+.kpi .d .up { color: var(--ok); font-weight: 600; }
+
+.trend { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 16px 28px; align-items: start; }
+@media (max-width: 720px) { .trend { grid-template-columns: 1fr; } }
+.chart svg { width: 100%; height: auto; display: block; }
+.chart .axis { fill: var(--muted); font-family: var(--f-mono); font-size: 10px; }
+.chart .grid { stroke: var(--line); stroke-width: 1; }
+.chart .prev { fill: none; stroke: var(--muted); stroke-width: 1.5; stroke-dasharray: 3 4; opacity: .7; }
+.chart .cur { fill: none; stroke: var(--accent); stroke-width: 2.25; stroke-linejoin: round; }
+.chart .area { fill: var(--accent); opacity: .12; }
+.chart .end { fill: var(--accent); stroke: var(--surface); stroke-width: 2; }
+.chart .endlbl { fill: var(--ink); font-family: var(--f-mono); font-size: 11px; font-weight: 500; }
+.legend { display: flex; gap: 16px; font-size: .78rem; color: var(--muted); margin-top: 6px; }
+.legend i { display: inline-block; width: 14px; height: 0; border-top: 2px solid var(--accent); vertical-align: middle; margin-right: 6px; }
+.legend i.p { border-top: 2px dashed var(--muted); }
+
+.channels { display: grid; gap: 8px; min-width: 210px; }
+.ch { display: grid; grid-template-columns: 112px 1fr 34px; gap: 10px; align-items: center; font-size: .85rem; }
+.bar { height: 8px; background: var(--accent-soft); border-radius: 99px; overflow: hidden; }
+.bar span { display: block; height: 100%; background: var(--accent); border-radius: 99px; }
+.ch .num { text-align: right; color: var(--muted); }
+
+/* Approvals */
+.section-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 6px 16px; }
+.section-head .label { letter-spacing: .06em; }
+.queue { display: grid; gap: 12px; }
+.item { border: 1px solid var(--line); border-radius: 8px; padding: 14px 16px; display: grid; gap: 10px; background: var(--surface); }
+.item.done { opacity: .55; }
+.src { display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: center; font-size: .82rem; color: var(--muted); }
+.src b { color: var(--ink); font-weight: 600; }
+.quote { font-size: .92rem; color: var(--muted); border-left: 2px solid var(--line); padding-left: 12px; }
+.draft { font-size: .95rem; background: var(--accent-soft); border-radius: 6px; padding: 10px 12px; }
+.draft textarea { width: 100%; min-height: 110px; font: inherit; color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 8px; resize: vertical; }
+.draft a { color: var(--accent); font-weight: 500; text-decoration: underline; text-underline-offset: 2px; overflow-wrap: anywhere; }
+.guide { display: inline-flex; align-items: center; gap: 8px; justify-self: start; font-size: .82rem; font-weight: 600; color: var(--accent); border: 1px solid var(--accent); border-radius: 6px; padding: 4px 10px; }
+.guide svg { width: 14px; height: 14px; flex: none; }
+.guide.none { color: var(--muted); border-color: var(--line); font-weight: 500; }
+.checks { display: flex; flex-wrap: wrap; gap: 6px; }
+.chk { font-size: .74rem; font-weight: 500; color: var(--ok); background: var(--ok-soft); padding: 2px 8px; border-radius: 4px; }
+.row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.status { font-size: .85rem; font-weight: 600; color: var(--ok); }
+.status.rej { color: var(--muted); }
+
+.flag { border: 1px solid var(--line); border-left: 4px solid var(--bad); border-radius: 8px; padding: 14px 16px; display: grid; gap: 8px; background: var(--surface); }
+.flag .quote { border-left-color: var(--bad-soft); }
+
+/* Harvest + value */
+.split { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: 20px; }
+@media (max-width: 820px) { .split { grid-template-columns: 1fr; } }
+.harvest { list-style: none; margin: 0; padding: 0; display: grid; }
+.harvest li { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 11px 0; border-top: 1px solid var(--line); }
+.harvest li:first-child { border-top: 0; }
+.kind { font-family: var(--f-mono); font-size: .7rem; color: var(--accent); border: 1px solid var(--accent); padding: 1px 6px; border-radius: 4px; text-transform: uppercase; }
+.harvest .t { font-weight: 500; font-size: .92rem; }
+.harvest .s { font-size: .8rem; color: var(--muted); }
+.gaps { display: grid; gap: 8px; }
+.gap { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; font-size: .9rem; }
+.gap .num { color: var(--muted); font-size: .82rem; }
+
+.value { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 16px; padding: 18px 20px; border-radius: var(--r); background: var(--accent-soft); }
+.value .v { font-family: var(--f-display); font-size: 1.7rem; font-weight: 700; color: var(--accent); }
+.value .k { font-size: .82rem; color: var(--muted); }
+.digest { font-size: .85rem; color: var(--muted); text-align: center; }
+
+/* Operator */
+.ops-sum { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; }
+.ops-sum .panel { padding: 14px 16px; gap: 2px; }
+.ops-sum .v { font-family: var(--f-mono); font-size: 1.5rem; font-variant-numeric: tabular-nums; }
+.ops-sum .v.bad { color: var(--bad); } .ops-sum .v.warn { color: var(--warn); }
+.tbl { overflow-x: auto; border: 1px solid var(--line); border-radius: var(--r); background: var(--surface); }
+table { width: 100%; border-collapse: collapse; font-size: .9rem; min-width: 720px; }
+th { text-align: left; font-size: .72rem; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); font-weight: 600; padding: 10px 14px; border-bottom: 1px solid var(--line); }
+td { padding: 12px 14px; border-top: 1px solid var(--line); vertical-align: top; }
+tr:first-child td { border-top: 0; }
+td.num, th.num { text-align: right; }
+td .s { display: block; font-size: .8rem; color: var(--muted); }
+tr.sev-bad td:first-child { box-shadow: inset 4px 0 0 var(--bad); }
+tr.sev-warn td:first-child { box-shadow: inset 4px 0 0 var(--warn); }
+tr.sev-ok td:first-child { box-shadow: inset 4px 0 0 var(--ok); }
+.linkish { background: none; border: 0; padding: 0; color: var(--accent); font-weight: 600; text-decoration: underline; text-underline-offset: 3px; }
+pre { margin: 0; background: var(--code-bg); border: 1px solid var(--line); border-radius: 8px; padding: 14px 16px; overflow-x: auto; font-family: var(--f-mono); font-size: .8rem; line-height: 1.6; color: var(--ink); }
+.note { font-size: .88rem; color: var(--muted); max-width: 68ch; }
+
+.toast { position: fixed; left: 50%; bottom: calc(20px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); background: var(--ink); color: var(--bg); padding: 10px 16px; border-radius: 8px; font-size: .9rem; max-width: calc(100% - 32px); }
+@media (prefers-reduced-motion: no-preference) { .toast { transition: opacity .2s; } }
+
+.open { margin-left: auto; color: var(--accent); font-weight: 600; font-size: .82rem; text-decoration: none; white-space: nowrap; }
+.open:hover { text-decoration: underline; text-underline-offset: 3px; }
+.post-title { color: var(--ink); font-weight: 600; font-size: 1rem; line-height: 1.35; text-decoration: none; }
+.post-title:hover { color: var(--accent); text-decoration: underline; text-underline-offset: 3px; }
+td .post-title { font-size: .9rem; }
+/* Site nav */
+.switch a { display: inline-block; text-decoration: none; color: var(--muted); padding: 6px 14px; border-radius: 99px; font-weight: 500; font-size: .88rem; }
+.switch a[aria-current="page"] { background: var(--accent); color: var(--accent-ink); }
+.switch a:not([aria-current="page"]):hover { color: var(--ink); }
+.crumb { color: var(--accent); font-weight: 600; text-decoration: underline; text-underline-offset: 3px; }
+
+/* Knowledge */
+.hello .lede { color: var(--muted); max-width: 60ch; margin-top: 6px; }
+.stats { display: flex; gap: 20px; flex-wrap: wrap; }
+.stats div { display: grid; }
+.stats b { font-family: var(--f-mono); font-size: 1.3rem; font-weight: 500; }
+.stats span { font-size: .78rem; color: var(--muted); }
+.btn[disabled] { opacity: .5; cursor: not-allowed; }
+input, select, textarea { font: inherit; color: inherit; }
+.drop { border: 2px dashed var(--line); border-radius: var(--r); padding: 28px 20px; display: grid; justify-items: center; gap: 10px; text-align: center; background: var(--bg); transition: border-color .15s, background .15s; cursor: pointer; }
+.drop.over { border-color: var(--accent); background: var(--accent-soft); }
+.drop svg { width: 40px; height: 40px; color: var(--accent); }
+.drop p.big { font-family: var(--f-display); font-size: 1.15rem; font-weight: 500; }
+.drop .types { font-size: .82rem; color: var(--muted); }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.staged { display: grid; gap: 14px; }
+.doc { border: 1px solid var(--line); border-radius: 8px; padding: 16px; display: grid; gap: 14px; background: var(--surface); }
+.doc-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+.doc-head .name { font-weight: 600; overflow-wrap: anywhere; min-width: 0; }
+.ext { font-family: var(--f-mono); font-size: .7rem; text-transform: uppercase; color: var(--accent); border: 1px solid var(--accent); padding: 1px 6px; border-radius: 4px; }
+.doc-head .size { font-size: .8rem; color: var(--muted); }
+.doc-head .btn.ghost { margin-left: auto; }
+.fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px 18px; }
+.field { display: grid; gap: 6px; min-width: 0; align-content: start; }
+.field > label, .field > .flabel { font-size: .82rem; font-weight: 600; }
+.field .hint { font-size: .78rem; color: var(--muted); }
+.field select, .field input[type="text"], .field input[type="date"], .field textarea { width: 100%; background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 7px 9px; }
+.field textarea { min-height: 70px; resize: vertical; }
+.wide { grid-column: 1 / -1; }
+.seg { display: inline-flex; flex-wrap: wrap; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; justify-self: start; }
+.seg label { display: flex; align-items: center; gap: 6px; padding: 6px 10px; font-size: .85rem; cursor: pointer; border-right: 1px solid var(--line); }
+.seg label:last-child { border-right: 0; }
+.seg input { accent-color: var(--accent); margin: 0; }
+.seg label:has(input:checked) { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chips label { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--line); border-radius: 99px; padding: 4px 10px; font-size: .82rem; cursor: pointer; }
+.chips input { accent-color: var(--accent); margin: 0; }
+.chips label:has(input:checked) { border-color: var(--accent); background: var(--accent-soft); }
+.doc-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.doc-foot .warnmsg { font-size: .82rem; color: var(--warn); }
+.lib-tools { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: space-between; }
+.filter { display: flex; flex-wrap: wrap; gap: 6px; }
+.filter button { border: 1px solid var(--line); background: var(--surface); padding: 4px 10px; border-radius: 99px; font-size: .82rem; color: var(--muted); }
+.filter button[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); font-weight: 600; }
+.pill.info { color: var(--info); background: var(--info-soft); }
+.pill.muted { color: var(--muted); background: var(--bg); }
+.auth { font-size: .76rem; font-weight: 600; padding: 2px 8px; border-radius: 4px; white-space: nowrap; }
+.auth.must { color: var(--accent-ink); background: var(--accent); }
+.auth.ref { color: var(--accent); border: 1px solid var(--accent); }
+.auth.ex { color: var(--muted); border: 1px dashed var(--muted); }
+.changes { display: grid; gap: 12px; }
+.change { border-left: 3px solid var(--info); padding-left: 12px; display: grid; gap: 4px; font-size: .9rem; }
+.change.warn { border-left-color: var(--warn); }
+.change .src { font-size: .78rem; color: var(--muted); }
+.order { margin: 0; padding-left: 20px; display: grid; gap: 6px; font-size: .9rem; }
+.gcards { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; }
+.gcard { border: 1px solid var(--line); border-radius: 8px; padding: 12px; display: grid; gap: 6px; }
+.gcard b { font-size: .9rem; }
+.gcard .s { font-size: .78rem; color: var(--muted); }
+@media (prefers-reduced-motion: reduce) { .drop { transition: none; } }
+
+/* ---- Pulse style guide: components (later rules win) ---- */
+.hello h1 { font-size: 2rem; line-height: 2.5rem; font-weight: 700; }
+.panel { border-radius: var(--r); padding: 24px; gap: 16px; }
+.onething { border-radius: var(--r); padding: 24px; }
+.btn { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 0 16px; border-radius: var(--r-control); font-size: 1rem; line-height: 1.5rem; font-weight: 600; text-decoration: none; border: 1px solid var(--accent); background: var(--surface); color: var(--accent); }
+.btn:hover { border-color: var(--accent-hover); color: var(--accent-hover); background: var(--accent-soft); }
+.btn:active { border-color: var(--accent-press); color: var(--accent-press); }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: #FFFFFF; }
+.btn.primary:hover { background: var(--accent-hover); border-color: var(--accent-hover); color: #FFFFFF; }
+.btn.primary:active { background: var(--accent-press); border-color: var(--accent-press); }
+.btn.ghost { border-color: transparent; background: transparent; color: var(--accent); text-decoration: underline; text-underline-offset: 3px; }
+.btn.ghost:hover { background: transparent; color: var(--bad); }
+.btn[disabled] { background: var(--line); border-color: var(--line); color: var(--muted); }
+.switch { padding: 4px; }
+.switch a { min-height: 40px; display: inline-flex; align-items: center; padding: 0 16px; font-size: .95rem; font-weight: 600; }
+.switch a[aria-current="page"] { background: var(--accent); color: #FFFFFF; }
+.top { background: var(--surface); }
+.prod img { width: 32px; height: 32px; }
+.open, .crumb, .linkish { color: var(--accent); text-decoration: underline; text-underline-offset: 3px; }
+.post-title { color: var(--ink); }
+.post-title:hover { color: var(--accent); }
+.draft { background: var(--bg); border: 1px solid var(--line); border-radius: var(--r-control); }
+.item, .flag, .agent, .doc { border-radius: var(--r); }
+.field select, .field input[type="text"], .field input[type="date"], .field textarea { border-color: var(--input-border); border-radius: var(--r-control); font-size: 1rem; padding: 12px; }
+.chk { color: var(--ok); background: var(--ok-soft); }
+.chart .cur { stroke: url(#pulseGrad); }
+.value { background: var(--surface); border: 1px solid var(--line); position: relative; overflow: hidden; }
+.value::before { content: ""; position: absolute; inset: 0 0 auto 0; height: 4px; background: var(--brand-gradient); }
+.value .v { color: var(--ink); }
+.label { font-size: .75rem; }
+
+/* ---- header lockup + footer (Pulse style guide: full lockup >= 360px visible width; smaller -> icon + live text) ---- */
+.top { position: static; padding: 8px 16px; }
+.brand { display: inline-flex; align-items: center; text-decoration: none; color: var(--ink); }
+.brand .lockup { width: 389px; height: auto; display: block; }
+.brand-compact { display: none; align-items: center; gap: 10px; font-size: 1.75rem; font-weight: 700; line-height: 1; }
+.brand-compact img { width: 48px; height: 48px; }
+.top-in { justify-content: space-between; }
+.switch { margin-left: 0; }
+@media (max-width: 640px) {
+  .brand .lockup { display: none; }
+  .brand-compact { display: inline-flex; }
+}
+.site-foot { display: flex; justify-content: center; padding-block: 40px 8px; margin-top: 32px; border-top: 1px solid var(--line); }
+.site-foot img { height: 28px; width: auto; display: block; }
+
+/* ---- Pulse style guide audit fixes (all 14 pages, v1.0) ---- */
+/* p.3 + p.12: product header = icon + live-text Pulse label */
+.top { padding: 12px 16px; }
+.brand { display: inline-flex; align-items: center; gap: 12px; text-decoration: none; color: var(--ink); }
+.brand img { width: 56px; height: 56px; display: block; }
+.brand .wordmark { font-size: 2rem; line-height: 2.5rem; font-weight: 700; letter-spacing: -.01em; color: var(--ink); }
+/* p.8: smallest type role is 14/20 */
+.label { font-size: .875rem; line-height: 1.25rem; color: var(--accent); font-weight: 600; letter-spacing: .04em; }
+.note, .hint, .digest, td .s, .s, .src, .size, .types, .k, .kpi .d, .change .src, .field .hint, .legend, .ch, .gap .num, .gap .mono, th, .chk, .pill, .auth, .ext, .guide, .harvest .s, .facts, .facts dt, .meta, .open, .doc-foot .warnmsg { font-size: .875rem; line-height: 1.25rem; }
+th, .facts dt { letter-spacing: .04em; }
+.hint { color: var(--muted); }
+/* p.10: 4px spacing scale, 24px card padding, 16px content gaps */
+.wrap { gap: 24px; }
+.split, .hq-grid, .trend { gap: 24px; }
+.item, .flag, .agent, .doc { padding: 24px; gap: 16px; }
+.queue, .agents, .staged { gap: 16px; }
+.kpi { padding: 12px 16px; }
+td { padding: 12px 16px; } th { padding: 12px 16px; }
+/* p.10: semantic status = text label + familiar icon */
+.pill::before { content: none; }
+.pill.ok::before { content: "\2713"; } .pill.warn::before { content: "!"; font-weight: 700; } .pill.bad::before { content: "\00D7"; font-weight: 700; } .pill.info::before { content: "\2139"; }
+.pill::before { width: auto; height: auto; border-radius: 0; background: none; }
+/* p.10: errors connected, not color alone */
+.doc-foot .warnmsg { color: var(--bad); font-weight: 600; }
+.field input[aria-invalid="true"] { border-color: var(--bad); border-width: 2px; }
+/* p.11: 44px targets */
+.mode button, .filter button, .seg label, .chips label { min-height: 44px; display: inline-flex; align-items: center; }
+.mode button { padding: 0 16px; font-size: .875rem; }
+.filter button { padding: 0 16px; font-size: .875rem; }
+.value .k, .drop .types, .stats span, .target .t span, .target .t .mono, .harvest .kind, .gcard .s { font-size: .875rem; line-height: 1.25rem; }
+
+/* ---- calm status system: color only for things someone must act on ---- */
+.pill:not(.ok):not(.warn):not(.bad):not(.info) { color: var(--muted); background: var(--surface); box-shadow: inset 0 0 0 1px var(--line); font-weight: 500; }
+.onething { border-left: 1px solid var(--line); }
+.flag { border-left: 1px solid var(--line); }
+.flag .quote { border-left-color: var(--line); }
+.agent { border-left: 1px solid var(--line); }
+tr td:first-child { box-shadow: none; }
+.change { border-left: 0; padding-left: 0; }
+.rules li.info::before { content: "\2139"; color: var(--accent); font-weight: 600; }
+
+/* ---- AI rewrite: selection bubble + menu ---- */
+.rw-bubble { position: fixed; z-index: 20; min-height: 36px; padding: 0 14px; border: 0; border-radius: var(--r-control); background: var(--ink); color: var(--surface); font: inherit; font-size: .875rem; font-weight: 600; box-shadow: 0 4px 16px rgb(1 38 76 / .2); cursor: pointer; }
+.rw-bubble:hover { background: var(--accent-press); }
+.rw-menu { position: fixed; z-index: 21; width: min(380px, calc(100vw - 16px)); max-height: calc(100vh - 16px); overflow: auto; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 16px; display: grid; gap: 12px; box-shadow: 0 12px 32px rgb(1 38 76 / .16); }
+.rw-title { font-weight: 600; }
+.rw-quote { color: var(--muted); font-size: .875rem; line-height: 1.25rem; background: var(--bg); border-radius: var(--r-control); padding: 8px 12px; }
+.rw-opts { display: flex; flex-wrap: wrap; gap: 8px; }
+.rw-opt { min-height: 40px; padding: 0 14px; border: 1px solid var(--input-border); border-radius: 99px; background: var(--surface); color: var(--ink); font: inherit; font-size: .875rem; font-weight: 600; cursor: pointer; }
+.rw-opt:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
+.rw-custom { display: flex; gap: 8px; }
+.rw-custom input { flex: 1; min-width: 0; min-height: 44px; border: 1px solid var(--input-border); border-radius: var(--r-control); padding: 0 12px; font: inherit; font-size: .9375rem; color: var(--ink); background: var(--surface); }
+.rw-label { font-size: .875rem; font-weight: 600; color: var(--muted); }
+.rw-result { background: var(--bg); border: 1px solid var(--line); border-radius: var(--r-control); padding: 12px; }
+.rw-hint, .rw-status { font-size: .875rem; line-height: 1.25rem; color: var(--muted); }
+.rw-error { color: var(--bad); font-size: .875rem; font-weight: 600; }
+.rw-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.queue-tip { font-size: .875rem; color: var(--muted); }
+
+/* ---- human-posting notice (communities that don't allow agent replies) ---- */
+.human-note { font-size: .9375rem; line-height: 1.5rem; color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: var(--r-control); padding: 12px 16px; max-width: 72ch; }
+.human-note b { font-weight: 600; }
+.item.done .act .btn { opacity: 1; }
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="top-in">
+    <a class="brand" href="#pulse" aria-label="Pulse home">
+      <img src="pulse-icon.png" alt="" width="56" height="56">
+      <span class="wordmark">Pulse</span>
+    </a>
+    <nav class="switch" aria-label="WellPeps Pulse">
+      <a href="#pulse" data-nav="pulse" aria-current="page">Pulse</a>
+      <a href="#hq" data-nav="hq">Operator HQ</a>
+      <a href="#knowledge" data-nav="knowledge">Knowledge</a>
+    </nav>
+  </div>
+</header>
+
+<!-- CLIENT PULSE -->
+<main class="wrap view" id="pulse" aria-label="Pulse">
+  <div class="hello">
+    <div>
+      <p class="label">WellPeps · Pulse</p>
+      <h1 id="greeting">Hello, WellPeps team</h1>
+    </div>
+    <p class="meta" id="today">Last 7 days</p>
+  </div>
+
+  <section class="onething" aria-label="Today's one thing">
+    <p class="label">Today's one thing</p>
+    <p class="big">3 replies are ready for you, two of them pointing people to your GLP-1 guide.</p>
+    <div class="actions">
+      <a class="btn primary" href="#approvals">Review replies</a>
+    </div>
+  </section>
+
+  <section class="panel" aria-labelledby="agent-name">
+    <div class="agent-head">
+      <h2 id="agent-name">Community Concierge</h2>
+      <span class="pill info">3 drafts ready</span>
+      <p class="sub">Watches Reddit, Instagram, your Facebook group and Trustpilot. Drafts replies in the WellPeps voice and sends anything clinical to your care team.</p>
+    </div>
+    <p class="lastrun"><b>Last run 9:45 AM:</b> scanned 38 new mentions, drafted 3 replies, escalated 1 post, skipped 34 that needed no response.</p>
+
+    <div class="kpis">
+      <div class="kpi"><span class="label">Mentions found</span><span class="v">186</span><span class="d"><span class="up">+14%</span> vs prior week</span></div>
+      <div class="kpi"><span class="label">Replies posted</span><span class="v">61</span><span class="d">all approved by you</span></div>
+      <div class="kpi"><span class="label">Median response</span><span class="v">38m</span><span class="d">from post to reply</span></div>
+      <div class="kpi"><span class="label">Positive sentiment</span><span class="v">72%</span><span class="d"><span class="up">+5 pts</span> vs prior week</span></div>
+      <div class="kpi"><span class="label">Sent to care team</span><span class="v">4</span><span class="d">side effects or dosing</span></div>
+    </div>
+
+    <div class="trend">
+      <div class="chart">
+        <p class="label">Mentions per day</p>
+        <svg id="spark" viewBox="0 0 560 170" role="img" aria-label="Mentions per day: this week rose from 22 to 38; last week ranged 18 to 35."></svg>
+        <div class="legend"><span><i></i>This week</span><span><i class="p"></i>Last week</span></div>
+      </div>
+      <div class="channels">
+        <p class="label">Where people talked</p>
+        <div class="ch"><span>Reddit</span><div class="bar"><span style="width:100%"></span></div><span class="num">74</span></div>
+        <div class="ch"><span>Instagram</span><div class="bar"><span style="width:70%"></span></div><span class="num">52</span></div>
+        <div class="ch"><span>Facebook group</span><div class="bar"><span style="width:50%"></span></div><span class="num">37</span></div>
+        <div class="ch"><span>Trustpilot</span><div class="bar"><span style="width:31%"></span></div><span class="num">23</span></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="panel" id="approvals" aria-labelledby="appr-h">
+    <div class="section-head">
+      <h2 id="appr-h">Waiting for your approval</h2>
+      <span class="label" id="appr-count">3 drafts</span>
+    </div>
+    <p class="queue-tip">Tip: select any part of a reply (or right-click a selection) to rewrite it with AI.</p>
+    <div class="queue" id="queue"></div>
+
+    <div class="flag" id="flagged">
+      <div class="src"><span class="pill">No reply needed</span><b>Reddit</b><span>r/AskDocs</span><span>Oct 9, 9:20 AM</span><a class="open" href="https://www.reddit.com/r/AskDocs/comments/1x1gpmx/elevated_liver_enzyme_due_to_compounded/" target="_blank" rel="noopener">View on Reddit ↗</a></div>
+      <a class="post-title" href="https://www.reddit.com/r/AskDocs/comments/1x1gpmx/elevated_liver_enzyme_due_to_compounded/" target="_blank" rel="noopener">Elevated liver enzyme due to compounded Tirzepatide</a>
+      <p class="quote">"…right after taking my second dose of the compounded medication, I decided to run another set of lab tests."</p>
+      <p>A possible side effect from medication bought through another supplier. The agent never answers medical questions like this. The post isn't about WellPeps, so nothing went to your care team; it's on your safety watch list so your team can see it.</p>
+      <div class="row"><span class="pill">On the safety watch list</span><button class="btn" data-toast="Marked as reviewed.">Mark reviewed</button></div>
+    </div>
+  </section>
+
+  <div class="split">
+    <section class="panel" aria-labelledby="harv-h">
+      <h2 id="harv-h">Harvest</h2>
+      <ul class="harvest">
+        <li><span class="kind">Report</span><div><p class="t">Weekly community report, Oct 3–9</p><p class="s">Top themes, sentiment shift, best-performing replies</p></div><button class="btn" data-toast="In the real product this opens the report.">Open</button></li>
+        <li><span class="kind">Idea</span><div><p class="t">Post idea: "What happens after you answer the health questions"</p><p class="s">11 people asked how approval works this week</p></div><button class="btn" data-toast="In the real product this opens the draft post.">Open</button></li>
+        <li><span class="kind">Log</span><div><p class="t">Care-team escalations, October</p><p class="s">4 posts, all acknowledged within 2 hours</p></div><button class="btn" data-toast="In the real product this opens the escalation log.">Open</button></li>
+      </ul>
+    </section>
+    <section class="panel" aria-labelledby="gap-h">
+      <h2 id="gap-h">FAQ gaps</h2>
+      <p class="note">Questions people keep asking that your site doesn't answer clearly.</p>
+      <div class="gaps">
+        <div class="gap"><span>Do you ship to Alaska and Hawaii?</span><span class="num">9×</span></div>
+        <div class="gap"><span>Is the monthly price all-inclusive?</span><span class="num">7×</span></div>
+        <div class="gap"><span>Can I pause my plan while traveling?</span><span class="num">5×</span></div>
+        <div class="gap"><span>How long until a provider reviews my answers?</span><span class="num">4×</span></div>
+      </div>
+      <a class="btn" href="#knowledge">Add an approved answer</a>
+    </section>
+  </div>
+
+  <section class="value" aria-label="October so far">
+    <div><p class="v num">142</p><p class="k">conversations handled in October</p></div>
+    <div><p class="v num">~11.8 h</p><p class="k">of team time saved (5 min each)</p></div>
+    <div><p class="v num">$41.20</p><p class="k">agent cost this month</p></div>
+    <div><p class="v num">0</p><p class="k">compliance issues</p></div>
+  </section>
+  <p class="digest">This Pulse is emailed to you every weekday at 8:00 AM.</p>
+</main>
+
+<!-- OPERATOR HQ -->
+<main class="wrap view" id="hq" aria-label="Operator HQ" hidden>
+  <div class="hello">
+    <div>
+      <p class="label">Operator HQ</p>
+      <h1>Manage your agents</h1>
+    </div>
+    <p class="meta">3 agents · 31 communities · sorted by what needs you</p>
+  </div>
+
+  <div class="ops-sum">
+    <div class="panel"><span class="label">Waiting on approval</span><span class="v">3</span></div>
+    <div class="panel"><span class="label">Open care-team escalations</span><span class="v">1</span></div>
+    <div class="panel"><span class="label">Communities cleared to reply</span><span class="v">0<small class="mono" style="font-size:.9rem;color:var(--muted)"> / 31</small></span></div>
+    <div class="panel"><span class="label">Agent spend, October</span><span class="v">$41.20</span></div>
+  </div>
+
+  <div class="hq-grid">
+    <section class="panel" aria-labelledby="ag-h">
+      <h2 id="ag-h">Agents</h2>
+      <div class="agents">
+        <article class="agent">
+          <div class="agent-top">
+            <h3>Community Concierge</h3><span class="pill info">3 drafts ready</span>
+            <div class="row"><a class="btn" href="#pulse">Open Pulse</a><button class="btn" data-pause>Pause</button></div>
+          </div>
+          <p class="note">Finds conversations about WellPeps and its programs, drafts replies and holds them for your approval.</p>
+          <dl class="facts">
+            <div><dt>Last run</dt><dd class="mono">9:45 AM</dd></div>
+            <div><dt>Runs</dt><dd>Every 30 min</dd></div>
+            <div><dt>Median approval wait</dt><dd class="mono">38m</dd></div>
+            <div><dt>Spend MTD</dt><dd class="mono">$34.60</dd></div>
+            <div><dt>Knows</dt><dd><a class="crumb" href="#knowledge">10 documents, 1 in review</a></dd></div>
+          </dl>
+          <div>
+            <p class="label" style="margin-bottom:6px">Posting mode</p>
+            <div class="mode" role="group" aria-label="Posting mode">
+              <button aria-pressed="false" data-mode="Listen only">Listen only</button>
+              <button aria-pressed="true" data-mode="Draft and wait for approval">Draft, you approve</button>
+              <button aria-pressed="false" data-mode="Auto-post" disabled aria-describedby="autopost-why">Auto-post</button>
+            </div>
+            <p class="hint" id="autopost-why">Auto-post is off for a healthcare brand. Every reply needs a person's approval.</p>
+          </div>
+        </article>
+
+        <article class="agent">
+          <div class="agent-top">
+            <h3>Safety screen</h3><span class="pill">1 with the care team</span>
+            <div class="row"><button class="btn" data-toast="The safety screen can't be paused while the Community Concierge is running.">Pause</button></div>
+          </div>
+          <p class="note">Re-checks every health-related post for side effects, dosing questions or possible harm and sends them to your care team. It never replies.</p>
+          <dl class="facts">
+            <div><dt>Last run</dt><dd class="mono">9:42 AM</dd></div>
+            <div><dt>Care-team response target</dt><dd>2 hours</dd></div>
+            <div><dt>Open for</dt><dd class="mono">1h 03m</dd></div>
+            <div><dt>Spend MTD</dt><dd class="mono">$4.10</dd></div>
+          </dl>
+        </article>
+
+        <article class="agent">
+          <div class="agent-top">
+            <h3>Weekly reporter</h3><span class="pill ok">Healthy</span>
+            <div class="row"><button class="btn" data-pause>Pause</button></div>
+          </div>
+          <p class="note">Writes the weekly community report and the list of questions nobody could answer.</p>
+          <dl class="facts">
+            <div><dt>Last run</dt><dd>Fri 6:00 PM</dd></div>
+            <div><dt>Runs</dt><dd>Fridays</dd></div>
+            <div><dt>Sends to</dt><dd>Your team inbox</dd></div>
+            <div><dt>Spend MTD</dt><dd class="mono">$2.50</dd></div>
+          </dl>
+        </article>
+      </div>
+    </section>
+
+    <div class="agents">
+      <section class="panel" aria-labelledby="tg-h">
+        <h2 id="tg-h">Today's activity</h2>
+        <div class="target">
+          <div class="t"><span>Replies posted</span><span class="mono">6 of 10 target</span></div>
+          <div class="bar"><span style="width:60%"></span></div>
+        </div>
+        <p class="note">Targets are a guide, not a limit. Pulse warns you when you're off pace but never posts more to catch up.</p>
+      </section>
+
+      <section class="panel" aria-labelledby="gr-h">
+        <h2 id="gr-h">What your agents will never do</h2>
+        <ul class="rules">
+          <li>Reply to a side effect or dosing question in public</li>
+          <li>Make medical, outcome or price claims</li>
+          <li>Post without saying they work with WellPeps</li>
+          <li>Post in a community that hasn't allowed brand replies</li>
+          <li>Use a link that isn't on your approved list</li>
+          <li class="info"><span>Guide pages aren't live yet, so replies that link a guide wait until they are. <a class="crumb" href="#knowledge">See guides</a></span></li>
+        </ul>
+      </section>
+    </div>
+  </div>
+
+  <section class="panel" aria-labelledby="cm-h">
+    <div class="section-head">
+      <h2 id="cm-h">Communities</h2>
+      <span class="label">Showing 8 of 31</span>
+    </div>
+    <p class="note">The agent listens everywhere but only replies where the community allows brands. Recording a moderator's permission clears it to reply.</p>
+    <div class="tbl">
+      <table>
+        <thead><tr><th>Community</th><th>Topic</th><th>Brands allowed?</th><th>Links allowed?</th><th class="num">Mentions, 7 days</th><th>Status</th><th></th></tr></thead>
+        <tbody>
+          <tr><td><a class="post-title" href="https://www.reddit.com/r/GLP1Discussion/" target="_blank" rel="noopener">r/GLP1Discussion ↗</a></td><td>Weight loss</td><td>Unknown</td><td>Unknown</td><td class="num mono">31</td><td><span class="pill">Listen only</span></td><td><button class="linkish" data-toast="In the real product this records the moderator's answer and the date.">Record permission</button></td></tr>
+          <tr><td><a class="post-title" href="https://www.reddit.com/r/SemaglutideCompound/" target="_blank" rel="noopener">r/SemaglutideCompound ↗</a></td><td>Weight loss</td><td>Unknown</td><td>Unknown</td><td class="num mono">22</td><td><span class="pill">Listen only</span></td><td><button class="linkish" data-toast="In the real product this records the moderator's answer and the date.">Record permission</button></td></tr>
+          <tr><td><a class="post-title" href="https://www.reddit.com/r/tirzepatide/" target="_blank" rel="noopener">r/tirzepatide ↗</a></td><td>Weight loss</td><td>Unknown</td><td>Unknown</td><td class="num mono">14</td><td><span class="pill">Listen only</span></td><td><button class="linkish" data-toast="In the real product this records the moderator's answer and the date.">Record permission</button></td></tr>
+          <tr><td><a class="post-title" href="https://www.reddit.com/r/HairLoss/" target="_blank" rel="noopener">r/HairLoss ↗</a></td><td>Hair</td><td>Unknown</td><td>Unknown</td><td class="num mono">7</td><td><span class="pill">Listen only</span></td><td><button class="linkish" data-toast="In the real product this records the moderator's answer and the date.">Record permission</button></td></tr>
+          <tr><td><a class="post-title" href="https://www.reddit.com/r/tressless/" target="_blank" rel="noopener">r/tressless ↗</a></td><td>Hair</td><td>Unknown</td><td>Unknown</td><td class="num mono">5</td><td><span class="pill">Listen only</span></td><td><button class="linkish" data-toast="In the real product this records the moderator's answer and the date.">Record permission</button></td></tr>
+          <tr><td><a class="post-title" href="https://www.reddit.com/r/erectiledysfunction/" target="_blank" rel="noopener">r/erectiledysfunction ↗</a></td><td>Sexual wellness</td><td>Unknown</td><td>Unknown</td><td class="num mono">4</td><td><span class="pill">Listen only</span></td><td><button class="linkish" data-toast="In the real product this records the moderator's answer and the date.">Record permission</button></td></tr>
+          <tr><td><a class="post-title" href="https://www.reddit.com/r/Peptides/" target="_blank" rel="noopener">r/Peptides ↗</a></td><td>Healthy aging</td><td>Unknown</td><td>Unknown</td><td class="num mono">9</td><td><span class="pill">Listen only</span></td><td><button class="linkish" data-toast="In the real product this records the moderator's answer and the date.">Record permission</button></td></tr>
+          <tr><td><a class="post-title" href="https://www.reddit.com/r/NAD/" target="_blank" rel="noopener">r/NAD ↗</a></td><td>Healthy aging</td><td>Unknown</td><td>Unknown</td><td class="num mono">3</td><td><span class="pill">Listen only</span></td><td><button class="linkish" data-toast="In the real product this records the moderator's answer and the date.">Record permission</button></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+</main>
+
+<!-- KNOWLEDGE -->
+<main class="wrap view" id="knowledge" aria-label="Knowledge" hidden>
+  <div class="hello">
+    <div>
+      <p class="label">WellPeps · Community engagement agent</p>
+      <h1>What your agent knows</h1>
+      <p class="lede">Add the documents your agent should read before it drafts a reply: approved messaging, compliance rules, voice guidance, program updates and community rules. Your compliance reviewer approves each one before the agent starts using it.</p>
+    </div>
+    <div class="stats" aria-label="Knowledge summary">
+      <div><b id="st-active">10</b><span>in use</span></div>
+      <div><b id="st-review">1</b><span>in review</span></div>
+      <div><b id="st-expected">3</b><span>expected</span></div>
+    </div>
+  </div>
+
+  <!-- ADD -->
+  <section class="panel" aria-labelledby="add-h">
+    <h2 id="add-h">Add documents</h2>
+    <label class="drop" id="drop" for="file">
+      <svg viewBox="0 0 40 40" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 28h-2a7 7 0 0 1-1-13.9A10 10 0 0 1 28.6 12 8 8 0 0 1 30 28h-2"/><path d="M20 20v14M14.5 25.5 20 20l5.5 5.5"/></svg>
+      <p class="big">Drop files here, or <u>browse</u></p>
+      <p class="types">PDF, Word, text or Markdown, plus screenshots of community rules (PNG or JPG). Up to 25 MB each.</p>
+    </label>
+    <input class="sr" type="file" id="file" multiple accept=".pdf,.doc,.docx,.txt,.md,.png,.jpg,.jpeg">
+    <div class="staged" id="staged" aria-live="polite"></div>
+  </section>
+
+  <!-- LIBRARY -->
+  <section class="panel" aria-labelledby="lib-h">
+    <div class="lib-tools">
+      <h2 id="lib-h">Library</h2>
+      <div class="filter" role="group" aria-label="Filter by status">
+        <button aria-pressed="true" data-f="all">All</button>
+        <button aria-pressed="false" data-f="active">In use</button>
+        <button aria-pressed="false" data-f="review">In review</button>
+        <button aria-pressed="false" data-f="expected">Expected</button>
+      </div>
+    </div>
+    <div class="tbl">
+      <table>
+        <thead><tr><th>Document</th><th>Kind</th><th>How the agent treats it</th><th>Added</th><th>Status</th></tr></thead>
+        <tbody id="lib"></tbody>
+      </table>
+    </div>
+    <p class="note">"Expected" documents were mentioned to us but haven't been uploaded yet. Upload them above and they replace the placeholder.</p>
+  </section>
+
+  <div class="split">
+    <section class="panel" aria-labelledby="chg-h">
+      <h2 id="chg-h">What the newest documents change</h2>
+      <div class="changes">
+        <div class="change">
+          <p><b>Guides become "consider every time, include when it helps".</b> Your agent will name a Smart Patient's Guide chapter only when that chapter answers the poster's question, and can decide that no guide fits.</p>
+          <p class="src">From: Derek's review of the Rules of Engagement, Oct 10 · replaces "a guide in every answering reply"</p>
+        </div>
+        <div class="change">
+          <p><b>New: how to pick which conversations to join.</b> The Engagement Goals and Conversation Selection Module adds goals for each reply and when to stay out.</p>
+          <p class="src">From: Engagement Goals and Conversation Selection Module V1, Oct 10 · in review</p>
+        </div>
+        <div class="change">
+          <p><b>Activity targets become warnings.</b> Daily reply targets no longer block posting. Community rules, moderator instructions and platform limits still do.</p>
+          <p class="src">From: Derek's review, Oct 10</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel" aria-labelledby="k-gap-h">
+      <h2 id="k-gap-h">Questions your agent couldn't answer</h2>
+      <p class="note">People asked these this week, but no approved document covers them. Adding an answer here (or to a guide) lets the agent reply next time.</p>
+      <div class="gaps">
+        <div class="gap"><span>Do you ship to Alaska and Hawaii?</span><span class="mono">9×</span></div>
+        <div class="gap"><span>Is the monthly price all-inclusive?</span><span class="mono">7×</span></div>
+        <div class="gap"><span>Can I pause my plan while traveling?</span><span class="mono">5×</span></div>
+        <div class="gap"><span>How long until a provider reviews my answers?</span><span class="mono">4×</span></div>
+      </div>
+      <button class="btn" data-toast="In the real product this opens a short form your team fills in, which becomes an approved answer.">Write an approved answer</button>
+    </section>
+  </div>
+
+  <div class="split">
+    <section class="panel" aria-labelledby="ord-h">
+      <h2 id="ord-h">When documents disagree</h2>
+      <ol class="order">
+        <li>Safety, privacy and clinical rules always win.</li>
+        <li>Community rules, moderator instructions and platform limits.</li>
+        <li>"Must follow" documents, newest effective date first.</li>
+        <li>"Use as reference" documents.</li>
+        <li>Examples, for tone only.</li>
+      </ol>
+      <p class="note">When a new document conflicts with one in use, your reviewer sees both side by side before approving it.</p>
+    </section>
+
+    <section class="panel" id="guides" aria-labelledby="gd-h">
+      <h2 id="gd-h">Smart Patient's Guides</h2>
+      <p class="note">The agent can point people to a chapter of these free guides. Links go live when the guide pages are published.</p>
+      <div class="gcards">
+        <div class="gcard"><b>GLP-1 Weight Loss</b><span class="s">4 chapters · 4 topics</span><span class="pill">Page not live yet</span></div>
+        <div class="gcard"><b>Sexual Wellness</b><span class="s">4 chapters · 2 topics</span><span class="pill">Page not live yet</span></div>
+        <div class="gcard"><b>Hair Restoration</b><span class="s">4 chapters · 2 topics</span><span class="pill">Page not live yet</span></div>
+        <div class="gcard"><b>Healthy Aging &amp; Vitality</b><span class="s">4 chapters · 1 topic</span><span class="pill">Page not live yet</span></div>
+        <div class="gcard"><b>NAD+ Therapy</b><span class="s">Guide page planned</span><span class="pill">Page not live yet</span></div>
+      </div>
+    </section>
+  </div>
+</main>
+
+<footer class="site-foot">
+  <img src="data:image/png;base64,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" alt="WellPeps" width="600" height="125">
+</footer>
+
+<button type="button" class="rw-bubble" id="rw-bubble" hidden>Rewrite</button>
+<div class="rw-menu" id="rw-menu" role="dialog" aria-label="Rewrite selection" hidden></div>
+
+<div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+
+<script>
+(function () {
+  // ----- greeting and date follow the viewer's clock -----
+  const MORNING_ENDS = 12, AFTERNOON_ENDS = 17;
+  function greet() {
+    const now = new Date(), h = now.getHours();
+    const part = h < MORNING_ENDS ? 'morning' : h < AFTERNOON_ENDS ? 'afternoon' : 'evening';
+    document.getElementById('greeting').textContent = `Good ${part}, WellPeps team`;
+    const day = now.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' });
+    document.getElementById('today').textContent = `${day} · last 7 days`;
+  }
+  greet();
+  setInterval(greet, 60000);
+
+  // ----- site router: #pulse, #hq, #knowledge -----
+  const VIEWS = ['pulse', 'hq', 'knowledge'];
+  function show(v) {
+    VIEWS.forEach(k => { document.getElementById(k).hidden = k !== v; });
+    document.querySelectorAll('[data-nav]').forEach(a => {
+      if (a.dataset.nav === v) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current');
+    });
+    window.scrollTo(0, 0);
+  }
+  document.addEventListener('click', e => {
+    const a = e.target.closest('a[href^="#"]'); if (!a) return;
+    const h = a.getAttribute('href').slice(1);
+    if (!VIEWS.includes(h)) return;                 // in-page anchor such as #approvals
+    e.preventDefault(); show(h);
+    try { history.replaceState(null, '', '#' + h); } catch (_) { /* sandboxed frames */ }
+  });
+  window.addEventListener('hashchange', () => { const h = location.hash.slice(1); if (VIEWS.includes(h)) show(h); });
+  { const h = location.hash.slice(1); show(VIEWS.includes(h) ? h : 'pulse'); }
+  document.addEventListener('click', e => {
+    const t = e.target.closest('[data-toast]'); if (t) { e.preventDefault(); toast(t.dataset.toast); }
+  });
+
+  // ----- Operator HQ controls -----
+  document.querySelectorAll('.mode').forEach(g => g.addEventListener('click', e => {
+    const b = e.target.closest('button'); if (!b || b.disabled) return;
+    g.querySelectorAll('button').forEach(x => x.setAttribute('aria-pressed', String(x === b)));
+    toast('Posting mode: ' + b.dataset.mode + '.');
+  }));
+  document.querySelectorAll('[data-pause]').forEach(b => b.addEventListener('click', () => {
+    const card = b.closest('.agent'), pill = card.querySelector('.pill');
+    const paused = b.textContent === 'Resume';
+    if (!paused) { b.dataset.prev = pill.outerHTML; pill.outerHTML = '<span class="pill">Paused</span>'; b.textContent = 'Resume'; toast(card.querySelector('h3').textContent + " paused. It won't start new runs until you resume it."); }
+    else { card.querySelector('.pill').outerHTML = b.dataset.prev; b.textContent = 'Pause'; toast(card.querySelector('h3').textContent + ' resumed.'); }
+  }));
+
+  // ----- toast -----
+  let tt;
+  window.wpToast = m => toast(m);
+  function toast(msg) {
+    const el = document.getElementById('toast');
+    el.textContent = msg; el.hidden = false;
+    clearTimeout(tt); tt = setTimeout(() => { el.hidden = true; }, 2600);
+  }
+
+  // ----- chart (one scale for marks, ticks and labels) -----
+  const cur = [22, 25, 19, 31, 27, 24, 38];
+  const prev = [20, 23, 18, 26, 22, 19, 35];
+  const days = ['Sat', 'Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
+  const W = 560, H = 170, L = 30, R = 40, T = 12, B = 26, max = 40;
+  const x = i => L + i * (W - L - R) / (cur.length - 1);
+  const y = v => T + (1 - v / max) * (H - T - B);
+  const pts = a => a.map((v, i) => x(i).toFixed(1) + ',' + y(v).toFixed(1)).join(' ');
+  let s = '<defs><linearGradient id="pulseGrad" x1="0" x2="1" y1="0" y2="0"><stop offset="0" stop-color="#02CCCE"/><stop offset=".55" stop-color="#028BEA"/><stop offset="1" stop-color="#0571EB"/></linearGradient></defs>';
+  [0, 20, 40].forEach(v => { s += `<line class="grid" x1="${L}" x2="${W - R}" y1="${y(v)}" y2="${y(v)}"/><text class="axis" x="${L - 6}" y="${y(v) + 3}" text-anchor="end">${v}</text>`; });
+  days.forEach((d, i) => { s += `<text class="axis" x="${x(i)}" y="${H - 6}" text-anchor="middle">${d}</text>`; });
+  s += `<polygon class="area" points="${x(0)},${y(0)} ${pts(cur)} ${x(cur.length - 1)},${y(0)}"/>`;
+  s += `<polyline class="prev" points="${pts(prev)}"/><polyline class="cur" points="${pts(cur)}"/>`;
+  const li = cur.length - 1;
+  s += `<circle class="end" cx="${x(li)}" cy="${y(cur[li])}" r="5"/><text class="endlbl" x="${x(li) + 9}" y="${y(cur[li]) + 4}">${cur[li]}</text>`;
+  document.getElementById('spark').innerHTML = s;
+
+  // ----- approval queue -----
+  const drafts = [
+    { id: 'd1', ch: 'Reddit', sub: 'r/GLP1Discussion', when: 'Oct 9, 7:37 AM',
+      url: 'https://www.reddit.com/r/GLP1Discussion/comments/1x1f4r3/trying_to_find_the_cheapest_legit_compounded/',
+      title: 'Trying to find the cheapest legit compounded tirzepatide, how do you compare its total cost?',
+      q: '"…the first one shows a low price for the starting dose. Another has a membership fee and then charges for the meds on top. Shipping is extra on some too. So should I be comparing the total for the same amount of meds at the same dose?"',
+      a: "Yeah, the low-starting-dose price that jumps later catches a lot of people. I'm part of the WellPeps team, so take this with that in mind: comparing the same medication at the same dose is exactly the right move. I'd also ask each provider whether follow-up with a clinician is included, how dose changes are handled, and whether shipping's extra. Our free GLP-1 Weight Loss guide has a chapter on this, \"What's actually included in the price\" (it just asks for an email): https://wellpeps.com/smart-patient-guides/glp-1-weight-loss",
+      guide: "GLP-1 Weight Loss guide › What's actually included in the price",
+      checks: ['WellPeps disclosed in sentence 2', 'No prices or competitor names', 'Email step stated'] },
+    { id: 'd2', ch: 'Reddit', sub: 'r/SemaglutideCompound', when: 'Oct 9, 9:07 AM',
+      url: 'https://www.reddit.com/r/SemaglutideCompound/comments/1x1ginl/trying_to_figure_out_where_my_prescription_would/',
+      title: 'Trying to figure out where my prescription would go. Which pharmacies compound semaglutide?',
+      q: '"…none of them state which pharmacy would make and ship my med. What should I ask for? The pharmacy\'s legal name? The state it\'s licensed in? Anything else?"',
+      a: "Honestly, those are the right questions, and good on you for asking before the prescription goes out. Full disclosure, I work with WellPeps. Any provider should be able to tell you which pharmacy will fill it, and you can check that the pharmacy is licensed in your state. I'd add one more: what follow-up with a clinician is included. There's a longer list in our free GLP-1 Weight Loss guide, under \"Questions to ask before choosing a provider\" (it just asks for an email): https://wellpeps.com/smart-patient-guides/glp-1-weight-loss",
+      guide: 'GLP-1 Weight Loss guide › Questions to ask before choosing a provider',
+      checks: ['WellPeps disclosed in sentence 2', "Doesn't name or criticize competitors", 'Email step stated'] },
+    { id: 'd3', ch: 'Reddit', sub: 'r/telehealth', when: 'Oct 9, 4:35 AM',
+      url: 'https://www.reddit.com/r/telehealth/comments/1x1c4f5/is_it_possible_to_switch_pharmacies_without/',
+      title: 'Is it possible to switch pharmacies without changing providers? I like my doctor, not the shipping',
+      q: '"My last two orders came 6 and 9 days late… Can my doctor just send it somewhere else? Is that a simple request, or does she need to write a new prescription?"',
+      a: "Oof, 6 and 9 days late is rough, especially when you like your doctor. I'm part of the WellPeps team, so I can't speak for your provider, but whether a prescription can move to a different pharmacy depends on how it was set up. The quickest route is to message your doctor and ask straight out. They'll know if it's a simple transfer or needs a new prescription.",
+      guide: null, noGuide: "No guide: it's about their current provider, and no chapter covers it",
+      checks: ['WellPeps disclosed in sentence 2', 'No medical advice', "Doesn't pitch WellPeps"] }
+  ];
+  const esc = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  const linkify = s => esc(s).replace(/https:\/\/wellpeps\.com\/[\w\-\/]+/g, u => `<a href="${u}" target="_blank" rel="noopener">${u.replace('https://', '')}</a>`);
+  const guideChip = d => d.guide
+    ? `<span class="guide"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 3.5C2 2.7 2.7 2 3.5 2H7v11H3.5c-.8 0-1.5.3-1.5.8V3.5ZM14 3.5c0-.8-.7-1.5-1.5-1.5H9v11h3.5c.8 0 1.5.3 1.5.8V3.5Z" fill="currentColor"/></svg>Smart Patient's ${d.guide}</span>`
+    : d.noGuide ? `<span class="guide none">${d.noGuide}</span>` : '';
+  const queue = document.getElementById('queue');
+  queue.innerHTML = drafts.map(d => `
+    <article class="item" id="${d.id}">
+      <div class="src"><b>${d.ch}</b><span>${d.sub}</span><span>${d.when}</span><a class="open" href="${d.url}" target="_blank" rel="noopener">View on ${d.ch} ↗</a></div>
+      <a class="post-title" href="${d.url}" target="_blank" rel="noopener">${esc(d.title)}</a>
+      <p class="quote">${esc(d.q)}</p>
+      <p class="human-note"><b>A WellPeps rep posts this one.</b> ${d.sub} doesn't allow agents to interact with community members, so Pulse only drafts. Read the post on ${d.ch}, then post the reply yourself.</p>
+      <div class="draft"><p class="label" style="margin-bottom:4px">Drafted reply</p><p class="txt">${linkify(d.a)}</p></div>
+      ${guideChip(d)}
+      <div class="checks">${d.checks.map(c => `<span class="chk">✓ ${c}</span>`).join('')}</div>
+      <div class="row act">
+        ${d.hold ? `<span class="pill">${d.hold}</span><a class="btn" href="#hq">Check community rules</a>` : `<button class="btn primary" data-act="approve">Approve and copy reply</button>`}
+        <button class="btn" data-act="edit">Edit</button>
+        <button class="btn ghost" data-act="reject">Don't post</button>
+      </div>
+    </article>`).join('');
+
+  // ----- AI rewrite: select text in a draft, then "Rewrite" (bubble) or right-click -----
+  const RW_OPTIONS = [
+    ['Friendlier', 'Make it friendlier and warmer, like a helpful person in the thread.'],
+    ['More professional', 'Make it more professional and polished, but still plain and human.'],
+    ['Shorter', 'Make it shorter and tighter without losing the point.'],
+    ['Simpler', 'Use simpler, everyday words and shorter sentences.']
+  ];
+  const RW_PREVIEW_CHARS = 160;
+  const RW_SELECTION_DELAY_MS = 120;
+  const rwBubble = document.getElementById('rw-bubble');
+  const rwMenu = document.getElementById('rw-menu');
+  let rwTarget = null;
+  let rwAbort = null;
+  let rwLast = null;
+  let rwTimer;
+
+  const asEl = n => (n && n.nodeType === 1 ? n : n && n.parentElement);
+  function draftFor(node) {
+    const item = asEl(node) && asEl(node).closest('#queue .item');
+    if (!item || item.classList.contains('done')) return null;
+    return { item, d: drafts.find(x => x.id === item.id) };
+  }
+  function currentSelection() {
+    const ae = document.activeElement;
+    if (ae && ae.tagName === 'TEXTAREA' && ae.closest('#queue .item')) {
+      const hit = draftFor(ae);
+      const passage = ae.value.slice(ae.selectionStart, ae.selectionEnd);
+      if (!hit || !passage.trim()) return null;
+      return { ...hit, kind: 'textarea', el: ae, passage, start: ae.selectionStart, end: ae.selectionEnd, rect: ae.getBoundingClientRect() };
+    }
+    const sel = window.getSelection();
+    if (!sel || sel.isCollapsed || !sel.rangeCount) return null;
+    const range = sel.getRangeAt(0);
+    const inTxt = n => asEl(n) && asEl(n).closest('.draft .txt');
+    if (!inTxt(range.startContainer) || inTxt(range.startContainer) !== inTxt(range.endContainer)) return null;
+    const hit = draftFor(range.startContainer);
+    const passage = sel.toString();
+    if (!hit || !passage.trim()) return null;
+    return { ...hit, kind: 'text', passage, rect: range.getBoundingClientRect() };
+  }
+  function placeAt(el, x, y) {
+    const w = el.offsetWidth, h = el.offsetHeight;
+    el.style.left = Math.max(8, Math.min(x, innerWidth - w - 8)) + 'px';
+    el.style.top = Math.max(8, Math.min(y, innerHeight - h - 8)) + 'px';
+  }
+  function updateBubble() {
+    if (!rwMenu.hidden) return;
+    const t = currentSelection();
+    if (!t) { rwBubble.hidden = true; return; }
+    rwTarget = t;
+    rwBubble.hidden = false;
+    const r = t.rect;
+    const y = r.top - rwBubble.offsetHeight - 8;
+    placeAt(rwBubble, r.left + r.width / 2 - rwBubble.offsetWidth / 2, y < 8 ? r.bottom + 8 : y);
+  }
+  const scheduleBubble = () => { clearTimeout(rwTimer); rwTimer = setTimeout(updateBubble, RW_SELECTION_DELAY_MS); };
+  document.addEventListener('selectionchange', scheduleBubble);
+  queue.addEventListener('mouseup', scheduleBubble);
+  queue.addEventListener('keyup', scheduleBubble);
+  window.addEventListener('scroll', () => { rwBubble.hidden = true; }, { passive: true });
+
+  function closeMenu(restoreFocus) {
+    if (rwAbort) { rwAbort.abort(); rwAbort = null; }
+    rwMenu.hidden = true;
+    rwBubble.hidden = true;
+    if (restoreFocus && rwTarget && rwTarget.kind === 'textarea') rwTarget.el.focus();
+  }
+  function openMenu(x, y) {
+    rwBubble.hidden = true;
+    renderOptions();
+    rwMenu.hidden = false;
+    placeAt(rwMenu, x, y);
+    rwMenu.querySelector('.rw-opt').focus();
+  }
+  const clip = s => (s.length > RW_PREVIEW_CHARS ? s.slice(0, RW_PREVIEW_CHARS).trimEnd() + '…' : s);
+  function renderOptions() {
+    rwMenu.innerHTML = `<p class="rw-title">Rewrite selection</p>
+      <p class="rw-quote">${esc(clip(rwTarget.passage))}</p>
+      <div class="rw-opts">${RW_OPTIONS.map(([label], i) => `<button type="button" class="rw-opt" data-rw="${i}">${label}</button>`).join('')}</div>
+      <form class="rw-custom"><label for="rw-ask" class="sr">Describe the change you want</label>
+        <input id="rw-ask" type="text" maxlength="200" placeholder="Or describe it, e.g. sound more upbeat">
+        <button class="btn primary" type="submit">Rewrite</button></form>`;
+  }
+  function renderBusy(label) {
+    rwMenu.innerHTML = `<p class="rw-title">${esc(label)}</p>
+      <p class="rw-status" role="status">Rewriting… this usually takes 20 to 40 seconds.</p>
+      <div class="rw-actions"><button type="button" class="btn" data-rwact="close">Cancel</button></div>`;
+  }
+  function renderResult(text, label) {
+    rwMenu.innerHTML = `<p class="rw-title">${esc(label)}</p>
+      <p class="rw-label">Suggestion</p>
+      <p class="rw-result">${esc(text)}</p>
+      <p class="rw-hint">Give it a read before you approve. Pulse's compliance checks still apply.</p>
+      <div class="rw-actions"><button type="button" class="btn primary" data-rwact="replace">Replace</button>
+        <button type="button" class="btn" data-rwact="again">Try again</button>
+        <button type="button" class="btn ghost" data-rwact="close">Cancel</button></div>`;
+    rwMenu.querySelector('[data-rwact="replace"]').focus();
+  }
+  function renderError(message, label) {
+    rwMenu.innerHTML = `<p class="rw-title">${esc(label)}</p>
+      <p class="rw-error" role="alert">Error: ${esc(message)}</p>
+      <div class="rw-actions"><button type="button" class="btn primary" data-rwact="again">Try again</button>
+        <button type="button" class="btn ghost" data-rwact="close">Cancel</button></div>`;
+  }
+  async function requestRewrite(instruction, label) {
+    rwLast = { instruction, label, text: null };
+    renderBusy(label);
+    rwAbort = new AbortController();
+    try {
+      const res = await fetch('/api/rewrite', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ passage: rwTarget.passage, instruction, context: rwTarget.d.a }),
+        signal: rwAbort.signal
+      });
+      const data = await res.json().catch(() => ({ ok: false, error: "The rewrite service sent back something unexpected." }));
+      if (!data.ok) throw new Error(data.error || "The rewrite didn't work. Try again.");
+      rwLast.text = data.text;
+      renderResult(data.text, label);
+    } catch (err) {
+      if (err.name === 'AbortError') return;
+      const offline = /Failed to fetch|NetworkError|404/.test(String(err.message));
+      renderError(offline ? "AI rewrite needs the Pulse dev server (serve.py). Start it, then try again." : err.message, label);
+    } finally {
+      rwAbort = null;
+    }
+  }
+  function markRewritten(item) {
+    const checks = item.querySelector('.checks');
+    if (checks && !checks.querySelector('.rw-mark')) checks.insertAdjacentHTML('beforeend', '<span class="pill rw-mark">Rewritten with AI</span>');
+  }
+  function applyRewrite(text) {
+    const t = rwTarget;
+    if (t.kind === 'textarea') {
+      t.el.value = t.el.value.slice(0, t.start) + text + t.el.value.slice(t.end);
+    } else {
+      let src = t.passage;
+      if (!t.d.a.includes(src)) src = src.replace(/(^|\s)wellpeps\.com\//g, '$1https://wellpeps.com/');
+      if (!t.d.a.includes(src)) { toast("Couldn't find that passage in the draft. Try selecting within one sentence."); return; }
+      t.d.a = t.d.a.replace(src, text);
+      const txt = t.item.querySelector('.draft .txt');
+      if (txt) txt.innerHTML = linkify(t.d.a);
+    }
+    markRewritten(t.item);
+    toast('Passage rewritten. Give it a read before you approve.');
+  }
+
+  rwBubble.addEventListener('mousedown', e => e.preventDefault());   // keep the text selected
+  rwBubble.addEventListener('click', () => {
+    const b = rwBubble.getBoundingClientRect();
+    openMenu(b.left, b.bottom + 8);
+  });
+  queue.addEventListener('contextmenu', e => {
+    const t = currentSelection();
+    if (!t) return;                                                    // normal browser menu otherwise
+    e.preventDefault();
+    rwTarget = t;
+    openMenu(e.clientX, e.clientY);
+  });
+  rwMenu.addEventListener('click', e => {
+    const opt = e.target.closest('[data-rw]');
+    if (opt) { const [label, instruction] = RW_OPTIONS[Number(opt.dataset.rw)]; requestRewrite(instruction, label); return; }
+    const act = e.target.closest('[data-rwact]');
+    if (!act) return;
+    if (act.dataset.rwact === 'close') closeMenu(true);
+    else if (act.dataset.rwact === 'again' && rwLast) requestRewrite(rwLast.instruction, rwLast.label);
+    else if (act.dataset.rwact === 'replace' && rwLast && rwLast.text) { applyRewrite(rwLast.text); closeMenu(true); }
+  });
+  rwMenu.addEventListener('submit', e => {
+    e.preventDefault();
+    const ask = rwMenu.querySelector('#rw-ask').value.trim();
+    if (!ask) { rwMenu.querySelector('#rw-ask').focus(); return; }
+    requestRewrite(ask, 'Custom rewrite');
+  });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape' && !rwMenu.hidden) closeMenu(true); });
+  document.addEventListener('mousedown', e => {
+    if (!rwMenu.hidden && !rwMenu.contains(e.target)) closeMenu(false);
+  });
+
+  function remaining() {
+    const n = queue.querySelectorAll('.item:not(.done)').length;
+    document.getElementById('appr-count').textContent = n ? n + (n === 1 ? ' draft' : ' drafts') : 'All caught up';
+  }
+  queue.addEventListener('click', e => {
+    const b = e.target.closest('[data-act]'); if (!b) return;
+    const item = b.closest('.item'), d = drafts.find(x => x.id === item.id);
+    const row = item.querySelector('.act'), box = item.querySelector('.draft');
+    if (b.dataset.act === 'edit') {
+      box.innerHTML = `<label class="label" for="ta-${d.id}" style="display:block;margin-bottom:4px">Edit reply</label><textarea id="ta-${d.id}">${d.a}</textarea>`;
+      row.innerHTML = d.hold
+        ? `<button class="btn primary" data-act="cancel" data-save>Save draft</button><button class="btn" data-act="cancel">Cancel</button>`
+        : `<button class="btn primary" data-act="approve">Save and copy reply</button><button class="btn" data-act="cancel">Cancel</button>`;
+      box.querySelector('textarea').focus();
+    } else if (b.dataset.act === 'cancel') {
+      const ta = box.querySelector('textarea'); if (ta && b.hasAttribute('data-save')) { d.a = ta.value; toast('Draft saved. It stays held until the community allows brand replies.'); }
+      box.innerHTML = `<p class="label" style="margin-bottom:4px">Drafted reply</p><p class="txt">${linkify(d.a)}</p>`;
+      row.innerHTML = (d.hold ? `<span class="pill">${d.hold}</span><a class="btn" href="#hq">Check community rules</a>` : `<button class="btn primary" data-act="approve">Approve and copy reply</button>`) + `<button class="btn" data-act="edit">Edit</button><button class="btn ghost" data-act="reject">Don't post</button>`;
+    } else if (b.dataset.act === 'approve') {
+      const ta = box.querySelector('textarea'); if (ta) { d.a = ta.value; box.innerHTML = `<p class="label" style="margin-bottom:4px">Reply</p><p class="txt">${linkify(d.a)}</p>`; }
+      item.classList.add('done');
+      row.innerHTML = `<span class="status">Approved. Paste the reply on ${d.ch} as yourself, then mark it posted.</span><a class="btn" href="${d.url}" target="_blank" rel="noopener">Open the post ↗</a><button class="btn primary" data-act="posted">Mark as posted</button>`;
+      const copied = () => toast('Approved and copied. Open the post and paste your reply.');
+      const notCopied = () => toast("Approved. Copy the reply from the card, then open the post.");
+      try { navigator.clipboard.writeText(d.a).then(copied, notCopied); } catch (_) { notCopied(); }
+      remaining();
+    } else if (b.dataset.act === 'posted') {
+      row.innerHTML = `<span class="status">Posted by you. Pulse logged it.</span><a class="open" href="${d.url}" target="_blank" rel="noopener">View on ${d.ch} ↗</a>`;
+      toast('Marked as posted.');
+    } else if (b.dataset.act === 'reject') {
+      item.classList.add('done'); row.innerHTML = `<span class="status rej">Not posted. The agent will learn from this.</span>`;
+      toast('Draft discarded.'); remaining();
+    }
+  });
+})();
+</script>
+<script>
+(function () {
+  // ----- knowledge page -----
+  const KINDS = ['Approved messaging', 'Compliance rule', 'Voice and style', 'Program or product status', 'Smart Patient\'s Guide', 'Community or forum rules', 'Facts and FAQ', 'Strategy or training', 'Other'];
+  const PROGRAMS = ['All programs', 'Weight Loss', 'Hair Restoration', 'Sexual Wellness', 'Healthy Aging & Vitality'];
+  const AUTH = { must: 'Must follow', ref: 'Use as reference', ex: 'Example only' };
+
+  const lib = [
+    { name: 'Approved Messaging & Response Guide', kind: 'Approved messaging', auth: 'must', added: 'Oct 6', status: 'active' },
+    { name: 'Approved Messaging Live Reference v1.0', kind: 'Program or product status', auth: 'must', added: 'Oct 6', status: 'active' },
+    { name: 'Competitor Mentions & Provider Switching Protocol V1', kind: 'Compliance rule', auth: 'must', added: 'Oct 6', status: 'active' },
+    { name: 'Community Engagement Compliance Training', kind: 'Compliance rule', auth: 'must', added: 'Oct 6', status: 'active' },
+    { name: 'Community Engagement Operations Training Manual V1', kind: 'Strategy or training', auth: 'ref', added: 'Oct 6', status: 'active' },
+    { name: 'Pre-LegitScript Marketing & Community Strategy', kind: 'Strategy or training', auth: 'ref', added: 'Oct 6', status: 'active' },
+    { name: 'Community Groups and Forums', kind: 'Community or forum rules', auth: 'must', added: 'Oct 6', status: 'active' },
+    { name: 'Agent Program Gameplan', kind: 'Strategy or training', auth: 'ref', added: 'Oct 8', status: 'active' },
+    { name: 'Smart Patient\'s Guides (5)', kind: 'Smart Patient\'s Guide', auth: 'ref', added: 'Oct 7', status: 'active' },
+    { name: 'Reply examples', kind: 'Voice and style', auth: 'ex', added: 'Oct 7', status: 'active' },
+    { name: 'Engagement Goals & Conversation Selection Module V1', kind: 'Strategy or training', auth: 'must', added: 'Oct 10', status: 'review' },
+    { name: 'Community Agent Voice', kind: 'Voice and style', auth: 'must', added: '', status: 'expected', from: 'Mentioned by Derek, Oct 10' },
+    { name: 'Offering Links to WellPeps Content', kind: 'Approved messaging', auth: 'must', added: '', status: 'expected', from: 'Mentioned by Derek, Oct 10' },
+    { name: 'Why and When to Engage', kind: 'Strategy or training', auth: 'must', added: '', status: 'expected', from: 'Mentioned by Derek, Oct 10' }
+  ];
+  const STATUS = {
+    active: '<span class="pill ok">In use</span>',
+    review: '<span class="pill info">In review</span>',
+    processing: '<span class="pill muted">Reading…</span>',
+    expected: '<span class="pill">Expected</span>'
+  };
+  const esc = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  let filter = 'all';
+
+  function renderLib() {
+    const rows = lib.filter(d => filter === 'all' || d.status === filter || (filter === 'review' && d.status === 'processing'));
+    document.getElementById('lib').innerHTML = rows.length ? rows.map(d => `
+      <tr>
+        <td><b>${esc(d.name)}</b>${d.from ? `<span class="s">${esc(d.from)}</span>` : ''}${d.note ? `<span class="s">${esc(d.note)}</span>` : ''}</td>
+        <td>${esc(d.kind)}${d.programs ? `<span class="s">${esc(d.programs)}</span>` : ''}</td>
+        <td><span class="auth ${d.auth}">${AUTH[d.auth]}</span>${d.supersedes ? `<span class="s">Replaces: ${esc(d.supersedes)}</span>` : ''}</td>
+        <td class="mono">${esc(d.added || '—')}</td>
+        <td>${STATUS[d.status]}</td>
+      </tr>`).join('') : `<tr><td colspan="5"><span class="s">Nothing here yet.</span></td></tr>`;
+    document.getElementById('st-active').textContent = lib.filter(d => d.status === 'active').length;
+    document.getElementById('st-review').textContent = lib.filter(d => d.status === 'review' || d.status === 'processing').length;
+    document.getElementById('st-expected').textContent = lib.filter(d => d.status === 'expected').length;
+  }
+  document.querySelector('.filter').addEventListener('click', e => {
+    const b = e.target.closest('button'); if (!b) return;
+    filter = b.dataset.f;
+    document.querySelectorAll('.filter button').forEach(x => x.setAttribute('aria-pressed', String(x === b)));
+    renderLib();
+  });
+
+  // ----- staging -----
+  const staged = document.getElementById('staged');
+  let seq = 0;
+  const fmtSize = n => n > 1048576 ? (n / 1048576).toFixed(1) + ' MB' : Math.max(1, Math.round(n / 1024)) + ' KB';
+  const guessKind = n => {
+    const s = n.toLowerCase();
+    if (/voice|tone|style/.test(s)) return 'Voice and style';
+    if (/link|messag|response/.test(s)) return 'Approved messaging';
+    if (/complian|legit|protocol|policy/.test(s)) return 'Compliance rule';
+    if (/guide|ebook/.test(s)) return 'Smart Patient\'s Guide';
+    if (/forum|group|reddit|community rules/.test(s)) return 'Community or forum rules';
+    if (/faq|fact/.test(s)) return 'Facts and FAQ';
+    if (/status|program|product|live reference/.test(s)) return 'Program or product status';
+    if (/when|engage|goal|strategy|training|manual|gameplan/.test(s)) return 'Strategy or training';
+    return 'Other';
+  };
+  const matchExpected = n => {
+    const s = n.toLowerCase();
+    return lib.find(d => d.status === 'expected' && (
+      (/voice/.test(s) && /Voice/.test(d.name)) ||
+      (/link/.test(s) && /Links/.test(d.name)) ||
+      (/why|when/.test(s) && /Why and When/.test(d.name))));
+  };
+
+  function stage(file) {
+    const id = 'f' + (++seq);
+    const ext = (file.name.split('.').pop() || '').slice(0, 4);
+    const exp = matchExpected(file.name);
+    const kind = exp ? exp.kind : guessKind(file.name);
+    const card = document.createElement('article');
+    card.className = 'doc'; card.id = id;
+    card.innerHTML = `
+      <div class="doc-head">
+        <span class="ext">${esc(ext)}</span><span class="name">${esc(file.name)}</span><span class="size">${fmtSize(file.size)}</span>
+        ${exp ? `<span class="pill info">Matches expected: ${esc(exp.name)}</span>` : ''}
+        <button class="btn ghost" data-act="remove" aria-label="Remove ${esc(file.name)}">Remove</button>
+      </div>
+      <div class="fields">
+        <div class="field">
+          <label for="${id}-kind">What kind of document is this?</label>
+          <select id="${id}-kind">${KINDS.map(k => `<option${k === kind ? ' selected' : ''}>${k}</option>`).join('')}</select>
+        </div>
+        <div class="field">
+          <span class="flabel" id="${id}-auth-l">How should the agent treat it?</span>
+          <div class="seg" role="radiogroup" aria-labelledby="${id}-auth-l">
+            <label><input type="radio" name="${id}-auth" value="must"${exp || /Compliance|Approved|Voice|Community/.test(kind) ? ' checked' : ''}>Must follow</label>
+            <label><input type="radio" name="${id}-auth" value="ref"${!(exp || /Compliance|Approved|Voice|Community/.test(kind)) ? ' checked' : ''}>Reference</label>
+            <label><input type="radio" name="${id}-auth" value="ex">Example only</label>
+          </div>
+          <span class="hint">"Must follow" needs the name of whoever approved it.</span>
+        </div>
+        <div class="field wide">
+          <span class="flabel" id="${id}-prog-l">Which programs does it apply to?</span>
+          <div class="chips" role="group" aria-labelledby="${id}-prog-l">
+            ${PROGRAMS.map((p, i) => `<label><input type="checkbox" value="${esc(p)}"${i === 0 ? ' checked' : ''}>${esc(p)}</label>`).join('')}
+          </div>
+        </div>
+        <div class="field">
+          <label for="${id}-by">Approved by</label>
+          <input type="text" id="${id}-by" placeholder="e.g. Derek Goldberg">
+        </div>
+        <div class="field">
+          <label for="${id}-date">Takes effect</label>
+          <input type="date" id="${id}-date" value="2026-10-10">
+        </div>
+        <div class="field">
+          <label for="${id}-sup">Replaces an older document?</label>
+          <select id="${id}-sup"><option value="">No, it adds to what's there</option>${lib.filter(d => d.status === 'active').map(d => `<option>${esc(d.name)}</option>`).join('')}</select>
+        </div>
+        <div class="field wide">
+          <label for="${id}-note">Anything the agent should know about it?</label>
+          <textarea id="${id}-note" placeholder="e.g. Use this for how replies should sound. The links section overrides the Live Reference."></textarea>
+        </div>
+      </div>
+      <div class="doc-foot">
+        <button class="btn primary" data-act="add">Send for review</button>
+        <span class="warnmsg" role="alert" hidden></span>
+      </div>`;
+    card._file = file; card._exp = exp;
+    staged.appendChild(card);
+  }
+
+  staged.addEventListener('click', e => {
+    const b = e.target.closest('[data-act]'); if (!b) return;
+    const card = b.closest('.doc'), id = card.id;
+    if (b.dataset.act === 'remove') { card.remove(); return; }
+    const auth = card.querySelector(`input[name="${id}-auth"]:checked`).value;
+    const by = card.querySelector(`#${id}-by`).value.trim();
+    const msg = card.querySelector('.warnmsg');
+    const byEl = card.querySelector(`#${id}-by`);
+    if (auth === 'must' && !by) { msg.id = `${id}-err`; msg.textContent = 'Error: add who approved it, or choose Reference.'; msg.hidden = false; byEl.setAttribute('aria-invalid', 'true'); byEl.setAttribute('aria-describedby', msg.id); byEl.focus(); return; }
+    byEl.removeAttribute('aria-invalid');
+    const progs = [...card.querySelectorAll('.chips input:checked')].map(x => x.value);
+    const entry = {
+      name: card._file.name.replace(/\.[^.]+$/, ''),
+      kind: card.querySelector(`#${id}-kind`).value,
+      auth, added: 'Oct 10', status: 'processing',
+      programs: progs.length && !progs.includes('All programs') ? progs.join(', ') : '',
+      supersedes: card.querySelector(`#${id}-sup`).value,
+      note: by ? 'Approved by ' + by : ''
+    };
+    if (card._exp) lib.splice(lib.indexOf(card._exp), 1, entry); else lib.push(entry);
+    card.remove(); renderLib();
+    toast('Sent for review. Your operator will check it before the agent uses it.');
+    setTimeout(() => { entry.status = 'review'; renderLib(); }, 1800);
+  });
+
+  // ----- drop zone -----
+  const drop = document.getElementById('drop'), input = document.getElementById('file');
+  const MAX = 25 * 1048576;
+  function take(files) {
+    [...files].forEach(f => f.size > MAX ? toast(`${f.name} is over 25 MB. Split it or compress it, then try again.`) : stage(f));
+  }
+  input.addEventListener('change', () => { take(input.files); input.value = ''; });
+  ['dragenter', 'dragover'].forEach(t => drop.addEventListener(t, e => { e.preventDefault(); drop.classList.add('over'); }));
+  ['dragleave', 'drop'].forEach(t => drop.addEventListener(t, e => { e.preventDefault(); drop.classList.remove('over'); }));
+  drop.addEventListener('drop', e => take(e.dataTransfer.files));
+
+  const toast = m => window.wpToast(m);
+
+  renderLib();
+})();
+</script>
+
+</body>
+</html>
