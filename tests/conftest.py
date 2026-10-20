@@ -42,3 +42,13 @@ _PINNED_BLANK = (
 def _sqlite_by_default(monkeypatch):
     for name in _PINNED_BLANK:
         monkeypatch.setenv(name, "")
+
+
+@pytest.fixture(autouse=True)
+def _no_recorded_community_permissions():
+    """The community overlay is a process-wide cache (harvey/communities.py): start and end clean."""
+    from harvey import communities
+
+    communities.clear_overlay()
+    yield
+    communities.clear_overlay()

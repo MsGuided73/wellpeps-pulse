@@ -119,7 +119,7 @@ async function loadFeed() {
   let html = '<div class="table-card"><table><thead><tr>' +
     '<th>Collected</th><th>Platform</th><th>Mention</th><th>Triage</th><th>Status</th><th></th></tr></thead><tbody>';
   for (const m of data.items) {
-    const body = m.title ? m.title + ' — ' + (m.text || '') : (m.text || '');
+    const body = m.title ? m.title + ': ' + (m.text || '') : (m.text || '');
     html += '<tr class="clickable" data-action="open-drawer" data-id="' + escHtml(String(m.id)) + '">' +
       '<td class="muted nowrap">' + formatDate(m.collected_at) + '</td>' +
       '<td class="nowrap">' + platformHtml(m.platform) + '</td>' +

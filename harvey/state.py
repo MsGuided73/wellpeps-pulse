@@ -506,6 +506,47 @@ MIGRATIONS: list[str] = [
     ALTER TABLE triage ADD COLUMN opportunity_score INTEGER;
     ALTER TABLE triage ADD COLUMN protocol_json TEXT NOT NULL DEFAULT '{}';
     """,
+    # ── v9: review desk APIs: knowledge documents and community permissions ──
+    # knowledge_docs: reference documents uploaded in the dashboard (kind /
+    # authority / programs tell the drafter how to use them; status in_review
+    # until an admin approves; text is the extracted text, extraction says
+    # whether it is done / pending (no PDF reader installed) / empty).
+    # community_permissions: what a human recorded about a community's rules
+    # (brand_participation allowed|not_allowed|unknown, links_allowed
+    # true|false|unknown); harvey/communities.py overlays it on
+    # config/communities.yaml, and the recorded value wins.
+    """
+    CREATE TABLE IF NOT EXISTS knowledge_docs (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        filename TEXT NOT NULL,
+        kind TEXT NOT NULL DEFAULT 'other',
+        authority TEXT NOT NULL DEFAULT 'reference',
+        programs_json TEXT NOT NULL DEFAULT '[]',
+        approved_by TEXT NOT NULL DEFAULT '',
+        effective_date TEXT NOT NULL DEFAULT '',
+        supersedes_id INTEGER REFERENCES knowledge_docs(id),
+        note TEXT NOT NULL DEFAULT '',
+        status TEXT NOT NULL DEFAULT 'in_review',
+        text TEXT NOT NULL DEFAULT '',
+        extraction TEXT NOT NULL DEFAULT 'done',
+        size_bytes INTEGER NOT NULL DEFAULT 0,
+        uploaded_by TEXT NOT NULL DEFAULT '',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        decided_by TEXT NOT NULL DEFAULT '',
+        decided_at TIMESTAMP
+    );
+    CREATE INDEX IF NOT EXISTS idx_knowledge_docs_status ON knowledge_docs(status, id);
+
+    CREATE TABLE IF NOT EXISTS community_permissions (
+        community_id TEXT PRIMARY KEY,
+        brand_participation TEXT NOT NULL DEFAULT 'unknown',
+        links_allowed TEXT NOT NULL DEFAULT 'unknown',
+        moderator_contact TEXT NOT NULL DEFAULT '',
+        note TEXT NOT NULL DEFAULT '',
+        recorded_by TEXT NOT NULL DEFAULT '',
+        recorded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+    """,
 ]
 
 

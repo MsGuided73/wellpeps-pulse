@@ -4,17 +4,18 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Sign in · WellPeps Pulse</title>
-<link rel="icon" type="image/png" sizes="32x32" href="/static/brand/favicon-32.png">
-<link rel="apple-touch-icon" href="/static/brand/favicon-180.png">
+<link rel="icon" type="image/png" sizes="32x32" href="/static/brand/pulse-favicon-32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="/static/brand/pulse-favicon-16.png">
+<link rel="apple-touch-icon" href="/static/brand/pulse-icon.png">
 <link rel="stylesheet" href="/static/app.css">
 </head>
 <body class="login-page">
-<div class="login-wrap">
+<main class="login-wrap">
   <form class="login-card" id="login-form" autocomplete="on">
     <div class="login-brand">
-      <img class="brand-logo" src="/static/brand/wellpeps-logo.png" width="224" height="44" alt="WellPeps">
+      <img class="brand-logo" src="/static/brand/pulse-icon.png" width="64" height="64" alt="">
       <h1><span class="visually-hidden">WellPeps </span>Pulse</h1>
-      <p class="tagline">Listen first. Humans approve every reply.</p>
+      <p class="tagline muted">Listen first. People approve every reply.</p>
     </div>
     <div class="form-group">
       <label class="form-label" for="email">Email</label>
@@ -28,7 +29,8 @@
     <div class="test-result error hidden" id="login-error" role="alert"></div>
     <p class="login-note">Accounts are created by an admin (<code>pulse user add</code>). Sessions end after 12 idle hours.</p>
   </form>
-</div>
+</main>
+<footer class="site-foot"><img src="/static/brand/wellpeps-logo.png" width="143" height="28" alt="WellPeps"></footer>
 <script src="/static/login.js"></script>
 </body>
 </html>

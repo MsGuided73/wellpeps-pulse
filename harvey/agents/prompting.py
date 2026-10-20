@@ -28,6 +28,15 @@ def mention_block(mention: Mention, max_chars: int = MAX_MENTION_CHARS) -> str:
     return f"Title: {mention.title}\n\n{text}" if mention.title else text
 
 
+def untrusted_block(label: str, text: str, nonce: str) -> str:
+    """``text`` between nonce-tagged ``BEGIN_<label>`` / ``END_<label>`` markers.
+
+    Same convention as the mention block (``UNTRUSTED_MENTION``): the nonce
+    is fresh per prompt, so the text cannot forge a closing marker.
+    """
+    return f"BEGIN_{label} {nonce}\n{text}\nEND_{label} {nonce}"
+
+
 def fill(template: str, values: dict[str, str]) -> str:
     """Single-pass ``{{name}}`` substitution; unknown names are left as-is."""
     return _PLACEHOLDER.sub(lambda m: values.get(m.group(1), m.group(0)), template)

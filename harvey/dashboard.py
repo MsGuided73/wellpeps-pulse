@@ -21,6 +21,7 @@ what a human did by hand.
 """
 
 import asyncio
+import json
 import logging
 import os
 import secrets
@@ -35,10 +36,26 @@ from fastapi import Depends, FastAPI, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse, RedirectResponse, Response
 from pydantic import BaseModel, Field
 
-from harvey import analytics, auth, briefs, health, insights, knowledge, pulse_store, reply_analytics, review, sandbox, trends
+from harvey import (
+    analytics,
+    auth,
+    briefs,
+    communities,
+    health,
+    insights,
+    knowledge,
+    knowledge_docs,
+    pulse_store,
+    reply_analytics,
+    review,
+    rewrite,
+    sandbox,
+    spend,
+    trends,
+)
 from harvey.config import ConfigFileNotFoundError, PulseConfig, load_config, load_env
 from harvey.escalation import ack as ack_escalation
-from harvey.models import MentionStatus
+from harvey.models import AuditEvent, AuditEventType, MentionStatus
 from harvey.netutil import client_ip, networks_from_config
 from harvey.paths import DB_PATH, PROJECT_ROOT
 from harvey.sandbox import routes as sandbox_routes
@@ -108,6 +125,7 @@ async def get_state() -> StateManager:
     if state.location not in _initialized:
         await state.init_db()
         _initialized.add(state.location)
+    await communities.ensure_overlay(state)   # community rules recorded in the dashboard
     return state
 
 
@@ -139,6 +157,16 @@ def get_brief_brain(config: PulseConfig = Depends(get_config), state: StateManag
     from harvey.brain import Brain
 
     return Brain(state, models=config.usage.models)
+
+
+def get_rewrite_brain(config: PulseConfig = Depends(get_config), state: StateManager = Depends(get_state)):
+    """The brain the AI rewrite uses (overridden in tests). Agent ``rewriter`` is never haiku."""
+    from harvey.brain import Brain
+
+    models = dict(config.usage.models)
+    model = models.get(rewrite.AGENT) or rewrite.DEFAULT_MODEL
+    models[rewrite.AGENT] = rewrite.DEFAULT_MODEL if "haiku" in model.lower() else model
+    return Brain(state, models=models)
 
 
 def require(permission: str):
@@ -447,12 +475,16 @@ async def get_mentions(status: str | None = None, platform: str | None = None,
                        competitor: str | None = None, product: str | None = None,
                        drug: str | None = None, category: str | None = None,
                        urgency: str | None = None, q: str | None = None,
-                       limit: int = 100, offset: int = 0, sort: str = "newest", user: dict = VIEW):
-    """Mentions, newest first (or ``sort=oldest``), filtered and paginated (text is a preview)."""
+                       limit: int = 100, offset: int = 0, sort: str = "newest",
+                       include_draft: bool = False, user: dict = VIEW):
+    """Mentions, newest first (or ``sort=oldest``), filtered and paginated (text is a preview).
+
+    ``include_draft=true`` adds ``community``, ``draft`` and ``guide`` to each item (the review
+    queue; a few queries per row, so keep ``limit`` at about 100 or less)."""
     return await review.feed(
         await get_state(), status=status, platform=platform, competitor=competitor,
         product=product, drug=drug, category=category, urgency=urgency, q=q,
-        limit=limit, offset=offset, sort=sort,
+        limit=limit, offset=offset, sort=sort, include_draft=include_draft,
     )
 
 
@@ -505,6 +537,135 @@ async def mark_posted(mention_id: int, request: Request, body: PostedBody | None
                              body.posted_url if body else "",
                              allow_sandbox=sandbox.request_allowed(request))
     return {"success": True}
+
+
+# ── Review desk APIs: AI rewrite, knowledge documents, community permissions, spend ──
+
+REWRITE_BODY_MAX_BYTES = 16 * 1024
+PERMISSION_BODY_MAX_BYTES = 16 * 1024
+# A 10 MB file as base64 (4/3 of it) plus the JSON around it.
+DOCUMENT_BODY_MAX_BYTES = (knowledge_docs.MAX_BYTES * 4) // 3 + 64 * 1024
+
+
+class _BadBody(Exception):
+    def __init__(self, status: int, detail: str):
+        super().__init__(detail)
+        self.status = status
+        self.detail = detail
+
+
+async def _json_object(request: Request, max_bytes: int) -> dict:
+    """The request's JSON object, read with a size cap (413 beyond it, 400 if it is not an object)."""
+    declared = request.headers.get("content-length", "")
+    if declared.isdigit() and int(declared) > max_bytes:
+        raise _BadBody(413, "the request is too large")
+    chunks, size = [], 0
+    async for chunk in request.stream():
+        size += len(chunk)
+        if size > max_bytes:
+            raise _BadBody(413, "the request is too large")
+        chunks.append(chunk)
+    try:
+        body = json.loads(b"".join(chunks) or b"null")
+    except ValueError:
+        raise _BadBody(400, "the request body is not valid JSON")
+    if not isinstance(body, dict):
+        raise _BadBody(400, "expected a JSON object")
+    return body
+
+
+@app.exception_handler(_BadBody)
+async def _bad_body(request: Request, exc: _BadBody):
+    return JSONResponse({"detail": exc.detail}, status_code=exc.status)
+
+
+@app.exception_handler(knowledge_docs.DocError)
+async def _doc_error(request: Request, exc: knowledge_docs.DocError):
+    return JSONResponse({"detail": exc.detail}, status_code=exc.status)
+
+
+@app.exception_handler(communities.PermissionInvalid)
+async def _permission_invalid(request: Request, exc: communities.PermissionInvalid):
+    return JSONResponse({"detail": str(exc)}, status_code=400)
+
+
+@app.post("/api/mentions/{mention_id}/rewrite")
+async def rewrite_passage(mention_id: int, request: Request, user: dict = REVIEW,
+                          config: PulseConfig = Depends(get_config), brain=Depends(get_rewrite_brain)):
+    """Reword one passage of the mention's current draft with Claude (agent ``rewriter``).
+
+    Body ``{"passage", "instruction"}``; answers ``{"ok", "text", "tier", "hits"}`` where tier and
+    hits are the deterministic compliance filter's verdict on the whole draft with the passage
+    replaced, or ``{"ok": false, "error"}``. The stored draft does not change: save through /edit."""
+    try:
+        body = await _json_object(request, REWRITE_BODY_MAX_BYTES)
+        result = await rewrite.rewrite(await get_state(), brain, config, user["email"], mention_id,
+                                       body.get("passage"), body.get("instruction"))
+    except _BadBody as exc:
+        return JSONResponse({"ok": False, "error": exc.detail}, status_code=exc.status)
+    except rewrite.RewriteError as exc:
+        return JSONResponse({"ok": False, "error": exc.message}, status_code=exc.status)
+    return result.as_dict()
+
+
+@app.get("/api/knowledge/documents")
+async def list_knowledge_documents(user: dict = VIEW):
+    """Every reference document, newest first, without its text."""
+    return {"documents": await knowledge_docs.list_documents(await get_state())}
+
+
+@app.post("/api/knowledge/documents")
+async def upload_knowledge_document(request: Request, user: dict = REVIEW):
+    """Upload a reference document (JSON with ``content_base64``, at most 10 MB; .txt .md .docx .pdf).
+    It waits ``in_review`` until an admin approves it."""
+    body = await _json_object(request, DOCUMENT_BODY_MAX_BYTES)
+    return await knowledge_docs.create_document(await get_state(), body, user["email"])
+
+
+@app.get("/api/knowledge/documents/{doc_id}")
+async def get_knowledge_document(doc_id: int, user: dict = VIEW):
+    """One document with ``text_preview`` (the first 2000 characters of its text)."""
+    return await knowledge_docs.get_document(await get_state(), doc_id)
+
+
+@app.post("/api/knowledge/documents/{doc_id}/approve")
+async def approve_knowledge_document(doc_id: int, user: dict = ADMIN):
+    return await knowledge_docs.decide(await get_state(), doc_id, True, user["email"])
+
+
+@app.post("/api/knowledge/documents/{doc_id}/reject")
+async def reject_knowledge_document(doc_id: int, user: dict = ADMIN):
+    return await knowledge_docs.decide(await get_state(), doc_id, False, user["email"])
+
+
+@app.get("/api/communities")
+async def list_communities(user: dict = VIEW):
+    """The community rules registry: config/communities.yaml with admin-recorded permissions over it."""
+    return {"communities": await communities.listing(await get_state())}
+
+
+@app.post("/api/communities/{community_id:path}/permission")
+async def record_community_permission(community_id: str, request: Request, user: dict = ADMIN):
+    """Record what a human learned about a community's rules; the record wins over the YAML."""
+    body = await _json_object(request, PERMISSION_BODY_MAX_BYTES)
+    if "brand_participation" not in body or "links_allowed" not in body:
+        raise communities.PermissionInvalid("brand_participation and links_allowed are required")
+    state = await get_state()
+    recorded, previous = await communities.record_permission(
+        state, community_id, body["brand_participation"], body["links_allowed"],
+        body.get("moderator_contact"), body.get("note"), recorded_by=user["email"])
+    await state.append_audit(AuditEvent(
+        event=AuditEventType.COMMUNITY_PERMISSION, actor=user["email"],
+        verdict={"action": "recorded", "community_id": recorded.community_id,
+                 "from": previous.as_dict() if previous else None, "to": recorded.as_dict()}))
+    counts = await communities.mentions_by_community(state)
+    return communities.view(recorded.community_id, counts.get(recorded.community_id, 0))
+
+
+@app.get("/api/spend")
+async def get_spend(user: dict = VIEW):
+    """This month's Claude and Apify spend (UTC calendar month)."""
+    return await spend.month_spend(await get_state())
 
 
 # ── Local DEMO sandbox and DEMO config (never in containers) ──

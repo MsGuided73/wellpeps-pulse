@@ -171,10 +171,11 @@ def test_review_gates_on_the_examples(example):
             assert engagement.reply_mode(gated) == "draft"
         else:
             # Out of the protocol's scope (no competitor, not about WellPeps),
-            # so its educational_only decision is not applied and a general
-            # education question is not worth a reply (Example 10). Flagged
-            # for WellPeps: the protocol scores this one high.
-            assert engagement.gated(gated) == engagement.GATE_NOT_WORTH_IT
+            # so its educational_only decision is not applied; a general
+            # education question is still worth a reply (Example 10; Selection
+            # Module V1 §3 "General medication or treatment education: RESPOND",
+            # which resolved R-14's open question; R-20).
+            assert engagement.gated(gated) == ""
 
 
 @pytest.mark.parametrize("example", [e for e in EXAMPLES if e["reply"]],

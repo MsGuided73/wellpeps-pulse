@@ -69,6 +69,8 @@ def _brain() -> FakeBrain:
         "actually do in the body": [_answer(category="question", subtype="general_education",
                                             subject_type="category", subject="GLP-1", urgency="normal",
                                             sentiment=0.0, sentiment_label="neutral")],
+        "everywhere this year": [_answer(category="other", subject_type="category", subject="GLP-1",
+                                         urgency="low", sentiment=0.0, sentiment_label="neutral")],
         "usually cost": [_answer(category="question", subtype="pricing_question", subject_type="category",
                                  subject="telehealth weight loss", urgency="normal",
                                  sentiment=0.0, sentiment_label="neutral")],
@@ -226,14 +228,26 @@ def test_every_serious_signal_puts_a_non_wellpeps_report_on_the_watch(update):
 
 
 @pytest.mark.asyncio
-async def test_general_education_not_about_wellpeps_or_a_competitor_is_not_worth_it(state):
+async def test_general_education_not_about_wellpeps_or_a_competitor_is_worth_a_reply(state):
+    # R-14 left this open; the Selection Module V1 (2026-10-10) §3 answers it:
+    # "General medication or treatment education: RESPOND" (R-20). Posting is
+    # still held while the community's rules are unverified (harvey/review.py).
     (mid,), *_ = await _run(state, GENERAL_EDU)
 
     triage = await state.get_triage(mid)
     assert triage.reply_appropriate is True
-    assert engagement.gated(triage) == engagement.GATE_NOT_WORTH_IT
-    assert engagement.reply_mode(triage) == "no_reply"
+    assert engagement.gated(triage) == ""
+    assert engagement.reply_mode(triage) == "draft"
     assert (await state.get_mention(mid)).status is MentionStatus.TRIAGED
+    assert [m.id for m in await state.list_draftable_mentions()] == [mid]
+
+
+@pytest.mark.asyncio
+async def test_a_post_with_no_opening_is_not_worth_it(state):
+    (mid,), *_ = await _run(state, "Wow, GLP-1 meds are everywhere this year")
+
+    triage = await state.get_triage(mid)
+    assert engagement.gated(triage) == engagement.GATE_NOT_WORTH_IT
     assert await state.list_draftable_mentions() == []
 
 

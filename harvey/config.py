@@ -71,6 +71,7 @@ DEFAULT_MODELS = {
     "drafter.acknowledge": "haiku",
     "reviewer": "sonnet",
     "pulse": "sonnet",   # daily/weekly market brief from aggregates
+    "rewriter": "sonnet",  # review desk "AI rewrite" of a draft passage; never haiku (enforced below)
     # #pulse-query bot: haiku turns a question into a strict QuerySpec,
     # sonnet words the answer from the aggregate result only.
     "slackbot.plan": "haiku",
@@ -106,6 +107,14 @@ class UsageConfig(BaseModel):
             raise ValueError(
                 f"the adversarial reviewer must not run on haiku ({', '.join(weak_review)}); "
                 "use sonnet or stronger"
+            )
+        weak_rewriter = [
+            key for key, model in v.items()
+            if (key == "rewriter" or key.startswith("rewriter.")) and "haiku" in model.lower()
+        ]
+        if weak_rewriter:
+            raise ValueError(
+                f"the rewriter must not run on haiku ({', '.join(weak_rewriter)}); use sonnet or stronger"
             )
         return {key: model.strip() for key, model in v.items()}
 
@@ -282,6 +291,13 @@ class SlackQueryConfig(BaseModel):
     per_user_per_hour: int = Field(default=20, ge=1, le=1000)
 
 
+class RewriteConfig(BaseModel):
+    """The review desk's AI rewrite (POST /api/mentions/{id}/rewrite; harvey/rewrite.py)."""
+
+    # Rewrites per user per UTC day (attempts that reached the model count).
+    daily_cap_per_user: int = Field(default=60, ge=1, le=1000)
+
+
 REDDIT_SORTS = ("relevance", "new", "top", "hot", "comments")
 # Market words checked by the keyword gate on top of the keywords.yaml / competitors.yaml families.
 DEFAULT_REDDIT_EXTRA_TERMS = (
@@ -331,6 +347,7 @@ class PulseConfig(BaseModel):
     review: ReviewConfig = Field(default_factory=ReviewConfig)
     pulse: PulseBriefConfig = Field(default_factory=PulseBriefConfig)
     slack_query: SlackQueryConfig = Field(default_factory=SlackQueryConfig)
+    rewrite: RewriteConfig = Field(default_factory=RewriteConfig)
     collectors: CollectorsConfig = Field(default_factory=CollectorsConfig)
     retention_days: int = Field(default=180, ge=1)
 

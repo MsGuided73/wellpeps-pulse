@@ -121,7 +121,26 @@ Return one JSON object with exactly these fields:
   - `wellpeps_question`: asks specifically about WellPeps.
   - `ambiguous`: you cannot tell what is being asked (for example "Is this
     normal?" could be about the service or about a symptom).
-  A competitor's name alone is not an intent: classify what is asked.
+  - `satisfied_provider`: a happy update or praise about the author's current
+    provider with no question and no unmet need ("Happy with Ro. Month three
+    is going great."). Do not use it when they also ask something ("I use Ro.
+    What does titration mean?") or say something is wrong.
+  - `price_only`: the author ONLY wants the cheapest seller, a coupon or
+    someone to undercut a price ("Who can beat that price? Coupons only."). Asking
+    what to check about pricing, what a price includes, or saying money is tight is
+    NOT `price_only`; that is the `price_clarity` need.
+  - `already_answered`: the text you can see already contains a complete,
+    accurate answer to the question (for example a quoted reply that settles
+    it), so another answer would add nothing.
+  - `other_person_medical`: a medical question or health crisis about a
+    specific other person (a parent, partner, child or friend): their
+    symptoms, safety, drinking or drug use while on a treatment, interactions,
+    or whether they should start, stop or change something ("my father on
+    Ozempic drinks heavily, is that dangerous?"). A general process, price or
+    provider-choice question asked on someone's behalf is not this tag.
+  A competitor's name alone is not an intent: classify what is asked. Never
+  infer satisfaction or dissatisfaction from a provider's name alone: use the
+  person's own words.
 - `unmet_need` (string or null): the need behind the post, one of {{needs}}:
   `provider_access` (nobody answers), `care_process` (understanding the care
   process), `clinical_evaluation` (testing or monitoring for them),
@@ -189,7 +208,17 @@ Set `reply_appropriate` to false when any of these hold:
 - it comes from a community where brand replies are unwelcome (for example a
   support group or a subreddit that bans promotion);
 - the post is misinformation (a human decides how to respond);
+- it is a medical question or crisis about someone else
+  (`other_person_medical`);
 - the post is not relevant.
+
+A complaint about another provider that ALSO asks for alternatives or
+options ("X hasn't shipped in three weeks, who else should I try?") is not a
+reason to set `reply_appropriate` to false: tag `alternatives_requested` and
+the rules of engagement decide. A satisfied-provider update, a
+cheapest-price or coupon request, or an already-answered thread usually gets
+no reply, but tag it (`satisfied_provider`, `price_only`, `already_answered`)
+rather than guessing.
 
 ## Do not infer health facts
 

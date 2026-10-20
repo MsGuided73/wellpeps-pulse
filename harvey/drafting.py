@@ -426,6 +426,7 @@ async def draft_batch(
     ``only``: draft just the draftable mentions it accepts (the rest wait).
     """
     report = DraftReport()
+    await communities.ensure_overlay(state)   # community rules recorded in the dashboard
     mentions = [m for m in await state.list_draftable_mentions(limit=limit) if only is None or only(m)]
 
     async def one(mention: Mention) -> bool:

@@ -17,10 +17,20 @@ open FINALIZE item; the competitor / switching protocol's live decision must
 allow a public reply (not HOLD, DO NOT ENGAGE or MONITOR ONLY, recomputed
 with the current config); and an adverse-event or emergency reply needs a
 clinical approver (role clinical or admin; ``approve_clinical``).
+
+Selection and permission are recomputed too (Engagement Goals and
+Conversation Selection Module V1 §5; R-20): a reply in a community whose rules
+are unverified, that needs moderator permission not yet recorded, that
+prohibits brand participation, or that is a competitor's own community is
+held ("human posts / held until permission": drafting for review is allowed,
+approval is not); so is a medical question about someone else, and a thread
+that already has the maximum number of approved WellPeps replies. Activity
+targets (80/20, per-community volume) are warnings only.
 """
 
 import json
 import logging
+import re
 from dataclasses import dataclass
 from datetime import datetime, timezone
 
@@ -176,8 +186,11 @@ FEED_SORTS = {"newest": "DESC", "oldest": "ASC"}
 
 async def feed(state, *, status=None, platform=None, competitor=None, product=None, drug=None,
                category=None, urgency=None, q=None, limit: int = 100, offset: int = 0,
-               sort: str = "newest") -> dict:
-    """Paginated mentions (newest collected first by default), with triage tags and a text preview."""
+               sort: str = "newest", include_draft: bool = False) -> dict:
+    """Paginated mentions (newest collected first by default), with triage tags and a text preview.
+
+    ``include_draft``: each item also carries ``community``, ``draft`` and ``guide``
+    (what the review queue shows; see ``attach_review_fields``)."""
     if sort not in FEED_SORTS:
         raise ReviewError(400, f"unknown sort '{str(sort)[:20]}'; use newest or oldest")
     direction = FEED_SORTS[sort]
@@ -214,7 +227,60 @@ async def feed(state, *, status=None, platform=None, competitor=None, product=No
         row["text_truncated"] = bool(row["text_truncated"])
         row["owned_channel"] = bool(row["owned_channel"])
         row["relevant"] = None if row["relevant"] is None else bool(row["relevant"])
+    if include_draft:
+        await attach_review_fields(state, rows)
     return {"items": rows, "total": total, "limit": limit, "offset": offset}
+
+
+_HIT_LINE = re.compile(r"^(?P<rule>[^:\s]+):\s*(?P<reason>.*?)(?:\s\[[^\]]*\])?$", re.DOTALL)
+
+
+def hit_dict(line: str) -> dict:
+    """{"rule", "reason"} from a stored filter-hit line ("R12: reason [match]")."""
+    found = _HIT_LINE.match(line or "")
+    return {"rule": found.group("rule"), "reason": found.group("reason")} if found else {"rule": "", "reason": line}
+
+
+def community_view(url: str) -> dict:
+    """The community rules for a permalink, for the review queue: whether a brand reply is
+    allowed (True / False / None = not known yet) next to the raw rules."""
+    status = communities.status_for_url(url)
+    allows = (True if status.participation == "allowed" or (status.participation == "with_permission"
+                                                              and status.permission_obtained)
+              else False if status.participation == "prohibited" else None)
+    return {**status.as_dict(), "allows_brand_replies": allows}
+
+
+def _draft_view(draft: Draft) -> dict:
+    return {"id": draft.id, "version": draft.version, "text": draft.text, "claim_ids": list(draft.claim_ids),
+            "tier": draft.tier, "filter_ok": draft.filter_ok, "hits": [hit_dict(h) for h in draft.filter_hits],
+            "review_verdict": getattr(draft.review_verdict, "value", draft.review_verdict),
+            "review_reasons": list(draft.review_reasons), "model": draft.model,
+            "created_at": draft.created_at.isoformat() if draft.created_at else None}
+
+
+async def attach_review_fields(state, rows: list[dict]) -> None:
+    """Add ``community``, ``draft`` (latest version or None) and ``guide`` (the Smart Patient's
+    Guide chip, as in /api/mentions/{id} ``engagement.guide``) to feed rows, in place.
+    Costs a few queries per row: ask for at most ~100 rows."""
+    if not rows:
+        return
+    records = await engagement.recent_replies(state)
+    for row in rows:
+        row["community"] = community_view(row["url"])
+        draft = (await state.list_drafts(row["id"], limit=1) or [None])[0]
+        row["draft"] = _draft_view(draft) if draft is not None else None
+        row["guide"] = None
+        mention = await state.get_mention(row["id"])
+        triage = await state.get_triage(row["id"])
+        if mention is None or triage is None:
+            continue
+        try:
+            row["guide"] = engagement.guide_view(
+                engagement.situation_of(triage), engagement.context_from(mention, records), triage, mention,
+                draft.text if draft else "", draft.claim_ids if draft else ())
+        except Exception as exc:
+            logger.warning("guide chip unavailable for mention %s (%s)", row["id"], type(exc).__name__)
 
 
 def _claim_info(claim_ids) -> dict:
@@ -245,7 +311,8 @@ async def detail(state, mention_id: int, config, role: str | None = None) -> dic
     audit = await state.list_audit(mention_id)
     claim_ids = list(dict.fromkeys(cid for d in drafts for cid in d.claim_ids))
     blockers = approval_blockers(mention.status, drafts[0] if drafts else None,
-                                 mention.platform.value, config, mention=mention, triage=triage, role=role)
+                                 mention.platform.value, config, mention=mention, triage=triage, role=role,
+                                 records=await engagement.recent_replies(state))
     info = await engagement.engagement_info(state, mention, triage, drafts[0] if drafts else None)
     info["handoff"] = _handoff(escalations, triage)
     return {
@@ -258,6 +325,7 @@ async def detail(state, mention_id: int, config, role: str | None = None) -> dic
         "audit": [e.model_dump(mode="json") for e in audit],
         "claims": _claim_info(claim_ids),
         "tracked_link": tracked_link(drafts[0] if drafts else None),
+        "community": community_view(mention.url),
         "approval": {"allowed": not blockers, "blockers": blockers,
                      "clinical_required": engagement.requires_clinical_approval(triage)},
         "engagement": info,
@@ -329,11 +397,37 @@ def _protocol_blocker(mention, triage: Triage | None) -> str:
     return ""
 
 
+def _selection_blockers(mention, triage: Triage | None, records) -> list[str]:
+    """Selection and permission, recomputed before approval (Selection Module
+    V1 §5): the firm posting block (unknown rules, missing moderator
+    permission, prohibited participation, a competitor's own community), a
+    medical question about someone else, and duplicate participation in the
+    thread. Activity targets (80/20, per-community volume) are warnings and
+    never appear here (Derek Goldberg 2026-10-10)."""
+    if mention is None:
+        return []
+    blockers = []
+    hold = engagement.posting_hold(mention)
+    if hold:
+        blockers.append(f"posting held: {hold}")
+    if engagement.about_other_person(triage):
+        blockers.append("a medical question or crisis about someone else: no public reply; it is on the safety "
+                        "watch (or with the clinical owner when WellPeps is named)")
+    if records is not None:
+        dup = engagement.thread_blocker(mention, records)
+        if dup:
+            blockers.append(dup)
+    return blockers
+
+
 def approval_blockers(status: MentionStatus, draft: Draft | None, platform: str, config, *,
-                      mention=None, triage: Triage | None = None, role: str | None = None) -> list[str]:
+                      mention=None, triage: Triage | None = None, role: str | None = None,
+                      records=None) -> list[str]:
     """Human-readable reasons approval is refused; empty when it may proceed.
     ``role``: the approver's role (None = not known yet: the clinical gate is
-    reported separately as ``clinical_required``)."""
+    reported separately as ``clinical_required``). ``records``: WellPeps' reply
+    history (``engagement.recent_replies``) for the duplicate-participation
+    check; None skips it."""
     if status is not MentionStatus.IN_REVIEW:
         return [f"only a mention waiting in review can be approved (this one is {status.value})"]
     if draft is None or not draft.text.strip():
@@ -345,6 +439,7 @@ def approval_blockers(status: MentionStatus, draft: Draft | None, platform: str,
     protocol_block = _protocol_blocker(mention, triage)
     if protocol_block:
         blockers.append(protocol_block)
+    blockers += _selection_blockers(mention, triage, records)
     gate = compliance_filter(draft.text, platform, draft.claim_ids, require_publishable=False,
                              context=_community_context(mention))
     if gate.tier == "red":
@@ -455,7 +550,7 @@ async def approve(state, mention_id: int, actor: str, config, draft_id: int | No
     if not clinical and not auth.can(role, "review"):
         raise ReviewError(403, "your role does not allow this")
     blockers = approval_blockers(mention.status, draft, mention.platform.value, config, mention=mention,
-                                 triage=triage, role=role)
+                                 triage=triage, role=role, records=await engagement.recent_replies(state))
     if blockers:
         raise ReviewError(409, "approval refused: " + "; ".join(blockers))
     await _move(state, mention_id, MentionStatus.APPROVED)

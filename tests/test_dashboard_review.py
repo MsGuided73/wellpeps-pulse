@@ -34,6 +34,7 @@ from tests.dashboard_helpers import (
     setup_app,
     teardown_app,
 )
+from tests.community_helpers import allow_community
 
 
 def _utcnow():
@@ -310,6 +311,7 @@ def test_approve_blocked_by_pending_claims_lists_them(state, reviewer_client):
 def test_approve_allowed_with_pending_claims_when_config_says_so(tmp_path, monkeypatch):
     cfg = PulseConfig(review=ReviewConfig(require_publishable_claims=False))
     state, _ = setup_app(tmp_path, monkeypatch, config=cfg)
+    allow_community(monkeypatch)        # r/test's rules recorded: posting is not held (R-20)
     try:
         mid = run(add_review_item(state))
         client, csrf = client_for(REVIEWER)
@@ -323,6 +325,7 @@ def signed_claims(tmp_path, monkeypatch):
     directory = approved_claims_dir(tmp_path, CLEAN_IDS)
     monkeypatch.setenv("PULSE_CONFIG_DIR", str(directory))
     knowledge.reload()
+    allow_community(monkeypatch)        # r/test's rules recorded: posting is not held (R-20)
     yield
     monkeypatch.delenv("PULSE_CONFIG_DIR")
     knowledge.reload()

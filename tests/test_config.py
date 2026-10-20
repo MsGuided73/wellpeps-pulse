@@ -30,7 +30,7 @@ def test_defaults():
     assert config.usage.models == DEFAULT_MODELS == {
         "triager": "haiku", "safety": "haiku", "drafter": "sonnet", "drafter.acknowledge": "haiku",
         "reviewer": "sonnet",
-        "pulse": "sonnet", "slackbot.plan": "haiku", "slackbot.answer": "sonnet",
+        "pulse": "sonnet", "rewriter": "sonnet", "slackbot.plan": "haiku", "slackbot.answer": "sonnet",
     }
     assert config.escalation.sla_minutes == 15
     assert config.escalation.clinical_owner == ""

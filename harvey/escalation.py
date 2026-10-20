@@ -64,7 +64,13 @@ VIRAL_NEGATIVE = "viral_negative"
 SAFETY_WATCH = "safety_watch"
 SAFETY_WATCH_REVIEW_MINUTES = 24 * 60
 _SERIOUS_SUBTYPES = frozenset({"emergency", "self_harm"})
-_SERIOUS_MARKERS = ("override:", "safety_screen:self_harm", "safety_screen:minor")
+# A medical question or crisis about someone else ("my father on Ozempic drinks
+# heavily"): never a reply; reviewed on the safety watch, or by the clinical
+# owner when WellPeps is named (session safeguard 2026-10-20). The markers are
+# set by the safety screen and the triager (harvey/engagement.py OTHER_PERSON_MARKERS).
+OTHER_PERSON_INTENT = "other_person_medical"
+OTHER_PERSON_MARKERS = ("safety_screen:other_person", "safety:other_person")
+_SERIOUS_MARKERS = ("override:", "safety_screen:self_harm", "safety_screen:minor", *OTHER_PERSON_MARKERS)
 # Kinds whose mention leaves the reply queue (status ``escalated``). A
 # viral negative is paged but stays ``triaged`` so a reply can be drafted.
 SEVERE_KINDS = frozenset(_KIND_BY_CATEGORY.values())
@@ -103,6 +109,8 @@ def escalation_kind(triage: Triage) -> str | None:
     """
     if not triage.relevant:
         return None
+    if about_other_person(triage):
+        return "adverse_event" if triage.subject_type == "wellpeps" else SAFETY_WATCH
     # The competitor / switching protocol's safety and incident route
     # (harvey/protocol.py; [CP] §4 step 2, §5), also when the public decision
     # is HOLD / DO NOT ENGAGE ("safety observations may still be routed
@@ -128,6 +136,13 @@ def escalation_kind(triage: Triage) -> str | None:
     ):
         return VIRAL_NEGATIVE
     return None
+
+
+def about_other_person(triage: Triage) -> bool:
+    """A medical question or crisis about someone else (triage tag or screen marker)."""
+    reason = triage.urgency_reason or ""
+    return (OTHER_PERSON_INTENT in (triage.intents or [])
+            or any(marker in reason for marker in OTHER_PERSON_MARKERS))
 
 
 def is_serious(triage: Triage) -> bool:

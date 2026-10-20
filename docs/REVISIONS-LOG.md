@@ -12,6 +12,163 @@ summary for discussion.
 
 ---
 
+## 2026-10-20: Review desk APIs
+
+### R-21. Review desk APIs: AI rewrite, knowledge documents, community permissions, spend (Live)
+- **Before:** a reviewer could only edit a draft by hand; reference material
+  (voice notes, approved wording, program status) lived in `config/` files that
+  only an engineer could change; what a person learned about a community's
+  rules (may we reply, may we link) had to be typed into
+  `config/communities.yaml`; and nobody could see what the month's Claude and
+  Apify calls had cost.
+- **After:**
+  - **AI rewrite** (`POST /api/mentions/{id}/rewrite`, reviewers and up): pick a
+    passage of the draft and give a short instruction ("shorter", "warmer");
+    Claude (agent `rewriter`, sonnet, never haiku, set in `harvey.yaml`)
+    rewrites only that passage. Fixed rules go with every call: return only the
+    passage; keep the meaning; add no facts, numbers, prices, timelines,
+    outcomes, guarantees or medical advice; keep the WellPeps disclosure, links
+    and guide or chapter titles exactly; never name or criticize other
+    providers; never suggest DMs, calls or sharing order or health details;
+    never claim to be a customer, patient or clinician; friendly plain voice,
+    no emoji, hashtags or em dashes. Pulse then runs the deterministic
+    compliance filter on the whole draft with the new passage in place and
+    shows green, yellow or red with the rules hit; a rewrite that loses a link
+    or the disclosure is thrown away. The saved draft does not change: the
+    reviewer applies the text and saves it, and the normal save runs the filter
+    again. Each rewrite is written to the audit log (who, which post, the
+    instruction; never the text). Cap: 60 rewrites per person per day
+    (`rewrite.daily_cap_per_user`).
+  - **Knowledge documents** (Knowledge tab): upload .txt, .md, .docx or .pdf
+    (up to 10 MB) and say what it is (approved messaging, compliance rule,
+    voice and style, program status, guide, community rules, facts and FAQ,
+    training, other), how much weight it has (must follow, reference, example),
+    which programs it covers, who approved it and from when. A must-follow
+    document needs a named approver. Uploads wait "in review" until an admin
+    approves or rejects them; approving a replacement retires the document it
+    supersedes. Active must-follow and reference documents for the post's
+    program are shown to the drafter as guidance (at most 6,000 characters,
+    must-follow first, newest first), headed "facts and claims still only from
+    the approved claims list": a document can change tone and scope, never add
+    a claim. A PDF is read only if a PDF reader is installed on the server;
+    otherwise it is stored as "extraction pending" with no text.
+  - **Community permissions** (Communities tab): an admin records, per
+    community, whether brand replies are allowed, whether links are allowed, a
+    moderator contact and a note. The recorded value wins over
+    `config/communities.yaml` everywhere Pulse checks a community (triage,
+    drafting, the compliance filter, approval), and clears the "community rules
+    are unverified" hold. Each change goes to the audit log with the old and new
+    values.
+  - **Spend:** this month's Claude cost (in total and per agent) and Apify cost
+    (total and run count). Under a Claude subscription the Claude figure is the
+    API-equivalent the CLI reports, not a bill.
+  - The review queue list can now include each post's draft, compliance
+    result, community rules and guide chapter in one call.
+- **Why:** the new review desk design needs these to work live: rewrite buttons,
+  an upload screen for the people who own the wording, and the community and
+  cost views. Migration `db/postgres/0005_review_desk.sql` (schema version 9)
+  must be applied before this build starts on Postgres.
+- **Source:** owner request for the merged Review Desk design (2026-10-20); the
+  rewrite rules restate the Approved Messaging & Response Guide and
+  `docs/RULES-OF-ENGAGEMENT.md`.
+- **Needs from WellPeps:** a named owner for document approval (who may click
+  Approve) and for recording community permissions.
+
+## 2026-10-20: WellPeps guidance Oct 8-10 and session safeguards
+
+### R-20. WellPeps guidance Oct 8-10 + session safeguards (Live)
+- **Before:**
+  - Pulse drafted any relevant post that passed the three R-14 gates. It had
+    no rule for satisfied-provider updates, cheapest-price or coupon requests,
+    already-answered threads or questions with no approved answer, and it
+    skipped general treatment-education questions (R-14's open question).
+  - A direct WellPeps question whose key fact is not approved ("What does
+    WellPeps charge?") was drafted around the missing fact.
+  - A post in a competitor's own subreddit (r/IVIMHEALTH, r/Noom,
+    r/yourmdonline) could be drafted like any other.
+  - A medical question about someone else ("my father on Ozempic drinks
+    heavily") could get a boundary reply or slip through.
+  - In a community whose rules were never checked, a draft was only yellow and
+    could be approved.
+  - A competitor complaint that also asked for alternatives was dropped if
+    triage guessed "no reply".
+  - The filter caught DMs but not calls, texts, e-mails or "reach out
+    privately" (yellow), nor requests to post order or health details.
+  - R31 blocked the bare phrases "your order", "your prescription", "your
+    provider", even in neutral wording.
+  - The reviewer prompt still said the disclosure belongs in the first
+    sentence (R-16 moved it to the first two).
+- **After:**
+  - **Conversation selection** (`harvey/engagement.py`): the Selection Module's
+    SKIP reasons are review gates: `satisfied_provider`, `price_only`,
+    `already_answered` (new triage tags) and a knowledge gap (useful
+    contribution 0). A direct WellPeps question whose central fact is not
+    approved is HOLD (`gate:hold_unverified_fact`). General medication or
+    treatment education now counts as worth a reply. Every post gets a record
+    for the review desk: RESPOND / SKIP / HOLD / ROUTE, a reason code, public
+    permission, posting hold and priority. The Module's §6 cases are tests.
+  - **Competitor communities are listen-only:** a community named for a
+    competitor (the insights community index) is never drafted, and a draft
+    there can never be approved. Its mentions still feed competitor insights,
+    and safety still routes.
+  - **Someone else's health:** triage tag `other_person_medical` and a new
+    safety-screen flag `other_person`. No reply of any kind; the post goes on
+    the safety watch (the clinical owner if WellPeps is named).
+  - **Posting held until permission:** in a community whose rules are
+    unverified, that needs a moderator's permission not yet recorded, that
+    prohibits brand replies, or that belongs to a competitor, Pulse may still
+    draft for review but approval is refused ("human posts / held until
+    permission"). Recording the rules or permission (config or the dashboard
+    record, R-21) lifts it. Approval also rechecks duplicate participation in
+    the thread.
+  - **Warnings vs blocks:** the 80/20 share and a new per-community activity
+    target (3 approved replies in 7 days) are warnings on the review desk,
+    never blocks. Community restrictions, moderator instructions and platform
+    limits are firm blocks.
+  - **Alternatives requests are never discarded:** when the protocol answers
+    an explicit alternatives request, the post is drafted even if triage
+    guessed "no reply"; the triage prompt says so too.
+  - **Filter (red):** any call, text, e-mail or private-channel suggestion;
+    asking anyone to post an order number, account or health details; an
+    invented clinical team ("I'm on the WellPeps clinical team"); promising
+    ungated guide access ("no email required"). R31 narrowed to the core rule:
+    claiming access to records, stating an order or account status, or tying
+    the person to WellPeps ("your WellPeps order"); "contact your prescribing
+    provider" and "your order" alone are fine. All approved responses pass.
+  - **Length:** 40-90 words stays a target ("aim for"), never a filter rule;
+    the drafter, reviewer and rules list say so.
+  - Prompts updated: triage, safety screen, draft, reviewer (disclosure in the
+    first two sentences; new SELECTION and OTHER_PERSON checks), rules list.
+- **Why:** owner, 2026-10-20: Pulse must "function according to the
+  safeguards and knowledge base identified and relied upon" in the review
+  session.
+- **Sources:**
+  - WellPeps Engagement Goals and Conversation Selection Module V1 (Oct 10):
+    §1 operating test; §2 steps 1-7; §3 respond/skip table; §4 priority and
+    resource; §5 integration requirements; §6 evaluation cases.
+  - "Community Engagement - Why and When to Engage" (its source note).
+  - Agent Program Gameplan (Knowledge Base copy, Oct 8): §3.2 no confirming
+    patients; §6.1-6.2 clinical questions go to humans; §7.1 "mostly, stay out"
+    and no unsolicited DMs; §12 non-negotiables.
+  - Derek Goldberg's e-mail decisions (Oct 10): consider the guide every time;
+    activity targets are warnings, restrictions are firm blocks; safety,
+    privacy and clinical overrides first, then the protocol; a complaint
+    asking for alternatives is not discarded.
+  - Pulse's response to Derek's review (Oct 7): R31 narrowing, unknown-community
+    approval block.
+- **Rules of Engagement:** new section 4a, the community table, words to avoid,
+  retained safeguards (R31), superseded rules, a PENDING table and conflict
+  rows.
+- **Needs sign-off (PENDING, not built):**
+  - company voice "we" on owned channels and review sites;
+  - paraphrasing approved claims;
+  - Hair Restoration status;
+  - review-time statements;
+  - whether the "it asks for your email" sentence can be dropped when the
+    landing page explains it (Module §4).
+- **Watch:** the activity target (3 per 7 days) and the knowledge-gap skip are
+  Pulse proposals; check them against the first weeks of live data.
+
 ## 2026-10-19: Pain points & emerging ICPs
 
 ### R-19. Stricter competitor complaints, listed from one post (Live)
@@ -207,6 +364,9 @@ on posts that could never benefit WellPeps. Agreed changes:
   because a reply is unlikely to benefit WellPeps. The Competitor Protocol's
   Example 10 treats such a post as worth an educational answer. Decide
   whether general education should count as "worth it".
+  **Answered by R-20 (2026-10-20):** WellPeps' Selection Module V1 (Oct 10)
+  §3 says "General medication or treatment education: RESPOND"; Pulse now
+  drafts them (the Module's SKIP reasons still apply).
 
 ### R-10. Suspected seeded posts flagged (Proposed)
 - Several shopper posts appeared the same morning with similar wording and
@@ -265,11 +425,11 @@ on posts that could never benefit WellPeps. Agreed changes:
 
 ### R-1. Open items from Derek's review not yet built
 - Block approval of replies in communities with unverified rules
-  (drafting allowed, posting not).
+  (drafting allowed, posting not). **Built in R-20.**
 - Clinical-only approval of safety replies (admins only with a clinical role).
 - Escalation stages "action pending" and "resolved".
 - Narrow the privacy phrase rule to record access / patient-status
-  confirmation.
+  confirmation. **Built in R-20.**
 - Real-model evaluation set built from raw posts.
 - Record the Competitor Protocol's approval status, approvers and date.
 - Approved wording for official-account company voice.

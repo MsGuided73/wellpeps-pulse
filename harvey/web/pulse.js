@@ -32,7 +32,7 @@ function renderMd(text) {
 }
 
 function fmtNum(n, digits) {
-  if (n === null || n === undefined || isNaN(Number(n))) return '—';
+  if (n === null || n === undefined || isNaN(Number(n))) return 'n/a';
   return Number(n).toFixed(digits === undefined ? 0 : digits);
 }
 
@@ -291,7 +291,7 @@ async function copyPhrase(index) {
 
 function setPulseView(view) {
   pulseView = view;
-  document.querySelectorAll('#pulse .seg button').forEach(b => b.classList.toggle('active', b.dataset.view === view));
+  document.querySelectorAll('#briefs .seg button').forEach(b => b.classList.toggle('active', b.dataset.view === view));
   document.getElementById('pulse-brief').classList.toggle('hidden', view !== 'brief');
   document.getElementById('pulse-live').classList.toggle('hidden', view !== 'live');
   document.getElementById('pulse-bank').classList.toggle('hidden', view !== 'bank');

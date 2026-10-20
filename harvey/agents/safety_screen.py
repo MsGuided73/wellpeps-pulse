@@ -16,6 +16,10 @@ term. Results, via ``apply_screen``:
   reason ``safety_screen:<flag>``: the mention escalates and pages.
 - minor -> no reply, urgency at least high, reason ``safety_screen:minor``.
   There is no escalation kind for minors yet (docs/PLAN.md open questions).
+- other_person (a medical question or crisis about someone else, e.g. "my
+  father on Ozempic drinks heavily") -> no reply of any kind, urgency at least
+  high, reason ``safety_screen:other_person``: the safety watch (or the clinical
+  owner when WellPeps is named) reviews it (session safeguard 2026-10-20).
 - unparseable after one retry -> ``safety_screen:failed``: urgency at least
   high and no reply, but no page (a parse failure is not a signal).
 Every flag also forces ``relevant=True``, so an injected "irrelevant"
@@ -68,6 +72,7 @@ class ScreenAnswer(BaseModel):
     adverse_event: bool
     self_harm: bool
     minor: bool
+    other_person: bool = False
     evidence: str = ""
 
 
@@ -78,6 +83,7 @@ class ScreenResult:
     minor: bool = False
     evidence: str = ""
     failed: bool = False
+    other_person: bool = False
     model: str = ""
 
     def as_dict(self) -> dict:
@@ -151,8 +157,8 @@ def apply_screen(triage: Triage, result: ScreenResult) -> Triage:
             "reply_appropriate": False,
             "urgency_reason": _reason(flag, triage.urgency_reason),
         })
-    if result.minor or result.failed:
-        flag = "minor" if result.minor else "failed"
+    if result.minor or result.failed or result.other_person:
+        flag = "minor" if result.minor else "other_person" if result.other_person else "failed"
         # relevant=True: a (possibly injected) "irrelevant" answer must not
         # drop a mention the screen wants a human to see.
         return triage.model_copy(update={
@@ -210,6 +216,7 @@ class SafetyScreen:
                     adverse_event=answer.adverse_event,
                     self_harm=answer.self_harm,
                     minor=answer.minor,
+                    other_person=answer.other_person,
                     evidence=_verbatim(answer.evidence, mention.text),
                     model=model,
                 )

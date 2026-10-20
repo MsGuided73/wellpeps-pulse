@@ -147,10 +147,11 @@ def test_language_bank_search_filter_sort_and_pagination(pulse_app):
     assert client.get("/api/language-bank?limit=0").status_code == 422
 
 
-def test_pulse_tab_is_in_the_page_after_review_desk(pulse_app):
+def test_briefs_tab_is_in_the_page_after_review_desk(pulse_app):
     client, _ = client_for(VIEWER)
     html = client.get("/").text
-    assert html.index('data-tab="feed"') < html.index('data-tab="review"') < html.index('data-tab="pulse"')
+    assert html.index('data-tab="feed"') < html.index('data-tab="review"') < html.index('data-tab="briefs"')
+    assert 'id="briefs" class="section"' in html
     assert '<script src="/static/pulse.js"></script>' in html
     assert client.get("/static/pulse.js").status_code == 200
 

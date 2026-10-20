@@ -31,7 +31,7 @@ const LABELS = {
   },
   status: {
     new: 'New', triaged: 'Triaged', drafted: 'Drafted', in_review: 'Waiting on you',
-    approved: 'Approved — post by hand', rejected: 'Rejected', posted: 'Posted', dropped: 'Dropped',
+    approved: 'Approved, post by hand', rejected: 'Rejected', posted: 'Posted', dropped: 'Dropped',
     escalated: 'Escalated',
   },
   subject: {wellpeps: 'WellPeps', competitor: 'Competitor', product: 'Product', category: 'Category', drug: 'Drug', none: 'None'},

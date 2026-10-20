@@ -10,7 +10,7 @@
 // - Labels, times and platform icons come from labels.js (loaded first):
 //   raw enum codes are shown only in title attributes.
 
-let currentTab = 'feed';
+let currentTab = 'pulse';
 let ME = null;
 let CLAIMS = null;            // [{id, text, tier, publishable}]
 let reviewItems = [];         // mentions shown in the review desk list
@@ -18,6 +18,7 @@ let reviewIndex = 0;
 let reviewDetail = null;      // detail of the selected review item
 let editClaims = [];          // claim ids in the editor
 let DEMO = {sandbox: false, demo_config: false, brand_handle: ''};  // GET /api/demo
+let reviewWantId = null;      // #review?id=N opens that mention in the review desk
 
 // ── Utilities ──
 
@@ -148,7 +149,8 @@ async function request(path, opts) {
   if ((opts.method || 'GET') !== 'GET' && ME) headers['X-CSRF-Token'] = ME.csrf;
   try {
     const r = await fetch(path, {method: opts.method || 'GET', headers,
-      body: opts.body === undefined ? undefined : JSON.stringify(opts.body), credentials: 'same-origin'});
+      body: opts.body === undefined ? undefined : JSON.stringify(opts.body), credentials: 'same-origin',
+      signal: opts.signal});
     if (r.status === 401) { window.location.assign('/login'); return {ok: false, status: 401, data: null}; }
     let data = null;
     try { data = await r.json(); } catch { data = null; }
@@ -171,12 +173,15 @@ async function send(path, body) {
   return r;
 }
 
+// Toasts go in the #toasts live region (role=status); an error toast is also
+// role=alert so it is announced right away.
 function showToast(msg, type) {
   const t = document.createElement('div');
   t.className = 'toast ' + type;
+  if (type === 'error') t.setAttribute('role', 'alert');
   t.textContent = msg;
-  document.body.appendChild(t);
-  setTimeout(() => t.remove(), type === 'error' ? 6000 : 2600);
+  (document.getElementById('toasts') || document.body).appendChild(t);
+  setTimeout(() => t.remove(), type === 'error' ? 6000 : 3200);
 }
 
 function navCount(id, n, alert) {
@@ -195,14 +200,31 @@ function can(permission) {
   return !!ME && (perms[ME.role] || []).includes(permission);
 }
 
-// ── Tabs & routing ──
-// The URL hash names the tab (#feed, #urgent, #analytics…); Feed and
-// Analytics add their filters (#feed?q=…). Slack links use #escalation-<id>
-// (Urgent) and #pulse-brief-<id> (Pulse). No hash means Feed.
+// ── Views & routing ──
+// The URL hash names the view. Three main views: #pulse (the default), #hq
+// and #knowledge. The older tabs are reached from the More menu and from
+// Operator HQ: #feed, #review, #urgent, #analytics, #briefs, #usage, #users,
+// #controls. Feed and Analytics add their filters (#feed?q=…); the review
+// desk takes #review?id=N. Slack links use #escalation-<id> (Urgent) and
+// #pulse-brief-<id> (Briefs).
 
-const TABS = ['feed', 'urgent', 'review', 'analytics', 'pulse', 'usage', 'users', 'controls'];
+const MAIN_VIEWS = ['pulse', 'hq', 'knowledge'];
+const TABS = MAIN_VIEWS.concat(['feed', 'urgent', 'review', 'analytics', 'briefs', 'usage', 'users', 'controls']);
+const VIEW_TITLES = {
+  pulse: 'Pulse', hq: 'Operator HQ', knowledge: 'Knowledge', feed: 'Feed', urgent: 'Urgent',
+  review: 'Review desk', analytics: 'Analytics', briefs: 'Briefs and live trends', usage: 'Usage',
+  users: 'Users', controls: 'Controls and logs',
+};
 const TAB_HASH = {};          // tab -> () => hash with its filters (feed.js, analytics.js)
 const TAB_ROUTE = {};         // tab -> (query) => void, called before the tab loads
+const TAB_LOAD = {};          // tab -> () => void, set by home.js / hq.js / knowledge.js
+const PAGE_ANCHORS = {approvals: 'pulse', 'watch-panel': 'pulse', insights: 'hq', communities: 'hq', guides: 'knowledge'};
+let firstRoute = true;
+
+TAB_ROUTE.review = (query) => {
+  const id = Number(new URLSearchParams(query || '').get('id'));
+  reviewWantId = id > 0 ? id : null;
+};
 
 function tabHash(id) {
   return TAB_HASH[id] ? TAB_HASH[id]() : '#' + id;
@@ -210,47 +232,86 @@ function tabHash(id) {
 
 function routeFromHash(hash) {
   if (/^#escalation-\d+$/.test(hash)) return {tab: 'urgent', keep: true};
-  if (/^#pulse-brief-\d+$/.test(hash)) return {tab: 'pulse', keep: true};
+  if (/^#pulse-brief-\d+$/.test(hash)) return {tab: 'briefs', keep: true};
+  const anchor = PAGE_ANCHORS[hash.slice(1)];
+  if (anchor) return {tab: anchor, keep: true};
   const m = hash.match(/^#([a-z]+)(?:\?(.*))?$/);
   if (m && TABS.includes(m[1])) return {tab: m[1], query: m[2] || '', keep: true};
-  return {tab: 'feed', query: '', keep: false};
+  return {tab: 'pulse', query: '', keep: false};
 }
 
 function route() {
   const r = routeFromHash(window.location.hash);
-  const tab = r.tab === 'users' && !can('admin') ? 'feed' : r.tab;
+  const tab = r.tab === 'users' && !can('admin') ? 'pulse' : r.tab;
   if (TAB_ROUTE[tab] && r.query !== undefined) TAB_ROUTE[tab](r.query);
   showTab(tab, {keepHash: r.keep && tab === r.tab, replace: true});
 }
 
+function setNavState(id) {
+  document.querySelectorAll('.switch a[data-nav]').forEach(a => {
+    if (a.dataset.nav === id) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current');
+  });
+  const more = document.getElementById('more-btn');
+  if (more) more.classList.toggle('on-tool', !MAIN_VIEWS.includes(id));
+  document.querySelectorAll('#more-menu a[data-tab]').forEach(a => {
+    if (a.dataset.tab === id) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current');
+  });
+}
+
+// Show one view. Moves focus to the view's h1 (not on the first load, so the
+// skip link stays the first stop) and sets the document title.
 function showTab(id, opts) {
   currentTab = id;
   document.querySelectorAll('.section').forEach(s => s.classList.toggle('active', s.id === id));
-  document.querySelectorAll('nav button').forEach(b => {
-    b.classList.toggle('active', b.dataset.tab === id);
-    if (b.dataset.tab === id) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current');
-  });
+  setNavState(id);
+  closeMoreMenu();
+  document.title = VIEW_TITLES[id] + ' · WellPeps Pulse';
   if (!(opts && opts.keepHash)) {
     const hash = tabHash(id);
     if (window.location.hash !== hash) history[opts && opts.replace ? 'replaceState' : 'pushState'](null, '', hash);
   }
   if (typeof Charts !== 'undefined') Charts.hideTip();
+  const heading = document.querySelector('#' + id + ' h1');
+  if (!firstRoute && heading) { window.scrollTo(0, 0); heading.focus({preventScroll: true}); }
+  firstRoute = false;
   loadCurrentTab();
+  const anchor = window.location.hash.slice(1);
+  if (PAGE_ANCHORS[anchor] === id) {
+    setTimeout(() => { const el = document.getElementById(anchor); if (el) el.scrollIntoView(); }, 80);
+  }
 }
 
 window.addEventListener('hashchange', () => { if (ME) route(); });
 
 function loadCurrentTab() {
+  if (TAB_LOAD[currentTab]) { TAB_LOAD[currentTab](); return; }
   switch (currentTab) {
     case 'urgent': loadUrgent(); break;
     case 'review': loadReview(); break;
     case 'analytics': loadAnalytics(); break;
-    case 'pulse': loadPulse(); break;
+    case 'briefs': loadPulse(); break;
     case 'feed': loadFeed(); break;
     case 'usage': loadUsage(); break;
     case 'users': loadUsers(); break;
     case 'controls': loadHarveyStatus(); loadLogs(); break;
   }
+}
+
+// ── More menu ──
+
+function closeMoreMenu() {
+  const menu = document.getElementById('more-menu');
+  if (!menu || menu.classList.contains('hidden')) return;
+  menu.classList.add('hidden');
+  document.getElementById('more-btn').setAttribute('aria-expanded', 'false');
+}
+
+function toggleMoreMenu() {
+  const menu = document.getElementById('more-menu');
+  const open = menu.classList.contains('hidden');
+  menu.classList.toggle('hidden', !open);
+  document.getElementById('more-btn').setAttribute('aria-expanded', String(open));
+  if (open) menu.querySelector('a:not(.hidden)').focus();
 }
 
 // ── Urgent ──
@@ -280,6 +341,7 @@ async function pollUrgent() {
   if (!data) return null;
   const breached = data.items.filter(i => i.breached).length;
   navCount('nav-urgent', data.items.length, breached > 0);
+  navCount('nav-urgent-item', data.items.length, breached > 0);
   renderUrgentBanner(data.items.length, breached);
   return data;
 }
@@ -289,7 +351,7 @@ const UNASSIGNED_HINT = 'Set escalation.owners in harvey.yaml';
 function ownerHtml(owner) {
   const o = String(owner || '').trim();
   if (!o || /^UNASSIGNED/i.test(o)) {
-    return '<span class="badge t-waiting owner-missing" title="' + escHtml(UNASSIGNED_HINT) + '">Unassigned</span>';
+    return '<span class="badge t-warn owner-missing" title="' + escHtml(UNASSIGNED_HINT) + '">Unassigned</span>';
   }
   return '<span class="owner">Owner <b>' + escHtml(o) + '</b></span>';
 }
@@ -299,7 +361,7 @@ function pagedHtml(e) {
     return '<span class="badge t-waiting" title="Serious health report not involving WellPeps: listed for a daily look, never paged">Safety watch (not paged)</span>';
   }
   const at = parseTs(e.notified_at);
-  if (!e.notified || !at) return '<span class="badge t-waiting" title="Slack page not sent yet; the sweep retries">Not paged</span>';
+  if (!e.notified || !at) return '<span class="badge t-warn" title="Slack page not sent yet; the sweep retries">Not paged</span>';
   const sameDay = at.toDateString() === new Date().toDateString();
   return '<span class="paged" title="' + escHtml(absTime(e.notified_at)) + '">Paged ' +
     escHtml(sameDay ? clockTime(at) : relTime(e.notified_at)) + '</span>';
@@ -312,7 +374,7 @@ function urgentCard(e) {
     : 'Your role cannot acknowledge escalations';
   const posted = e.posted_at || e.collected_at;
   const author = authorText(e.platform, e.author_handle);
-  return '<article class="ucard ' + (e.breached ? 'bad' : 'warn') + '" id="escalation-' + id + '">' +
+  return '<article class="ucard' + (e.breached ? ' bad' : '') + '" id="escalation-' + id + '">' +
     '<div class="ucard-top">' + platformHtml(e.platform) +
       '<span class="ucard-id">#' + id + '</span>' +
       '<span class="ucard-sla"><span class="countdown' + (e.breached ? ' late' : '') + '" data-due="' +
@@ -368,7 +430,8 @@ async function loadReview(keepSelection) {
     api('/api/mentions?status=approved&limit=200'),
   ]);
   if (!waiting || !approved) { listEl.innerHTML = offlineState(); return; }
-  const selectedId = keepSelection && reviewItems[reviewIndex] ? reviewItems[reviewIndex].id : null;
+  const selectedId = reviewWantId || (keepSelection && reviewItems[reviewIndex] ? reviewItems[reviewIndex].id : null);
+  reviewWantId = null;
   // Waiting items: safety and incidents first, then unresolved gates, then the
   // rest (Competitor/Switching Protocol §9), oldest first within each.
   reviewItems = waiting.items.slice().reverse().sort((a, b) => queueRank(a) - queueRank(b))
@@ -385,7 +448,7 @@ async function loadReview(keepSelection) {
   let html = '';
   let group = '';
   reviewItems.forEach((m, i) => {
-    const g = m.status === 'approved' ? 'Approved — post by hand' : 'Waiting on you';
+    const g = m.status === 'approved' ? 'Approved, post by hand' : 'Waiting on you';
     if (g !== group) { html += '<div class="desk-group">' + escHtml(g) + '</div>'; group = g; }
     html += '<div class="desk-item' + (i === reviewIndex ? ' active' : '') + '" data-action="review-select" data-index="' + i + '">' +
       '<div class="to">' + platformIcon(m.platform) + '<span>' + escHtml(label('platform', m.platform)) +
@@ -427,7 +490,7 @@ async function selectReview(index) {
 function claimChip(cid, removable) {
   const info = (reviewDetail && reviewDetail.claims[cid]) || (CLAIMS || []).find(c => c.id === cid) || {};
   const cls = info.publishable ? 'ok' : 'pending';
-  const hover = (info.text || 'unknown claim') + (info.publishable ? '' : ' — PENDING sign-off, not publishable');
+  const hover = (info.text || 'unknown claim') + (info.publishable ? '' : ' (pending sign-off, not publishable)');
   return '<span class="claim-chip ' + cls + '" title="' + escHtml(hover) + '">' + escHtml(cid) +
     (removable ? '<button type="button" data-action="claim-remove" data-claim="' + escHtml(cid) + '" aria-label="Remove claim">×</button>' : '') +
     '</span>';
@@ -438,7 +501,7 @@ function renderClaims() {
   if (!el) return;
   const editable = can('review') && reviewDetail.mention.status === 'in_review';
   el.innerHTML = editClaims.length ? editClaims.map(c => claimChip(c, editable)).join(' ')
-    : '<span class="muted">No claim IDs — approval needs at least one.</span>';
+    : '<span class="muted">No claim IDs. Approval needs at least one.</span>';
 }
 
 // Urgency reason codes read as words; keyword regexes never reach the screen
@@ -516,7 +579,7 @@ function renderReviewPane() {
   const reviewer = can('review');
   const blockers = (d.approval && d.approval.blockers) || [];
   const claimOptions = (CLAIMS || []).map(c => '<option value="' + escHtml(c.id) + '">' + escHtml(c.id) +
-    (c.publishable ? '' : ' (pending)') + ' — ' + escHtml(truncate(c.text, 70)) + '</option>').join('');
+    (c.publishable ? '' : ' (pending)') + ': ' + escHtml(truncate(c.text, 70)) + '</option>').join('');
   let html = mentionHead(m) +
     '<div class="subject">' + escHtml(m.title || truncate(m.text, 90)) + '</div>' + detailWhy(d) +
     '<div class="body">' + escHtml(m.text) + '</div>' +
@@ -593,7 +656,7 @@ function engagementHtml(d) {
   const sit = e.situation || {};
   const chips = [];
   chips.push(tag('Situation', sit.label));
-  if (sit.template) chips.push(tag('Template', sit.template + (sit.template_name ? ' — ' + sit.template_name : '')));
+  if (sit.template) chips.push(tag('Template', sit.template + (sit.template_name ? ': ' + sit.template_name : '')));
   const g = e.guide;
   if (g && (g.mode === 'link' || g.mode === 'name') && g.title) {
     chips.push(tag('Guide', g.title + ' → ' + (g.chapter || '') + (g.mode === 'name' ? ' (named, no link)' : '')));
@@ -681,7 +744,7 @@ async function saveEdit() {
   const text = document.getElementById('editor').value;
   const r = await send('/api/mentions/' + currentMentionId() + '/edit', {text, claim_ids: editClaims});
   if (r.ok) {
-    showToast('Saved as v' + r.data.version + ' — filter ' + r.data.tier + ', reviewer ' + r.data.verdict + '.', 'success');
+    showToast('Saved as v' + r.data.version + '. Filter ' + r.data.tier + ', reviewer ' + r.data.verdict + '.', 'success');
     loadReview(true);
   }
 }
@@ -924,6 +987,7 @@ async function loadUsage() {
 
 const ACTIONS = {
   'refresh': () => loadCurrentTab(),
+  'more-menu': () => toggleMoreMenu(),
   'logout': async () => { await request('/api/logout', {method: 'POST', body: {}}); window.location.assign('/login'); },
   'ack': el => ackEscalation(el.dataset.id),
   'view-details': el => openDrawer(el.dataset.id),
@@ -947,8 +1011,7 @@ const ACTIONS = {
 };
 
 document.addEventListener('click', (event) => {
-  const tabBtn = event.target.closest('nav button[data-tab]');
-  if (tabBtn) { showTab(tabBtn.dataset.tab); return; }
+  if (!event.target.closest('.more-wrap')) closeMoreMenu();
   if (event.target.closest('a[href]')) return;  // let links (Open post ↗) work inside clickable rows
   const el = event.target.closest('[data-action]');
   if (!el || el.disabled) return;
@@ -963,7 +1026,13 @@ document.getElementById('user-form').addEventListener('submit', (event) => {
 
 document.addEventListener('keydown', (event) => {
   if (document.querySelector('dialog[open]')) return;  // dialogs handle their own keys (password.js)
-  if (event.key === 'Escape') { closeDrawer(); return; }
+  if (event.key === 'Escape') {
+    const menuOpen = !document.getElementById('more-menu').classList.contains('hidden');
+    closeMoreMenu();
+    if (menuOpen) document.getElementById('more-btn').focus();
+    closeDrawer();
+    return;
+  }
   const typing = event.target.closest('input, textarea, select, [contenteditable]');
   if (typing || event.ctrlKey || event.metaKey || event.altKey || currentTab !== 'review') return;
   if (event.key === 'j') { event.preventDefault(); selectReview(reviewIndex + 1); }
@@ -980,8 +1049,10 @@ async function init() {
   document.getElementById('user-chip').innerHTML = '<span>' + escHtml(ME.name || ME.email) + '</span>' +
     '<span class="role" title="' + escHtml(ME.role) + '">' + escHtml(label('role', ME.role)) + '</span>' +
     '<span class="caret" aria-hidden="true">&#9662;</span>';
+  document.getElementById('user-chip').setAttribute('aria-label', 'Account: ' + (ME.name || ME.email));
   if (ME.must_change_password) { enterForcedChange(); return; }  // nothing else loads until it's done
   document.getElementById('nav-users').classList.toggle('hidden', !can('admin'));
+  document.getElementById('hq-users-link').classList.toggle('hidden', !can('admin'));
   await loadDemoFlags();
   route();
   if (currentTab !== 'urgent') pollUrgent();  // the nav badge and the Feed banner
@@ -990,6 +1061,7 @@ async function init() {
   setInterval(pollUrgent, 30000);
   setInterval(tickCountdowns, 1000);
   setInterval(loadHarveyStatus, 8000);
+  setInterval(() => { if (!document.hidden) loadReviewCount(); }, 60000);
   setInterval(() => {
     if (document.hidden) return;
     if (currentTab === 'urgent') loadUrgent();

@@ -36,6 +36,10 @@ community allows a link or promotion at all. With no link allowed, claim
 links are not shown to the model. Influencer-only wording and guide
 templates with an unfilled [slot] are never offered.
 
+Reference documents (harvey/knowledge_docs.py): approved must_follow / reference documents for the
+mention's program are appended to the user message as a delimited guidance block (at most 6000
+characters). They shape tone and scope only; facts and claims still come from the claims list.
+
 The drafter never decides whether a reply is safe. The compliance filter,
 the adversarial reviewer, and a human do that downstream.
 """
@@ -46,7 +50,7 @@ from dataclasses import dataclass, field, replace
 from pydantic import BaseModel, ConfigDict, ValidationError
 
 from harvey import knowledge as knowledge_module
-from harvey import guides, links
+from harvey import guides, knowledge_docs, links
 from harvey.agents import prompting
 from harvey.agents.acknowledger import AGENT as ACK_AGENT
 from harvey.agents.acknowledger import TASK as ACK_TASK
@@ -440,6 +444,19 @@ class Drafter:
             return "", ["acknowledgements disabled"]
         return await self._acknowledger.acknowledge(mention, situation_label)
 
+    async def _reference_block(self, mention: Mention, triage: Triage) -> str:
+        """The active reference documents for this mention's program (harvey/knowledge_docs.py),
+        read through the brain's state; "" when there is none or they can't be read."""
+        state = getattr(self.brain, "state", None)
+        if state is None:
+            return ""
+        try:
+            return await knowledge_docs.reference_block(
+                state, programs_for(triage.product, triage.drug, _post_text(mention)))
+        except Exception as exc:
+            logger.warning(f"reference documents unavailable for mention {mention.id}: {type(exc).__name__}")
+            return ""
+
     async def _ask(self, prompt: str) -> tuple[DraftAnswer | None, str]:
         try:
             raw = await self.brain.think_json(prompt, agent=AGENT, task=TASK)
@@ -479,6 +496,9 @@ class Drafter:
         offered = [c.id for c in claims]
         model = _model_name(self.brain, AGENT, TASK)
         prompt = build_prompt(mention, triage, claims, guidance=guidance)
+        references = await self._reference_block(mention, triage)
+        if references:
+            prompt += "\n\n" + references
         if feedback:
             prompt += _feedback_block(feedback)
         attempts = self.max_attempts if max_calls is None else max(1, min(int(max_calls), self.max_attempts))

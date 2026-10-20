@@ -12,10 +12,10 @@ function rpDays(days) {
 
 function rpTable(caption, head, rows) {
   if (!rows.length) return '';
-  return '<table><caption class="visually-hidden">' + escHtml(caption) + '</caption><thead><tr>' +
+  return '<div class="table-card"><table><caption class="visually-hidden">' + escHtml(caption) + '</caption><thead><tr>' +
     head.map((h, i) => '<th' + (i ? ' class="num"' : '') + '>' + escHtml(h) + '</th>').join('') + '</tr></thead><tbody>' +
     rows.map(r => '<tr>' + r.map((c, i) => '<td' + (i ? ' class="num"' : '') + '>' + c + '</td>').join('') + '</tr>').join('') +
-    '</tbody></table>';
+    '</tbody></table></div>';
 }
 
 function rpRender(d) {

@@ -18,6 +18,7 @@ from tests.dashboard_helpers import (
     setup_app,
     teardown_app,
 )
+from tests.community_helpers import allow_community
 
 
 @pytest.fixture
@@ -43,7 +44,8 @@ def _adverse(state):
                            text, ["CLM-AMG-04-WORK-WITH", "CLM-AMG-10-REACTION"]))
 
 
-def test_adverse_event_reply_needs_a_clinical_approver(env):
+def test_adverse_event_reply_needs_a_clinical_approver(env, monkeypatch):
+    allow_community(monkeypatch)        # r/test's rules recorded: posting is not held (R-20)
     mid = _adverse(env)
     with pytest.raises(review.ReviewError) as err:
         run(review.approve(env, mid, "reviewer@x", PulseConfig(), role="reviewer"))
@@ -64,7 +66,8 @@ def test_clinical_user_cannot_approve_a_routine_reply(env):
     assert err.value.status == 403
 
 
-def test_dashboard_routes_the_clinical_gate_by_role(env):
+def test_dashboard_routes_the_clinical_gate_by_role(env, monkeypatch):
+    allow_community(monkeypatch)        # r/test's rules recorded: posting is not held (R-20)
     mid = _adverse(env)
     reviewer, csrf = client_for(REVIEWER)
     resp = post(reviewer, csrf, f"/api/mentions/{mid}/approve")

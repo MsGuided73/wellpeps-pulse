@@ -166,7 +166,10 @@ def test_mark_posted_accepts_a_sandbox_link_in_demo_mode(app_state, tmp_path, de
     assert posted.event is AuditEventType.POSTED and posted.verdict["posted_url"] == link
 
 
-def test_mark_posted_still_accepts_real_links_when_demo_is_off(app_state, demo_cfg):
+def test_mark_posted_still_accepts_real_links_when_demo_is_off(app_state, demo_cfg, monkeypatch):
+    from tests.community_helpers import allow_community
+
+    allow_community(monkeypatch)        # r/test's rules recorded: posting is not held (R-20)
     mid = run(add_review_item(app_state, "real1"))
     client, csrf = _login()
     _approve(client, csrf, mid)

@@ -227,7 +227,25 @@ def apply_safety_net(triage: Triage, text: str) -> Triage:
         })
     if merged.category in SEVERE_CATEGORIES or not merged.relevant:
         merged = merged.model_copy(update={"reply_appropriate": False})
-    return merged
+    return _other_person(merged)
+
+
+OTHER_PERSON_MARKER = "safety:other_person"
+
+
+def _other_person(triage: Triage) -> Triage:
+    """A medical question or crisis about someone else (triage's
+    ``other_person_medical`` tag): never a reply, on the safety watch (session
+    safeguard 2026-10-20). The marker goes after the existing reason so the
+    page's reason code is unchanged; it is what the draftable SQL reads."""
+    if not triage.relevant or "other_person_medical" not in (triage.intents or []):
+        return triage
+    reason = (triage.urgency_reason or "").strip()
+    if OTHER_PERSON_MARKER not in reason:
+        suffix = f"; {OTHER_PERSON_MARKER}"
+        reason = f"{reason[:300 - len(suffix)]}{suffix}" if reason else OTHER_PERSON_MARKER
+    urgency = triage.urgency if triage.urgency in (Urgency.URGENT, Urgency.HIGH) else Urgency.HIGH
+    return triage.model_copy(update={"reply_appropriate": False, "urgency_reason": reason, "urgency": urgency})
 
 
 # --- Agent -----------------------------------------------------------------------
@@ -445,7 +463,7 @@ async def _triage_one(state, triager, mention, report: "TriageReport", escalate,
         # Review gates (not ours / not worth it): after the protocol, which
         # decides the situation; recorded so drafting and the heartbeat agree.
         from harvey import engagement  # late: engagement imports compliance -> knowledge
-        triage = engagement.with_review_gate(triage)
+        triage = engagement.with_review_gate(triage, mention)
         status, escalation = await _record(state, mention, triage, escalate, screened)
     except Exception as exc:
         report.errors += 1
@@ -493,6 +511,7 @@ async def triage_batch(
     threads side by side, one mention per thread at a time (harvey/batching.py).
     """
     report = TriageReport()
+    await communities.ensure_overlay(state)   # community rules recorded in the dashboard
     pending = await state.list_mentions(status=MentionStatus.NEW, limit=limit, oldest_first=True)
 
     async def one(mention) -> bool:

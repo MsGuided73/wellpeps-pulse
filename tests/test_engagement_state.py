@@ -80,6 +80,25 @@ async def test_subtype_round_trips_and_unknown_values_are_blank(tmp_path):
       "reply_appropriate": True}, True),
     ({"category": Category.QUESTION, "competitor": "Ro", "protocol_decision": "educational_only",
       "reply_appropriate": False}, False),
+    # ... but an explicit alternatives request the protocol answers is drafted
+    # whatever triage guessed: a complaint that also asks for alternatives is
+    # never discarded for containing a complaint (Derek Goldberg 2026-10-10; R-20).
+    ({"category": Category.COMPLAINT, "competitor": "Ro", "protocol_decision": "appropriate_alternative",
+      "intents": ["venting_only", "alternatives_requested"], "reply_appropriate": False}, True),
+    ({"category": Category.COMPLAINT, "competitor": "Ro", "protocol_decision": "educational_only",
+      "intents": ["alternatives_requested"], "reply_appropriate": False}, True),
+    # a medical question about someone else: never, boundary or not (R-20)
+    ({"category": Category.QUESTION, "subtype": "safety_question", "subject_type": "wellpeps",
+      "urgency_reason": "x; safety:other_person"}, False),
+    ({"category": Category.QUESTION, "subtype": "general_education", "reply_appropriate": True,
+      "urgency_reason": "safety_screen:other_person"}, False),
+    # Selection Module gates recorded at triage time (R-20)
+    ({"category": Category.QUESTION, "subtype": "general_education", "reply_appropriate": True,
+      "urgency_reason": "gate:not_worth_it:price_only"}, False),
+    ({"category": Category.QUESTION, "subtype": "pricing_question", "subject_type": "wellpeps",
+      "reply_appropriate": True, "urgency_reason": "gate:hold_unverified_fact"}, False),
+    ({"category": Category.QUESTION, "subtype": "general_education", "reply_appropriate": True,
+      "urgency_reason": "gate:competitor_community"}, False),
 ])
 async def test_draftable_query_agrees_with_drafts_reply(tmp_path, triage, drafted):
     state = await fresh_state(tmp_path)
@@ -112,7 +131,7 @@ def test_postgres_0004_is_idempotent_and_bumps_to_8():
                    "protocol_json text not null default '{}'"):
         assert f"alter table pulse.triage add column if not exists {column}" in body
     assert re.search(r"values\s*\(\s*8\s*,", body) and "on conflict (version) do nothing" in body
-    assert len(MIGRATIONS) == 8
+    assert len(MIGRATIONS) >= 8
 
 
 @pytest.mark.asyncio

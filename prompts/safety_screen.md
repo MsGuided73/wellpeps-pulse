@@ -30,6 +30,12 @@ Does the post describe any of these?
 3. `minor`: someone who is, or says they are, under 18 seeking or using
    prescription weight-loss drugs (GLP-1s and similar) or sexual-wellness
    drugs.
+4. `other_person`: a medical question or health crisis about a specific
+   other person (a parent, partner, child or friend): their symptoms, their
+   safety on a treatment, drinking or drug use while on it, interactions, or
+   whether they should start, stop or change something. Example: "my father
+   is on Ozempic and drinks heavily, is that dangerous?". A general price,
+   process or provider question asked on someone's behalf is false.
 
 ## Output
 
@@ -38,6 +44,7 @@ Return one JSON object with exactly these fields:
 - `adverse_event` (bool)
 - `self_harm` (bool)
 - `minor` (bool)
+- `other_person` (bool)
 - `evidence` (string): the shortest phrase from the post that supports a true
   answer, copied EXACTLY, character for character, at most 20 words. Use ""
   when every answer is false.

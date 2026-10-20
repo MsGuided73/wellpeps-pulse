@@ -24,6 +24,7 @@ usage:
     drafter.acknowledge: haiku  # one short acknowledgement sentence on approved (boundary) replies
     reviewer: sonnet      # adversarial compliance review; never haiku (config rejects it)
     pulse: sonnet         # daily/weekly market brief (aggregates only, never post text)
+    rewriter: sonnet      # review desk "AI rewrite" of a draft passage; never haiku (config rejects it)
     slackbot.plan: haiku  # #pulse-query bot: question -> strict query spec (JSON)
     slackbot.answer: sonnet  # #pulse-query bot: short answer from the aggregate result only
   # Drafting and briefs pause in quiet hours. Escalations never do.
@@ -89,6 +90,11 @@ slack_query:
   # only; it never approves, acks or posts. Refused questions don't count.
   daily_limit: 100        # answered questions per local day, all users
   per_user_per_hour: 20   # answered questions per Slack user per rolling hour
+
+rewrite:
+  # Review desk "AI rewrite" (POST /api/mentions/{id}/rewrite). Each call is one
+  # Claude call; this caps rewrites per signed-in user per UTC day.
+  daily_cap_per_user: 60
 
 # Days to keep mention text before purging (pending legal sign-off).
 # Live collection (Phase 9, harvey/collect.py). OFF until WellPeps' legal

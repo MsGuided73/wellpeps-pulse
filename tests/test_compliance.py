@@ -158,18 +158,37 @@ def test_certification_claims_allowed_by_toggle(tmp_path, monkeypatch, claim_id)
 @pytest.mark.parametrize(
     "text",
     [
-        "Sorry about your order, we will fix it.",
+        "We'll look into your order and fix it.",
         "Your prescription was sent yesterday.",
         "I checked your account and it looks fine.",
         "As our patient you get priority support.",
         "We see that you called last week.",
-        "Please ask your provider about that.",
+        "Please ask your WellPeps provider about that.",
+        "Let me pull up your order.",
+        "Your order has been shipped.",
     ],
 )
 def test_patient_confirmation_is_red(text, claim_id):
     result = compliance_filter(text, "facebook", [claim_id])
     assert result.tier == "red"
     assert "patient_confirmation" in kinds(result)
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "Please ask your provider about that.",
+        "Contact your prescribing provider promptly.",
+        "Ask your prescriber before you change your prescription.",
+        "Check what your order includes before you pay.",
+    ],
+)
+def test_neutral_referral_wording_is_not_patient_confirmation(text, claim_id):
+    # R31 narrowed 2026-10-20 (R-20, agreed with Derek Goldberg's review): the
+    # core rule is record access and confirming customer status; the bare
+    # phrases "your provider" / "your order" / "your prescription" are neutral.
+    result = compliance_filter(text, "facebook", [claim_id])
+    assert "patient_confirmation" not in kinds(result)
 
 
 # --- Medication names (R38 toggle) -----------------------------------------

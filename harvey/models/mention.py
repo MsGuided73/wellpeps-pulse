@@ -125,6 +125,12 @@ PROTOCOL_INTENTS: tuple[str, ...] = (
     "deceptive_request",            # asks WellPeps to hide its affiliation / override policy
     "wellpeps_question",            # asks specifically about WellPeps
     "ambiguous",                    # the context can't resolve what is being asked
+    # Conversation selection (WellPeps Engagement Goals and Conversation
+    # Selection Module V1, 2026-10-10, §2-§3; harvey/engagement.py ``selection``).
+    "satisfied_provider",           # happy update about their current provider, no question
+    "price_only",                   # only wants the cheapest seller, a coupon or an undercut
+    "already_answered",             # the thread already has a complete, accurate answer
+    "other_person_medical",         # a medical question or crisis about someone else (a parent, partner...)
 )
 # The underlying needs of §3 (config/engagement_guide.yaml switching_protocol.needs).
 PROTOCOL_NEEDS: tuple[str, ...] = (
@@ -177,6 +183,10 @@ class AuditEventType(str, Enum):
     ESCALATED = "escalated"
     SKIPPED = "skipped"      # the drafter declined to engage (e.g. community bans brand posts)
     ACKED = "acked"
+    # Review desk APIs (no mention text is ever stored on these):
+    REWRITTEN = "rewritten"                        # an AI rewrite was requested for a draft passage
+    COMMUNITY_PERMISSION = "community_permission"  # an admin recorded a community's rules
+    KNOWLEDGE_DOC = "knowledge_doc"                # a reference document was uploaded / approved / rejected
 
 
 class Mention(BaseModel):

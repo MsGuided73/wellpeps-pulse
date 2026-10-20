@@ -14,9 +14,16 @@ Everything here is deterministic; no model calls.
   (config/communities.yaml), repeated links and the stop rules, from the
   reply history in the database.
 - ``engagement_info`` / ``mix_report``: what the review desk and the
-  Analytics "Education vs promotion" card show. The 80/20 share is a
-  planning metric only (Competitor/Switching Protocol §1; Operations Manual
-  §2.1): it never gates or flags a single reply.
+  Analytics "Education vs promotion" card show. The 80/20 share and the
+  per-community activity target are planning metrics only
+  (``activity_warnings``; Competitor/Switching Protocol §1; Operations Manual
+  §2.1; Derek Goldberg 2026-10-10): they never gate or flag a single reply.
+- Conversation selection (WellPeps Engagement Goals and Conversation Selection
+  Module V1, 2026-10-10): ``skip_reason`` / ``unverified_central_fact`` /
+  ``competitor_community`` feed the review gates; ``selection`` is the
+  RESPOND / SKIP / HOLD / ROUTE record; ``posting_hold`` is the firm posting
+  block (unknown rules, missing permission, prohibited, a competitor's own
+  community) that harvey/review.py enforces at approval.
 - The competitor / switching protocol (harvey/protocol.py) decides first for
   mentions in its scope: its classification and route are part of the
   situation match (``decisions`` / ``routes`` in engagement_guide.yaml).
@@ -26,27 +33,62 @@ import json
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 
-from harvey import communities, knowledge, promotion, protocol
+from harvey import communities, escalation, knowledge, promotion, protocol
 from harvey.compliance import ReplyContext, has_disclosure
 from harvey.models import Category, Mention, Triage
 from harvey.models.knowledge import Situation
 
+# A medical question or crisis about someone else (a parent, partner, friend):
+# never a reply, boundary or not; the safety watch (or the clinical owner when
+# WellPeps is named) reviews it (session safeguard 2026-10-20; docs/REVISIONS-LOG.md
+# R-20). Set by the safety screen or, from triage's intent tag, by the triager.
+OTHER_PERSON_MARKERS = escalation.OTHER_PERSON_MARKERS
 # Safety-screen / triage markers that block any reply, boundary replies included.
 SAFETY_BLOCK_MARKERS = ("safety_screen:minor", "safety_screen:self_harm", "safety_screen:failed",
-                        "triage_failed")
+                        "triage_failed", *OTHER_PERSON_MARKERS)
 # Review gates (first live pull, user decision 2026-10-09; docs/REVISIONS-LOG.md
-# R-13, R-14). Appended to the triage's urgency_reason at triage time so the
+# R-13, R-14, R-20). Appended to the triage's urgency_reason at triage time so the
 # Python and SQL views of "what gets drafted" stay identical.
 GATE_NOT_OURS = "gate:not_ours"            # a boundary / clinical reply to a post not about WellPeps
 GATE_NOT_WORTH_IT = "gate:not_worth_it"    # a reply could not plausibly benefit WellPeps
-NO_REPLY_MARKERS = (*SAFETY_BLOCK_MARKERS, GATE_NOT_OURS, GATE_NOT_WORTH_IT)
+# A competitor's own community (r/IVIMHEALTH, r/Noom, r/yourmdonline): listen-only
+# intelligence, never a reply candidate (session safeguard 2026-10-20).
+GATE_COMPETITOR_COMMUNITY = "gate:competitor_community"
+# A direct WellPeps question whose central fact is awaiting verification (Engagement
+# Goals and Conversation Selection Module V1 §2 step 5, §6 "What does WellPeps charge?").
+GATE_HOLD_FACT = "gate:hold_unverified_fact"
+GATES = (GATE_COMPETITOR_COMMUNITY, GATE_NOT_OURS, GATE_NOT_WORTH_IT, GATE_HOLD_FACT)
+NO_REPLY_MARKERS = (*SAFETY_BLOCK_MARKERS, *GATES)
+# Selection Module §3 SKIP reasons, recorded as "gate:not_worth_it:<code>".
+SKIP_PRICE_ONLY = "price_only"
+SKIP_NO_ADDED_VALUE = "no_added_value"
+SKIP_SATISFIED_PROVIDER = "satisfied_provider"
+SKIP_KNOWLEDGE_GAP = "knowledge_gap"
+# Intents that are a genuine question or invitation (an opening, Module §2 step 3).
+OPENING_INTENTS = frozenset({"alternatives_requested", "general_information", "comparison_request",
+                             "wellpeps_question"})
+# An explicit alternatives request the protocol answers (APPROPRIATE
+# ALTERNATIVE, or EDUCATIONAL ONLY when no approved fact fits): the protocol,
+# not triage's reply_appropriate guess, decides it once the safety, privacy and
+# clinical overrides have run, so a complaint that also asks for alternatives
+# is never discarded for containing a complaint (Derek Goldberg, 2026-10-10;
+# Selection Module §5).
+ANSWERING_DECISIONS = ("appropriate_alternative", "educational_only")
+ALTERNATIVES_INTENT = "alternatives_requested"
+
+
+def answers_alternatives_request(triage: Triage | None) -> bool:
+    return (triage is not None and (triage.protocol_decision or "") in ANSWERING_DECISIONS
+            and ALTERNATIVES_INTENT in (triage.intents or []))
 # Questions where a WellPeps answer can lead somewhere (choosing, comparing,
 # how it works, asking about WellPeps).
 BENEFIT_SUBTYPES = frozenset({
     "process_question", "pricing_question", "has_anyone_used_wellpeps", "clinic_recommendation",
     "competitor_comparison", "competitor_comparison_wellpeps", "misinformation_about_wellpeps",
+    "general_education",            # Selection Module V1 §3 (2026-10-10): general education RESPONDs (R-20)
 })
 BENEFIT_DECISIONS = frozenset({"appropriate_alternative", "educational_only"})
+BENEFIT_NEEDS = frozenset({"treatment_education"})
 DRAFTING_MODES = frozenset({"draft", "boundary_only", "stop"})
 APPROVED_RESPONSE_MODEL = "approved-response"
 RECENT_REPLY_LIMIT = 2000
@@ -95,9 +137,14 @@ def situation_of(triage: Triage | None) -> Situation:
                          triage.protocol_decision, triage.protocol_route)
 
 
+def about_other_person(triage: Triage | None) -> bool:
+    """A medical question or crisis about someone else (intent tag or safety-screen marker)."""
+    return triage is not None and escalation.about_other_person(triage)
+
+
 def safety_blocked(triage: Triage | None) -> bool:
     reason = (triage.urgency_reason if triage else "") or ""
-    return any(marker in reason for marker in SAFETY_BLOCK_MARKERS)
+    return any(marker in reason for marker in SAFETY_BLOCK_MARKERS) or about_other_person(triage)
 
 
 def reply_mode(triage: Triage) -> str:
@@ -111,41 +158,128 @@ def reply_mode(triage: Triage) -> str:
 def gated(triage: Triage | None) -> str:
     """The review gate that stopped this triage ("" = none)."""
     reason = (triage.urgency_reason if triage else "") or ""
-    return next((g for g in (GATE_NOT_OURS, GATE_NOT_WORTH_IT) if g in reason), "")
+    return next((g for g in GATES if g in reason), "")
+
+
+def skip_code(triage: Triage | None) -> str:
+    """The Selection Module SKIP code recorded with ``gate:not_worth_it`` ("" = none)."""
+    reason = (triage.urgency_reason if triage else "") or ""
+    head = f"{GATE_NOT_WORTH_IT}:"
+    start = reason.find(head)
+    if start < 0:
+        return ""
+    return reason[start + len(head):].split(";", 1)[0].strip()
 
 
 def worth_it(triage: Triage) -> bool:
-    """Gate 3: a reply could plausibly benefit WellPeps."""
+    """Gate 3: a reply could plausibly benefit WellPeps. General medication or
+    treatment education counts (Selection Module §1, §3 "General medication or
+    treatment education: RESPOND"; "useful education can benefit the wider
+    audience even when the original poster never becomes a customer"): this
+    answers R-14's open question. The SKIP reasons (``skip_reason``) still apply."""
     category = _value(triage.category)
     return (triage.subject_type in ("wellpeps", "competitor")
             or (triage.protocol_decision or "") in BENEFIT_DECISIONS
             or category == "purchase_intent"
-            or (triage.subtype or "") in BENEFIT_SUBTYPES)
+            or (triage.subtype or "") in BENEFIT_SUBTYPES
+            or (triage.unmet_need or "") in BENEFIT_NEEDS)
 
 
-def review_gate(triage: Triage) -> str:
-    """Which review gate applies to a fresh triage ("" = it may be drafted).
-    Order: safety and permission (situations, protocol) first, then gate 2b
-    (clinical / boundary replies only for posts about WellPeps), then gate 3
-    (benefit). Benefit is never a reason to engage; it only filters."""
-    if not triage.relevant or safety_blocked(triage):
-        return ""
-    mode = situation_of(triage).reply
-    if mode in ("boundary_only", "stop") and triage.subject_type != "wellpeps":
-        return GATE_NOT_OURS
-    if mode == "draft" and not worth_it(triage):
-        return GATE_NOT_WORTH_IT
+def skip_reason(triage: Triage) -> str:
+    """Why the Selection Module (V1, 2026-10-10, §2 steps 3-6, §3) skips an
+    otherwise draftable post ("" = it doesn't). Intent beats keywords: these
+    come from triage's tags, never from a provider name or a price word alone.
+
+    - price_only: only the cheapest seller, a coupon or an undercut (an
+      affordability or "what does it include" question is not this).
+    - no_added_value: the thread already has a complete, accurate answer.
+    - satisfied_provider: a happy update about another provider with no
+      question ("Happy with Ro. Month three is going great.").
+    - knowledge_gap: triage says no useful general answer exists (useful
+      contribution 0) for a post not about WellPeps: skip, do not improvise.
+    """
+    intents = set(triage.intents or ())
+    if "price_only" in intents:
+        return SKIP_PRICE_ONLY
+    if "already_answered" in intents:
+        return SKIP_NO_ADDED_VALUE
+    satisfied = "satisfied_provider" in intents or (triage.subtype or "") == "competitor_praise"
+    if satisfied and not intents & OPENING_INTENTS:
+        return SKIP_SATISFIED_PROVIDER
+    if triage.useful_contribution == 0 and triage.subject_type != "wellpeps":
+        return SKIP_KNOWLEDGE_GAP
     return ""
 
 
-def with_review_gate(triage: Triage) -> Triage:
+def unverified_central_fact(triage: Triage, publishable: set[str] | frozenset[str] | None = None) -> str:
+    """The need whose central WellPeps fact is not yet approved ("" = none).
+
+    A direct WellPeps question ("What does WellPeps charge?") turns on the
+    need's direct facts (``switching_protocol.needs.<need>.direct``). When the
+    need has direct facts and none is publishable (CONFIRM / FINALIZE /
+    PENDING), Pulse HOLDs instead of drafting around it (Selection Module §2
+    step 5, §3 "HOLD unresolved central facts", §6). A need with only partial
+    facts (provider access) is answered with those, as before."""
+    pricing = (triage.subtype or "") == "pricing_question"
+    direct = "wellpeps_question" in (triage.intents or []) or (triage.subject_type == "wellpeps" and pricing)
+    if not direct:
+        return ""
+    need = triage.unmet_need or ("price_clarity" if pricing else "")
+    spec = protocol.config().needs.get(need) if need else None
+    if spec is None or not spec.direct:
+        return ""
+    ok = knowledge.publishable_claim_ids() if publishable is None else publishable
+    return "" if any(c in ok for c in spec.direct) else need
+
+
+def competitor_community(mention: Mention | None) -> str:
+    """The competitor whose own community this mention lives in ("" = none):
+    the subreddit / group name matches a competitor or alias in the insights
+    community index (``harvey.insights``; r/IVIMHEALTH -> Ivím Health, r/Noom ->
+    Noom Med). Mentions there are listen-only intelligence."""
+    if mention is None:
+        return ""
+    from harvey import insights  # late: insights reads the brief's stores
+
+    name = insights.community_of({"url": mention.url, "engagement_json": mention.engagement or {}})
+    key = insights.normalize_name(name)
+    return insights.community_index().get(key, "") if key else ""
+
+
+def review_gate(triage: Triage, mention: Mention | None = None) -> str:
+    """Which review gate applies to a fresh triage ("" = it may be drafted).
+    Order: safety and permission (situations, protocol) first, then a
+    competitor's own community (listen only), then gate 2b (clinical /
+    boundary replies only for posts about WellPeps), then the Selection
+    Module's SKIP reasons and gate 3 (benefit), then HOLD for an unverified
+    central fact. Benefit is never a reason to engage; it only filters."""
+    if not triage.relevant or safety_blocked(triage):
+        return ""
+    if competitor_community(mention):
+        return GATE_COMPETITOR_COMMUNITY
+    mode = situation_of(triage).reply
+    if mode in ("boundary_only", "stop") and triage.subject_type != "wellpeps":
+        return GATE_NOT_OURS
+    if mode != "draft":
+        return ""
+    skip = skip_reason(triage)
+    if skip:
+        return f"{GATE_NOT_WORTH_IT}:{skip}"
+    if not worth_it(triage):
+        return GATE_NOT_WORTH_IT
+    if unverified_central_fact(triage):
+        return GATE_HOLD_FACT
+    return ""
+
+
+def with_review_gate(triage: Triage, mention: Mention | None = None) -> Triage:
     """The triage with its review gate recorded (a new copy; unchanged when none).
 
     The gate goes after the existing reason: its leading marker (override:,
     safety_screen:, severe_category...) is what ``escalation.reason_code`` and
     ``explain.urgency_explanation`` read. The reason is trimmed so the gate
     always fits in the 300-character column."""
-    gate = review_gate(triage)
+    gate = review_gate(triage, mention)
     if not gate:
         return triage
     suffix = f"; {gate}"
@@ -160,7 +294,12 @@ def drafts_reply(triage: Triage) -> bool:
         return False
     mode = reply_mode(triage)
     if mode == "draft":
-        return bool(triage.reply_appropriate)
+        # Once the safety, privacy and clinical overrides have run, the
+        # protocol decides ordinary engagement: a competitor complaint that
+        # asks for alternatives is answered even if triage guessed "no reply"
+        # (Derek Goldberg 2026-10-10; Selection Module §5 "Do not let
+        # 'complaint about another company' suppress an eligible alternatives request").
+        return bool(triage.reply_appropriate) or answers_alternatives_request(triage)
     return mode in ("boundary_only", "stop")
 
 
@@ -207,11 +346,17 @@ def draftable_where() -> tuple[str, tuple]:
     triage's reply_appropriate)."""
     case, case_params = _mode_case_sql()
     blocks = " AND ".join("instr(COALESCE(t.urgency_reason, ''), ?) = 0" for _ in NO_REPLY_MARKERS)
+    answering = ", ".join("?" for _ in ANSWERING_DECISIONS)
+    # An answered alternatives request (``answers_alternatives_request``):
+    # protocol_json stores the model's intents as a JSON list (harvey/state.py).
     sql = (f"m.status = 'triaged' AND t.relevant = TRUE AND {blocks} "
            f"AND NOT EXISTS (SELECT 1 FROM audit_log a WHERE a.mention_id = m.id AND a.event = '{SKIPPED_EVENT}') "
-           f"AND (({case} = 'draft' AND t.reply_appropriate = TRUE) "
+           f"AND (({case} = 'draft' AND (t.reply_appropriate = TRUE "
+           f"OR (COALESCE(t.protocol_decision, '') IN ({answering}) "
+           f"AND instr(COALESCE(t.protocol_json, ''), ?) > 0))) "
            f"OR {case} IN ('boundary_only', 'stop'))")
-    return sql, (*NO_REPLY_MARKERS, *case_params, *case_params)
+    return sql, (*NO_REPLY_MARKERS, *case_params, *ANSWERING_DECISIONS, f'"{ALTERNATIVES_INTENT}"',
+                 *case_params)
 
 
 # --- Persona and approved replies ------------------------------------------------------------
@@ -463,6 +608,183 @@ async def stop_decision(state, mention: Mention, triage: Triage | None) -> StopD
     return stop_decision_from(mention, triage, await recent_replies(state))
 
 
+def thread_blocker(mention: Mention, records: list[ReplyRecord]) -> str:
+    """Duplicate participation, rechecked at approval (Selection Module §5:
+    "Recheck ... duplicate participation"): the thread already has the
+    maximum number of approved / posted WellPeps replies ("" = none)."""
+    thread = communities.thread_key(mention.url)
+    if not thread:
+        return ""
+    limit = knowledge.engagement_guide().stop_rules.max_wellpeps_replies_per_thread
+    earlier = [r for r in records if r.thread == thread and r.mention_id != mention.id and r.approved]
+    if len(earlier) < limit:
+        return ""
+    return (f"WellPeps already has {len(earlier)} approved replies in this thread: no pile-ons "
+            "(Guide §22; Selection Module §2 step 6)")
+
+
+# --- Posting permission (a firm block) and activity targets (warnings only) -----------------------------
+#
+# Derek Goldberg (WellPeps), 2026-10-10: internal activity targets are warnings;
+# explicit community restrictions, moderator instructions and platform limits
+# are firm posting blocks. Selection Module §2 step 2: unknown rules or missing
+# required permission mean HOLD; internal drafting for review may be allowed,
+# but posting approval stays blocked until verified ("Never treat a yellow
+# unknown-rule warning as sufficient for approval", §5).
+
+POSTING_HOLD_LABEL = "human posts / held until permission"
+# Internal planning target (Pre-LegitScript strategy Channel 3: "Don't overwhelm
+# a single subreddit/community"): approved WellPeps replies per community per
+# window above which the review desk warns. Never a block.
+ACTIVITY_WINDOW_DAYS = 7
+ACTIVITY_TARGET_PER_COMMUNITY = 3
+
+
+def posting_hold(mention: Mention | None) -> str:
+    """Why a human may not post (approve) a reply here yet ("" = permitted).
+    Community permission is read only through ``communities.status_for_url``."""
+    if mention is None:
+        return ""
+    owner = competitor_community(mention)
+    if owner:
+        return f"{owner}'s own community: listen-only intelligence, never a WellPeps reply"
+    status = communities.status_for_url(mention.url)
+    if status.participation == "prohibited":
+        return "the community prohibits brand participation (a firm posting block)"
+    if status.participation == "unknown":
+        return (f"{POSTING_HOLD_LABEL}: the community's rules are unverified; record them (or the moderator's "
+                "permission) before posting ([CP] §2, §10; Selection Module §2 step 2)")
+    if status.participation == "with_permission" and not status.permission_obtained:
+        return (f"{POSTING_HOLD_LABEL}: the community requires moderator/admin permission, which has not been "
+                "recorded ([CP] §2; Selection Module §2 step 2)")
+    return ""
+
+
+def public_permission(mention: Mention | None) -> str:
+    """allowed | prohibited | unknown | permission_missing | platform_rules_only."""
+    if mention is None:
+        return "unknown"
+    if competitor_community(mention):
+        return "prohibited"
+    status = communities.status_for_url(mention.url)
+    if status.participation == "with_permission":
+        return "allowed" if status.permission_obtained else "permission_missing"
+    return {"allowed": "allowed", "prohibited": "prohibited",
+            communities.NONE: "platform_rules_only"}.get(status.participation, "unknown")
+
+
+def activity_warnings(records: list[ReplyRecord], community: str, exclude: int | None = None,
+                      now: datetime | None = None) -> list[str]:
+    """Internal activity targets for this community, as warnings: never a
+    block, never a filter hit (Derek Goldberg 2026-10-10; [CP] §1; [OM] §2.1)."""
+    if not community:
+        return []
+    warnings = []
+    mix = community_mix(records, community, exclude=exclude)
+    if mix.over:
+        warnings.append(f"education vs promotion: {mix.promotional} of the last {mix.replies} replies here were "
+                        f"promotional (planning target {int(mix.limit * 100)}%)")
+    cutoff = (now or _utcnow()) - timedelta(days=ACTIVITY_WINDOW_DAYS)
+    recent = [r for r in records if r.community == community and r.mention_id != exclude and r.approved
+              and r.approved_at is not None and r.approved_at >= cutoff]
+    if len(recent) >= ACTIVITY_TARGET_PER_COMMUNITY:
+        warnings.append(f"activity: {len(recent)} WellPeps replies approved here in the last {ACTIVITY_WINDOW_DAYS} "
+                        f"days (planning target {ACTIVITY_TARGET_PER_COMMUNITY}); don't overwhelm one community")
+    return warnings
+
+
+# --- Conversation selection record (Selection Module V1 §2, §5) -------------------------------------------
+
+RESPOND, SKIP, HOLD, ROUTE = "RESPOND", "SKIP", "HOLD", "ROUTE"
+_ROUTE_CODES = {"adverse_event": "CLINICAL_ROUTE", "safety_watch": "CLINICAL_ROUTE", "legal": "LEGAL_ROUTE",
+                "privacy": "PRIVACY_ROUTE", "billing_fraud": "SUPPORT_ROUTE", "viral_negative": "SUPPORT_ROUTE",
+                "support": "SUPPORT_ROUTE"}
+
+
+@dataclass(frozen=True)
+class Selection:
+    decision: str                 # RESPOND | SKIP | HOLD | ROUTE
+    reason_code: str              # EDUCATION_FIT, DIRECT_INTEREST, PRICE_ONLY, RULES_UNKNOWN, CLINICAL_ROUTE...
+    public_permission: str
+    posting_hold: str = ""        # why a human may not post yet ("" = permitted)
+    priority: str | None = None   # high | standard (RESPOND only)
+
+    def as_dict(self) -> dict:
+        return {"engagement_decision": self.decision, "reason_code": self.reason_code,
+                "public_permission": self.public_permission, "posting_hold": self.posting_hold,
+                "priority": self.priority}
+
+
+def _route_code(triage: Triage) -> str:
+    if about_other_person(triage):
+        return "CLINICAL_ROUTE"
+    kind = escalation.escalation_kind(triage) or (triage.protocol_route or "")
+    return _ROUTE_CODES.get(kind, "CLINICAL_ROUTE" if safety_blocked(triage) else "")
+
+
+def _respond_code(triage: Triage) -> tuple[str, str]:
+    """(reason code, priority) for an eligible RESPOND (Selection Module §4)."""
+    intents = set(triage.intents or ())
+    if triage.subject_type == "wellpeps" or "wellpeps_question" in intents:
+        return "DIRECT_INTEREST", "high"
+    if (triage.protocol_decision or "") == "appropriate_alternative":
+        return "ALTERNATIVES_FIT", "high"
+    if (triage.unmet_need or "") == "treatment_education" and triage.need_clarity == 2:
+        return "EDUCATION_FIT", "high"
+    if (triage.subtype or "") in ("clinic_recommendation", "competitor_comparison") \
+            or _value(triage.category) == "purchase_intent":
+        return "PROVIDER_SELECTION", "standard"
+    return "EDUCATION_FIT", "standard"
+
+
+def selection(triage: Triage | None, mention: Mention | None = None) -> Selection:
+    """The Selection Module's decision for the review desk, recomputed from the
+    current config: incidents ROUTE first (never opportunity-scored), then
+    access (a competitor's community or prohibited participation: SKIP), the
+    protocol's own HOLD / DO NOT ENGAGE / MONITOR ONLY, the SKIP reasons, an
+    unverified central fact (HOLD), and finally permission: unknown rules or
+    missing permission HOLD posting (drafting for review is allowed). A post
+    that would be skipped anyway is SKIP, not HOLD."""
+    permission = public_permission(mention)
+    hold = posting_hold(mention)
+    if triage is None:
+        return Selection(HOLD, "NOT_TRIAGED", permission, hold)
+    if not triage.relevant:
+        return Selection(SKIP, "OFF_TOPIC", permission, hold)
+    mode = situation_of(triage).reply
+    route = _route_code(triage)
+    if route or (triage.protocol_decision or "") in ("escalate", "clinical_caution") \
+            or mode in ("boundary_only", "stop"):
+        return Selection(ROUTE, route or "CLINICAL_ROUTE", permission, hold)
+    if competitor_community(mention):
+        return Selection(SKIP, "COMPETITOR_COMMUNITY", permission, hold)
+    if permission == "prohibited":
+        return Selection(SKIP, "PARTICIPATION_PROHIBITED", permission, hold)
+    decision = triage.protocol_decision or ""
+    if decision == "do_not_engage":
+        return Selection(SKIP, "DO_NOT_ENGAGE", permission, hold)
+    skip = skip_reason(triage) if mode == "draft" or decision in ("hold", "monitor_only") else ""
+    if skip:
+        return Selection(SKIP, skip.upper(), permission, hold)
+    if decision == "monitor_only":
+        return Selection(SKIP, "NO_OPENING", permission, hold)
+    if decision == "hold":
+        code = ("RULES_UNKNOWN" if permission in ("unknown", "permission_missing")
+                else "HOLD_CONTEXT" if "ambiguous" in (triage.intents or []) else "UNVERIFIED_FACT")
+        return Selection(HOLD, code, permission, hold)
+    if mode != "draft" or not worth_it(triage):
+        return Selection(SKIP, "NO_OPENING", permission, hold)
+    if unverified_central_fact(triage):
+        return Selection(HOLD, "UNVERIFIED_FACT", permission, hold)
+    if not (triage.reply_appropriate or answers_alternatives_request(triage)):
+        return Selection(SKIP, "NO_OPENING", permission, hold)
+    if permission in ("unknown", "permission_missing"):
+        return Selection(HOLD, "RULES_UNKNOWN" if permission == "unknown" else "PERMISSION_MISSING",
+                         permission, hold)
+    code, priority = _respond_code(triage)
+    return Selection(RESPOND, code, permission, hold, priority)
+
+
 # --- Drafter guidance ---------------------------------------------------------------------------------
 
 
@@ -592,6 +914,10 @@ async def engagement_info(state, mention: Mention, triage: Triage | None, draft=
         "persona": {"persona": persona.persona, "display_name": persona.display_name},
         "repeated_link_ids": sorted(repeated_links(records, status.id, exclude=mention.id)),
         "guide": guide_view(situation, context_from(mention, records), triage, mention, text, claim_ids),
+        # Selection Module V1 §5 record; posting hold = a firm block; warnings never block.
+        "selection": selection(triage, mention).as_dict(),
+        "posting_hold": posting_hold(mention),
+        "warnings": activity_warnings(records, status.id, exclude=mention.id),
     }
 
 

@@ -257,8 +257,41 @@ prohibited:
   - {id: R49, pattern: '\bI.?ll\s+(?:DM|PM|message|inbox)\s+you\b|\b(?:DM|PM|message|inbox)\s+me\b|\bcheck\s+your\s+(?:DMs|inbox|messages)\b|\bsend\s+(?:me|us)\s+a\s+(?:DM|PM|private\s+message)\b|\b(?:DM|PM|message)\s+us\b|\bslide\s+into\b', reason: "moves the conversation to a private channel (no unsolicited DMs; no channel migration to evade a community rule)", source: "[CP] §1, §8, §11, Example 15; [OM] §12.1; Guide §9", examples: ["I'll DM you", "DM me", "send me a DM"]}
   - {id: R49, pattern: '\b(?:up|down)vot(?:e|es|ed|ing)\b', reason: "vote manipulation", source: "[CP] §1; [OM] §12.2", examples: ["upvote this"]}
 
+  # --- R-20 session safeguards (2026-10-20; docs/REVISIONS-LOG.md R-20) ----------
+  # Never suggest a call, text, e-mail or any other private channel (the DM forms
+  # are the R49 rule above): Pulse has no messaging capability and community
+  # rules forbid unsolicited private follow-up ([CP] §1, §8, §11, Example 15;
+  # [OM] §12.1; Gameplan §7.1 "r/HealthInsurance ... warns members to report
+  # unsolicited DMs"; Selection Module §3 "no ... unsolicited DM workaround").
+  # Routing to WellPeps' approved support channel is the approved wording
+  # (CLM-AMG-09-*), not a private invitation, and is not matched.
+  - {id: R49, pattern: '\b(?:I.?ll|I\s+will|we.?ll|we\s+will|I\s+can|we\s+can|happy\s+to|let\s+me|let.s)\s+(?:give\s+you\s+a\s+)?(?:call|phone|ring|text|e-?mail)(?:\s+you)?\b|\b(?:call|phone|text|e-?mail)\s+(?:me|us)\b|\bgive\s+(?:me|us)\s+a\s+(?:call|ring|text|shout)\b|\b(?:hop|jump|get)\s+on\s+a\s+(?:quick\s+)?(?:call|phone\s+call|video\s+call|zoom)\b|\b(?:schedule|book|set\s+up)\s+a\s+(?:quick\s+)?(?:call|phone\s+call|chat)\s+with\s+(?:me|us)\b|\breach\s+out\s+(?:to\s+(?:me|us)\s+)?privately\b|\b(?:chat|talk|connect)\s+(?:privately|offline|1:1|one[- ]on[- ]one)\b|\b(?:send|share)\s+(?:me|us)\s+your\s+(?:number|phone|e-?mail)\b', reason: "suggests a call, text, e-mail or other private channel (no unsolicited private contact; route only through the approved support channel)", source: "R-20; [CP] §1, §8, §11, Example 15; [OM] §12.1; Guide §9", examples: ["Give us a call", "I'll call you", "email me", "reach out privately", "hop on a quick call"]}
+  # Never ask anyone to share order, account or health details in public
+  # (Guide §8; [OM] §10; [CT] Module 5; Gameplan §12 "No PHI, ever"). The approved
+  # "please don't post ..." wording is exempt.
+  - {id: R32, pattern: '\b(?:post|share|comment|reply\s+with|drop)\s+your\s+(?:order\s+(?:number|no\.?|#|id)|account\s+(?:number|details|info(?:rmation)?|email)|member\s+id|date\s+of\s+birth|DOB|phone(?:\s+number)?|address|prescription|dose|dosage|meds|medications?|lab\s+(?:results|numbers|values)|labs|A1C|BMI|weight|medical\s+(?:history|details|info(?:rmation)?))\b|\bwhat(?:.s|\s+is)\s+your\s+(?:order|account|member)\s+(?:number|no\.?|#|id)\b', except_pattern: '\b(?:don.t|do\s+not|never|no\s+need\s+to|avoid|without|not)\b[^.!?;]{0,25}?\b(?:post|share|comment|reply\s+with|drop)\b[^.!?;]{0,60}', reason: "asks the person to share order, account or health details in public", source: "R-20; Guide §8; [OM] §10.2; [CT] Module 5", examples: ["post your order number", "share your dose", "what's your order number"]}
+  # Never invent a department, clinical team or clinical authority (Selection
+  # Module §4 "do not invent a department, employee persona, patient experience
+  # or clinical authority"; Gameplan §3.2 Delaware HB 191). "I'm part of the
+  # WellPeps team" (Guide §4) is the approved form and is not matched.
+  - {id: R2, pattern: '\b(?:I.m|I\s+am|we.re|we\s+are)\s+(?:on|in|with|from|part\s+of)\s+(?:the\s+)?(?:WellPeps\s+)?(?:clinical|medical|nursing|pharmacy|pharmacist|physician|prescriber|provider|doctor)\s+(?:team|staff|department|group)\b', reason: "invents a clinical team or clinical authority; use an approved role description (\"I'm part of the WellPeps team.\")", source: "R-20; Selection Module §4; Guide §4", examples: ["I'm on the WellPeps clinical team", "we're with the medical team"]}
+  # Never promise ungated access when the guide asks for an e-mail (Selection
+  # Module §4 "Do not promise immediate ungated access when an email is
+  # required"; [CP] §8).
+  - {id: R49, pattern: '\bno\s+(?:e-?mail|sign[- ]?up|signup|registration|strings)\s+(?:needed|required|necessary|attached)\b|\bwithout\s+(?:giving\s+)?(?:an?\s+|your\s+)?(?:e-?mail|signing\s+up|sign[- ]?up)\b|\bno\s+(?:e-?mail|sign[- ]?up)\s+(?:wall|gate)\b|\binstant(?:ly)?\s+(?:access|download)\b|\bungated\b', reason: "promises ungated access; the Smart Patient Guides ask for an e-mail", source: "R-20; Selection Module §4; [CP] §8", examples: ["no email required", "no signup needed", "instant download"]}
+
 patient_confirmation:
-  - {id: R31, pattern: '\byour\s+(?:order|orders|prescription|prescriptions|Rx|account|shipment|package|refill|refills|chart|medical\s+records?|records|intake|treatment\s+plan|provider|WellPeps\s+provider|lab\s+results)\b|\byour\s+WellPeps\s+care\s+team\b', reason: "references the person's account, order, prescription or provider", source: "R31 ([CHS] §9; inferred). Narrowed 2026-10-07: generic \"your care team\" is allowed ([CP] Example 1: \"ask how you can contact your care team\"); \"your WellPeps care team\" stays red", examples: ["we'll look into your account", "your order", "your prescription", "your provider", "your refill"]}
+  # Narrowed 2026-10-20 (R-20; agreed with Derek Goldberg's review, 2026-10-07):
+  # the core rule is "never claim access to the person's records and never
+  # confirm that someone is a WellPeps customer or patient" ([OM] §8; [CT]
+  # Module 5; Gameplan §3.2, §12). The bare phrases "your order", "your
+  # prescription", "your provider" ... are neutral referral wording ("contact
+  # your prescribing provider", [AMG] §6, §10) and are no longer red; tying them
+  # to WellPeps ("your WellPeps order") or to our access ("I'll pull up your
+  # order") stays red.
+  - {id: R31, pattern: '\byour\s+WellPeps\s+(?:order|orders|prescription|prescriptions|Rx|account|shipment|package|refill|refills|chart|medical\s+records?|records|intake|treatment\s+plan|provider|providers|care\s+team|membership|plan|subscription)\b', reason: "ties the person's order, account, prescription or provider to WellPeps (confirms they are a customer or patient)", source: "R31 ([OM] §8; [CT] Module 5); narrowed 2026-10-20 (R-20)", examples: ["your WellPeps account", "your WellPeps order", "your WellPeps provider"]}
+  - {id: R31, pattern: '\b(?:I|we)(?:.ll|\s+will|\s+can|\s+could|\s+just)?\s+(?:look(?:ed)?\s+(?:into|up|at)|pull(?:ed)?\s+up|check(?:ed)?(?:\s+on)?|review(?:ed)?|access(?:ed)?|find|found|track(?:ed)?)\s+your\s+(?:order|orders|prescription|prescriptions|Rx|account|shipment|package|refill|refills|chart|medical\s+records?|records|file|intake|treatment\s+plan|lab\s+results|history)\b|\blet\s+(?:me|us)\s+(?:look\s+(?:into|up|at)|pull\s+up|check(?:\s+on)?|review|track)\s+your\b', reason: "claims access to the person's order, account or records", source: "R31 ([OM] §8; [CT] Module 5); narrowed 2026-10-20 (R-20)", examples: ["we'll look into your account", "I'll pull up your order", "let me check your prescription"]}
+  - {id: R31, pattern: '\byour\s+(?:order|orders|prescription|prescriptions|Rx|account|shipment|package|refill|refills|intake|subscription|membership|lab\s+results)\s+(?:was|were|is|are|has\s+been|have\s+been|got|will\s+be)\s+(?:already\s+|just\s+)?(?:sent|shipped|processed|approved|denied|cancel+ed|refunded|delayed|received|filled|updated|on\s+(?:its|the)\s+way|being\s+\w+|ready|active)\b', reason: "states the status of the person's order, prescription or account (claims access to their records)", source: "R31 ([OM] §8; [CT] Module 5); narrowed 2026-10-20 (R-20)", examples: ["Your prescription was sent yesterday", "your order has been shipped"]}
   - {id: R31, pattern: '\bas\s+(?:our|a\s+WellPeps)\s+(?:patient|customer|member|client)\b', reason: "confirms patient status", source: "R31", examples: ["as our patient", "as a WellPeps customer"]}
   - {id: R31, pattern: '\b(?:you.re|you\s+are)\s+(?:a|an|one\s+of\s+our)\s+(?:existing\s+|current\s+)?(?:WellPeps\s+)?(?:patients?|customers?|members?|clients?)\b', reason: "confirms patient status", source: "R31", examples: ["you're one of our patients", "you are an existing WellPeps member"]}
   - {id: R31, pattern: '\bwe\s+(?:can\s+)?(?:see|noticed|checked|reviewed|looked\s+(?:at|into))\s+(?:that\s+)?(?:you|your)\b', reason: "implies access to the person's records", source: "R31", examples: ["we can see that you", "we checked your", "we looked into your"]}
@@ -273,6 +306,5 @@ yellow:
   - {id: R10, pattern: '\b(?:testimonials?|my\s+(?:experience|results|journey)|I\s+(?:took|take|was\s+on|am\s+on|started|tried))\b', reason: "testimonial / personal medication experience", source: "R10 + R24"}
   - {id: R12, pattern: '\bLegitScript\b', reason: "any LegitScript mention needs review while certification is pending", source: "R12"}
   - {id: R27, pattern: '\d+(?:\.\d+)?\s?%|\bstud(?:y|ies)\s+(?:show|shows|found|prove|proves)\b', reason: "statistic or study citation must come from approved material", source: "R27 + R17"}
-  - {id: R31, pattern: '\breach\s+out\s+privately\b', reason: "private-channel invitation; no unsolicited DMs (R6). DM invitations are red (R49)", source: "R31 + R6; [CP] §1"}
   - {id: R33, pattern: '\b(?:teens?|teenagers?|minors?|under\s+18|high\s+school(?:ers?)?|1[3-7]\s*(?:yo|y/o|years?\s+old))\b', reason: "possible minor; no weight-loss or muscle engagement with under-18s", source: "R33 ([CHS] §5-6)"}
   - {id: R41, pattern: '(?<!\bif\s)(?<!\bwhat\s)(?<!\bwhatever\s)\byou\s+need\b', reason: "\"You need...\" can read as an individual directive (Guide §26); check it is not treatment advice", source: "Guide §26"}

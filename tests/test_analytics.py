@@ -376,14 +376,17 @@ def test_feed_sorts_newest_first_by_default_and_oldest_on_request(app_db):
 # ── Page and static assets ──
 
 
-def test_feed_is_the_first_and_default_tab(app_db):
+def test_pulse_is_the_default_view_with_the_older_tabs_in_the_more_menu(app_db):
     client, _ = client_for(VIEWER)
     html = client.get("/").text
-    order = [html.index(f'data-tab="{t}"') for t in
-             ("feed", "urgent", "review", "analytics", "pulse", "usage", "users", "controls")]
-    assert order == sorted(order)
-    assert re.search(r'class="active" data-tab="feed"', html)
-    assert re.search(r'id="feed" class="section active"', html)
+    main = [html.index(f'data-nav="{v}"') for v in ("pulse", "hq", "knowledge")]
+    assert main == sorted(main)
+    more = [html.index(f'data-tab="{t}"') for t in
+            ("feed", "review", "urgent", "analytics", "briefs", "usage", "users", "controls")]
+    assert more == sorted(more)
+    for view in ("pulse", "hq", "knowledge"):
+        assert f'id="{view}" class="section view"' in html
+    assert 'id="feed" class="section"' in html
     assert 'id="urgent-banner"' in html
 
 

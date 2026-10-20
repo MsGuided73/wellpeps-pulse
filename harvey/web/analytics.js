@@ -217,7 +217,7 @@ function anRenderShare(d) {
     detail: Charts.fmtPct(s.raw.share) + (s.raw.delta_pts === null ? '' : ' ' + Charts.fmtSigned(s.raw.delta_pts, 1) + ' pts')})));
   Charts.table(document.getElementById('an-table-share'),
     [{label: 'Brand'}, {label: 'Mentions', num: true}, {label: 'Share', num: true}, {label: 'Previous', num: true}, {label: 'Change (pts)', num: true}],
-    d.series.map(s => [s.key, Charts.fmtInt(s.total), Charts.fmtPct(s.share), Charts.fmtPct(s.prev_share), s.delta_pts === null ? '—' : Charts.fmtSigned(s.delta_pts, 1)]),
+    d.series.map(s => [s.key, Charts.fmtInt(s.total), Charts.fmtPct(s.share), Charts.fmtPct(s.prev_share), s.delta_pts === null ? 'n/a' : Charts.fmtSigned(s.delta_pts, 1)]),
     'Share of voice this period');
 }
 
@@ -234,7 +234,7 @@ function anRenderSentiment(d) {
   Charts.table(document.getElementById('an-table-sentiment'),
     [{label: d.params.bucket === 'week' ? 'Week' : 'Day'}].concat(series.map(s => ({label: s.label + ' (n)', num: true}))),
     d.buckets.map((k, i) => [Charts.bucketLabel(k, d.params.bucket, true)].concat(series.map(s =>
-      (s.values[i] === null ? '—' : Charts.fmtSigned(s.values[i], 2)) + ' (' + s.n[i] + ')'))), 'Average sentiment');
+      (s.values[i] === null ? 'n/a' : Charts.fmtSigned(s.values[i], 2)) + ' (' + s.n[i] + ')'))), 'Average sentiment');
   document.getElementById('an-note-sentiment').textContent = 'Mean triage sentiment, −1 to +1. Points with fewer than ' + d.min_n + ' mentions are left out.';
 }
 
@@ -295,15 +295,15 @@ function anRenderDrugs(d) {
   Charts.table(document.getElementById('an-table-drugs'),
     [{label: 'Drug / topic'}, {label: 'Mentions', num: true}, {label: 'Previous', num: true}, {label: 'Change', num: true}],
     d.drugs.map(x => [x.drug, x.suppressed ? '<2' : Charts.fmtInt(x.total), x.prev_total === null ? '<2' : Charts.fmtInt(x.prev_total),
-      x.change_pct === null ? '—' : Charts.fmtSigned(x.change_pct, 0) + '%']), 'Drug and topic momentum');
+      x.change_pct === null ? 'n/a' : Charts.fmtSigned(x.change_pct, 0) + '%']), 'Drug and topic momentum');
   document.getElementById('an-note-drugs').textContent = 'Each line is that drug’s own scale. Change compares with the previous period of the same length.';
 }
 
 // g. Escalations & SLA
 function anRenderEscalations(d) {
   document.getElementById('an-extra-escalations').innerHTML = '<div class="an-mini">' +
-    anMini('Median time to acknowledge', d.median_ack_minutes === null ? '—' : d.median_ack_minutes + ' min') +
-    anMini('Breached the SLA', d.breached_pct === null ? '—' : d.breached_pct + '%', d.breached ? 'bad' : '') +
+    anMini('Median time to acknowledge', d.median_ack_minutes === null ? 'n/a' : d.median_ack_minutes + ' min') +
+    anMini('Breached the SLA', d.breached_pct === null ? 'n/a' : d.breached_pct + '%', d.breached ? 'bad' : '') +
     anMini('Open now', String(d.open), d.open_breached ? 'bad' : '', d.open_breached ? d.open_breached + ' breached' : '') + '</div>';
   const series = d.series.map(s => ({label: label('kind', s.key), color: anMapColor(AN_KIND_COLORS, s.key), values: s.values, total: s.total}));
   if (!d.total) {
@@ -341,8 +341,8 @@ function anRenderTiles(d) {
     '<div class="value">' + value + '</div><div class="an-tile-delta">' + delta + ' <span class="muted">' + escHtml(note || period) + '</span></div></div>';
   document.getElementById('an-tiles').innerHTML =
     tile('Relevant mentions', escHtml(Charts.fmtInt(t.mentions.value)), anDelta(t.mentions.change_pct, '%', 0, null)) +
-    tile('WellPeps share of voice', escHtml(t.share.value === null ? '—' : Charts.fmtPct(t.share.value)), anDelta(t.share.delta_pts, ' pts', 1, true)) +
-    tile('WellPeps avg sentiment', escHtml(t.sentiment.value === null ? '—' : Charts.fmtSigned(t.sentiment.value, 2)),
+    tile('WellPeps share of voice', escHtml(t.share.value === null ? 'n/a' : Charts.fmtPct(t.share.value)), anDelta(t.share.delta_pts, ' pts', 1, true)) +
+    tile('WellPeps avg sentiment', escHtml(t.sentiment.value === null ? 'n/a' : Charts.fmtSigned(t.sentiment.value, 2)),
       anDelta(t.sentiment.delta, '', 2, true), t.sentiment.value === null ? 'needs 3+ scored mentions' : '') +
     tile('Open escalations', escHtml(String(t.open_escalations.value)),
       t.open_escalations.breached ? '<span class="delta down"><span aria-hidden="true">&#9888;</span> ' + escHtml(String(t.open_escalations.breached)) + ' breached</span>' : '<span class="delta flat">none breached</span>', 'right now') +

@@ -2,14 +2,17 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>WellPeps Pulse</title>
-<link rel="icon" type="image/png" sizes="32x32" href="/static/brand/favicon-32.png">
-<link rel="apple-touch-icon" href="/static/brand/favicon-180.png">
-<link rel="preload" href="/static/fonts/inter-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="icon" type="image/png" sizes="32x32" href="/static/brand/pulse-favicon-32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="/static/brand/pulse-favicon-16.png">
+<link rel="apple-touch-icon" href="/static/brand/pulse-icon.png">
 <link rel="stylesheet" href="/static/app.css">
+<link rel="stylesheet" href="/static/views.css">
 </head>
 <body>
+
+<a class="skip-link" href="#main">Skip to content</a>
 
 <div class="demo-config-banner hidden" id="demo-config-banner" role="status">
   <strong>DEMO CONFIG — claims marked approved for demonstration only</strong>
@@ -19,49 +22,218 @@
   DEMO SANDBOX on: post links open fictional demo threads on this machine (<a href="/sandbox" target="_blank" rel="noopener">open the sandbox</a>).
 </div>
 
-<header>
-  <div class="brand">
-    <img class="brand-logo" src="/static/brand/wellpeps-logo.png" width="183" height="36" alt="WellPeps">
-    <div class="brand-text">
-      <h1><span class="visually-hidden">WellPeps </span>Pulse</h1>
-      <div class="tagline">Listen first. Humans approve every reply.</div>
-    </div>
-  </div>
-  <div class="header-controls">
-    <div class="harvey-status" id="header-status">
-      <span class="status-dot stopped" id="header-dot"></span>
-      <span id="header-status-text">Checking…</span>
-    </div>
-    <div class="user-menu-wrap">
-      <button type="button" class="user-chip" id="user-chip" data-action="user-menu" aria-haspopup="menu"
-        aria-expanded="false" aria-controls="user-menu"></button>
-      <div class="user-menu hidden" id="user-menu" role="menu" aria-label="Account">
-        <button type="button" role="menuitem" data-action="pw-open">Change password</button>
-        <button type="button" role="menuitem" data-action="logout">Sign out</button>
+<header class="top">
+  <div class="top-in">
+    <a class="brand" href="#pulse" aria-label="Pulse home">
+      <img src="/static/brand/pulse-icon.png" alt="" width="48" height="48">
+      <span class="wordmark">Pulse</span>
+    </a>
+    <nav class="switch" aria-label="Main">
+      <a href="#pulse" data-nav="pulse">Pulse<span class="nav-count" id="nav-review" aria-label="replies waiting for approval"></span></a>
+      <a href="#hq" data-nav="hq">Operator HQ</a>
+      <a href="#knowledge" data-nav="knowledge">Knowledge</a>
+    </nav>
+    <div class="top-tools">
+      <div class="harvey-status" id="header-status" role="status">
+        <span class="status-dot stopped" id="header-dot" aria-hidden="true"></span>
+        <span id="header-status-text">Checking…</span>
       </div>
+      <div class="more-wrap">
+        <button type="button" class="more-btn" id="more-btn" data-action="more-menu" aria-expanded="false"
+          aria-controls="more-menu">More<span class="nav-count" id="nav-urgent" aria-label="open urgent items"></span><span aria-hidden="true">&#9662;</span></button>
+        <div class="pop hidden" id="more-menu" aria-label="More">
+          <a href="#feed" data-tab="feed">Feed</a>
+          <a href="#review" data-tab="review">Review desk</a>
+          <a href="#urgent" data-tab="urgent">Urgent<span class="nav-count" id="nav-urgent-item"></span></a>
+          <a href="#analytics" data-tab="analytics">Analytics</a>
+          <a href="#briefs" data-tab="briefs">Briefs and live trends</a>
+          <a href="#usage" data-tab="usage">Usage</a>
+          <a href="#users" data-tab="users" class="hidden" id="nav-users">Users</a>
+          <a href="#controls" data-tab="controls">Controls and logs</a>
+        </div>
+      </div>
+      <div class="user-menu-wrap">
+        <button type="button" class="user-chip" id="user-chip" data-action="user-menu" aria-haspopup="menu"
+          aria-expanded="false" aria-controls="user-menu"></button>
+        <div class="pop user-menu hidden" id="user-menu" role="menu" aria-label="Account">
+          <button type="button" role="menuitem" data-action="pw-open">Change password</button>
+          <button type="button" role="menuitem" data-action="logout">Sign out</button>
+        </div>
+      </div>
+      <button type="button" class="refresh-btn" data-action="refresh">Refresh</button>
     </div>
-    <button class="refresh-btn" data-action="refresh">Refresh</button>
-    <button class="refresh-btn" data-action="logout">Sign out</button>
   </div>
 </header>
 
-<nav aria-label="Sections">
-  <button class="active" data-tab="feed" aria-current="page">Feed</button>
-  <button data-tab="urgent">Urgent<span class="nav-count" id="nav-urgent" aria-label="open urgent items"></span></button>
-  <button data-tab="review">Review desk<span class="nav-count" id="nav-review"></span></button>
-  <button data-tab="analytics">Analytics</button>
-  <button data-tab="pulse">Pulse</button>
-  <button data-tab="usage">Usage</button>
-  <button data-tab="users" class="hidden" id="nav-users">Users</button>
-  <button data-tab="controls">Controls</button>
-</nav>
+<main id="main" tabindex="-1">
 
-<main>
+<!-- Pulse: today's one thing, the approval queue, the safety watch -->
+<div id="pulse" class="section view">
+  <div class="hello">
+    <h1 id="greeting" tabindex="-1">Hello, WellPeps team</h1>
+    <p class="meta" id="today"></p>
+  </div>
+
+  <section class="onething" aria-labelledby="one-h">
+    <p class="label" id="one-h">Today's one thing</p>
+    <p class="big" id="onething-text">Checking what needs you…</p>
+    <div class="actions" id="onething-actions"></div>
+  </section>
+
+  <p class="weekline" id="weekline" aria-label="This week at a glance"></p>
+
+  <section class="panel plain" id="approvals" aria-labelledby="appr-h">
+    <div class="section-head-row">
+      <h2 id="appr-h">Waiting for your approval</h2>
+      <span class="label" id="appr-count"></span>
+    </div>
+    <p class="queue-tip">Tip: select any part of a reply, or right-click a selection, to rewrite it with AI.</p>
+    <div class="queue" id="queue"></div>
+  </section>
+
+  <section class="panel plain" id="watch-panel" aria-labelledby="watch-h">
+    <div class="section-head-row">
+      <h2 id="watch-h">Safety watch</h2>
+      <span class="label" id="watch-count"></span>
+    </div>
+    <p class="note">Posts about side effects, legal or privacy concerns. Pulse never answers these in public. The ones that involve WellPeps go to the care team; the rest sit here so your team can see them.</p>
+    <div class="watch" id="watch"></div>
+  </section>
+
+  <section class="panel" aria-labelledby="live-spend-h">
+    <h2 id="live-spend-h">Spend this month</h2>
+    <div id="pulse-spend" aria-live="polite"></div>
+  </section>
+</div>
+
+<!-- Operator HQ: agents, spend, what people struggle with, communities, guardrails -->
+<div id="hq" class="section view">
+  <div class="hello">
+    <div>
+      <h1 tabindex="-1">Operator HQ</h1>
+      <p class="lede">The agents behind Pulse, what they cost, where they may reply, and everything they will never do.</p>
+    </div>
+  </div>
+
+  <div class="ops-sum" id="hq-sum"></div>
+
+  <div class="grid-2">
+    <section class="panel plain" aria-labelledby="ag-h">
+      <h2 id="ag-h">Agents</h2>
+      <div class="agents" id="hq-agents"></div>
+    </section>
+    <div class="stack">
+      <section class="panel" aria-labelledby="sp-h">
+        <h2 id="sp-h">Spend</h2>
+        <div id="hq-spend" aria-live="polite"></div>
+      </section>
+      <section class="panel" aria-labelledby="gr-h">
+        <h2 id="gr-h">What your agents will never do</h2>
+        <ul class="rules">
+          <li>Post anything themselves. Pulse drafts; a person approves and posts every reply</li>
+          <li>Reply to a side effect or dosing question in public</li>
+          <li>Make medical, outcome or price claims</li>
+          <li>Post without saying they work with WellPeps</li>
+          <li>Use a link that isn't on the approved list</li>
+          <li class="info"><span>Replies that link a guide wait until that guide's page is live. <a href="#knowledge">See guides</a></span></li>
+        </ul>
+      </section>
+    </div>
+  </div>
+
+  <section class="panel" id="insights" aria-labelledby="pp-h">
+    <div class="section-head-row">
+      <h2 id="pp-h">What people are struggling with</h2>
+      <span class="label" id="pp-window"></span>
+    </div>
+    <p class="note">Pulse tracks complaints and questions so you can spot ongoing pain points and new kinds of customers. Every quote links to the original post.</p>
+    <div id="pp-body" aria-live="polite"></div>
+  </section>
+
+  <section class="panel" id="communities" aria-labelledby="cm-h">
+    <div class="section-head-row">
+      <h2 id="cm-h">Communities</h2>
+      <span class="label" id="cm-count"></span>
+    </div>
+    <p class="note">Pulse listens everywhere but only drafts where the community's rules allow it. Recording a moderator's answer updates what the agent may say there.</p>
+    <div id="cm-body" aria-live="polite"></div>
+  </section>
+
+  <section class="panel" aria-labelledby="tools-h">
+    <h2 id="tools-h">More tools</h2>
+    <p class="note">Everything else Pulse can show you.</p>
+    <div class="tool-links" id="hq-tools">
+      <a class="btn btn-secondary" href="#analytics">Analytics</a>
+      <a class="btn btn-secondary" href="#briefs">Briefs and live trends</a>
+      <a class="btn btn-secondary" href="#usage">Usage</a>
+      <a class="btn btn-secondary" href="#feed">Feed</a>
+      <a class="btn btn-secondary" href="#review">Review desk</a>
+      <a class="btn btn-secondary" href="#urgent">Urgent</a>
+      <a class="btn btn-secondary hidden" id="hq-users-link" href="#users">Users</a>
+      <a class="btn btn-secondary" href="#controls">Controls and logs</a>
+    </div>
+  </section>
+</div>
+
+<!-- Knowledge: what the agent knows -->
+<div id="knowledge" class="section view">
+  <div class="hello">
+    <div>
+      <h1 tabindex="-1">What your agent knows</h1>
+      <p class="lede">Add the documents your agent should read before it drafts a reply: approved messaging, compliance rules, voice guidance, program updates and community rules. A reviewer approves each one before the agent starts using it.</p>
+    </div>
+    <div class="stats" id="kn-stats" role="group" aria-label="Knowledge summary"></div>
+  </div>
+
+  <section class="panel plain" aria-labelledby="add-h">
+    <h2 id="add-h">Add documents</h2>
+    <label class="drop" id="kn-drop" for="kn-file">
+      <svg viewBox="0 0 40 40" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 28h-2a7 7 0 0 1-1-13.9A10 10 0 0 1 28.6 12 8 8 0 0 1 30 28h-2"/><path d="M20 20v14M14.5 25.5 20 20l5.5 5.5"/></svg>
+      <span class="big">Drop files here, or <u>browse</u></span>
+      <span class="types">PDF, Word (.docx), text or Markdown. Up to 10 MB each.</span>
+    </label>
+    <input class="visually-hidden" type="file" id="kn-file" multiple accept=".pdf,.docx,.txt,.md">
+    <div class="staged" id="kn-staged" aria-live="polite"></div>
+  </section>
+
+  <section class="panel" aria-labelledby="lib-h">
+    <div class="lib-tools">
+      <h2 id="lib-h">Library</h2>
+      <div class="filter" role="group" aria-label="Filter by status" id="kn-filter">
+        <button type="button" aria-pressed="true" data-f="all">All</button>
+        <button type="button" aria-pressed="false" data-f="active">In use</button>
+        <button type="button" aria-pressed="false" data-f="review">In review</button>
+        <button type="button" aria-pressed="false" data-f="other">Replaced or rejected</button>
+      </div>
+    </div>
+    <div id="kn-lib" aria-live="polite"></div>
+  </section>
+
+  <div class="grid-eq">
+    <section class="panel" aria-labelledby="ord-h">
+      <h2 id="ord-h">When documents disagree</h2>
+      <ol class="order">
+        <li>Safety, privacy and clinical rules always win.</li>
+        <li>Community rules, moderator instructions and platform limits.</li>
+        <li>"Must follow" documents, newest effective date first.</li>
+        <li>"Use as reference" documents.</li>
+        <li>Examples, for tone only.</li>
+      </ol>
+      <p class="note">When a new document conflicts with one in use, your reviewer sees both before approving it.</p>
+    </section>
+    <section class="panel" id="guides" aria-labelledby="gd-h">
+      <h2 id="gd-h">Smart Patient's Guides</h2>
+      <p class="note">The agent can point people to a chapter of these free guides.</p>
+      <div id="kn-guides"></div>
+    </section>
+  </div>
+</div>
 
 <!-- Feed: every collected mention -->
-<div id="feed" class="section active">
+<div id="feed" class="section">
+  <p class="crumb-back"><a href="#hq">&larr; Operator HQ</a></p>
   <div class="section-head">
-    <h2>Feed</h2>
+    <h1 tabindex="-1">Feed</h1>
     <p>Public mentions Pulse has collected, newest first. Click a row for its full record and audit trail. Filters stay in the address bar, so you can share a filtered view.</p>
   </div>
   <div class="urgent-banner hidden" id="urgent-banner" role="status"></div>
@@ -95,8 +267,9 @@
 
 <!-- Urgent: open escalations, breached first -->
 <div id="urgent" class="section">
+  <p class="crumb-back"><a href="#hq">&larr; Operator HQ</a></p>
   <div class="section-head">
-    <h2>Urgent</h2>
+    <h1 tabindex="-1">Urgent</h1>
     <p>Open escalations, breached first, then the soonest SLA. Adverse events are acknowledged by the clinical owner. Refreshes every 30 seconds.</p>
   </div>
   <div id="urgent-list"></div>
@@ -104,8 +277,9 @@
 
 <!-- Review desk: drafts waiting on a human, and approved replies to post by hand -->
 <div id="review" class="section">
+  <p class="crumb-back"><a href="#hq">&larr; Operator HQ</a></p>
   <div class="section-head">
-    <h2>Review desk</h2>
+    <h1 tabindex="-1">Review desk</h1>
     <p>Every reply needs a human approval with signed-off claims. Pulse never posts: copy an approved reply, post it yourself, then mark it posted.</p>
   </div>
   <div class="desk">
@@ -117,8 +291,9 @@
 
 <!-- Analytics: graphic market intelligence (aggregates only) -->
 <div id="analytics" class="section">
+  <p class="crumb-back"><a href="#hq">&larr; Operator HQ</a></p>
   <div class="section-head">
-    <h2>Analytics</h2>
+    <h1 tabindex="-1">Analytics</h1>
     <p>Market signals from triaged, relevant mentions: aggregates only, never individuals. Anything seen in fewer than 2 mentions folds into “Other” or is hidden. Days are local to <span id="an-tz">the org timezone</span>.</p>
   </div>
   <form class="an-filters" id="an-filters" aria-label="Analytics filters">
@@ -166,9 +341,10 @@
 </div>
 
 <!-- Pulse: market trends, briefs, language bank (aggregates only) -->
-<div id="pulse" class="section">
+<div id="briefs" class="section">
+  <p class="crumb-back"><a href="#hq">&larr; Operator HQ</a></p>
   <div class="section-head">
-    <h2>Pulse</h2>
+    <h1 tabindex="-1">Briefs and live trends</h1>
     <p>What the market is saying, from triaged mentions only: aggregates, never individuals. Briefs are written from these tables, and every number an action card cites is checked against them.</p>
   </div>
   <div class="pulse-bar">
@@ -217,7 +393,8 @@
 
 <!-- Usage -->
 <div id="usage" class="section">
-  <div class="section-head"><h2>Usage</h2><p>Actual Claude usage — your subscription quota, calls, and tokens per agent and task. Subscription plans aren't billed per token, so no dollar costs here.</p></div>
+  <p class="crumb-back"><a href="#hq">&larr; Operator HQ</a></p>
+  <div class="section-head"><h1 tabindex="-1">Usage</h1><p>Actual Claude usage: your subscription quota, calls, and tokens per agent and task. Subscription plans aren't billed per token, so no dollar costs here.</p></div>
   <div id="usage-quota" class="card hidden"></div>
   <div class="stats-grid" id="usage-stats"></div>
   <div class="card hidden" id="usage-daily"></div>
@@ -226,7 +403,8 @@
 
 <!-- Users (admin) -->
 <div id="users" class="section">
-  <div class="section-head"><h2>Users</h2><p>Who can sign in. Viewers read; reviewers edit, approve and acknowledge non-clinical escalations; clinical acknowledges any escalation; admins do everything.</p></div>
+  <p class="crumb-back"><a href="#hq">&larr; Operator HQ</a></p>
+  <div class="section-head"><h1 tabindex="-1">Users</h1><p>Who can sign in. Viewers read; reviewers edit, approve and acknowledge non-clinical escalations; clinical acknowledges any escalation; admins do everything.</p></div>
   <form class="card form-row" id="user-form">
     <div class="form-group"><label class="form-label" for="u-email">Email</label>
       <input class="form-input" id="u-email" name="email" type="email" required></div>
@@ -248,7 +426,8 @@
 
 <!-- Controls -->
 <div id="controls" class="section">
-  <div class="section-head"><h2>Controls</h2><p>Start and stop the heartbeat loop (admins), and watch what it's doing.</p></div>
+  <p class="crumb-back"><a href="#hq">&larr; Operator HQ</a></p>
+  <div class="section-head"><h1 tabindex="-1">Controls and logs</h1><p>Start and stop the heartbeat loop (admins), and watch what it's doing.</p></div>
   <div class="control-panel">
     <div class="card">
       <h2>Heartbeat</h2>
@@ -272,7 +451,54 @@
   </div>
 </div>
 
+
 </main>
+
+<footer class="site-foot">
+  <img src="/static/brand/wellpeps-logo.png" width="143" height="28" alt="WellPeps">
+</footer>
+
+<button type="button" class="rw-bubble" id="rw-bubble" hidden>Rewrite</button>
+<div class="rw-menu" id="rw-menu" role="dialog" aria-label="Rewrite selection" hidden></div>
+<div class="toasts" id="toasts" role="status" aria-live="polite"></div>
+
+<!-- Operator HQ: record a moderator's answer for one community (admins). -->
+<dialog class="modal" id="perm-dialog" aria-labelledby="perm-title" aria-describedby="perm-lede">
+  <form class="modal-body" id="perm-form" novalidate>
+    <h2 id="perm-title">Record permission</h2>
+    <p class="lede" id="perm-lede"></p>
+    <div class="field">
+      <label for="perm-participation">Can WellPeps post here?</label>
+      <select id="perm-participation">
+        <option value="allowed">Yes, brand replies are allowed</option>
+        <option value="not_allowed">No, brand replies are not allowed</option>
+        <option value="unknown">Not sure yet</option>
+      </select>
+    </div>
+    <div class="field">
+      <label for="perm-links">Are links allowed?</label>
+      <select id="perm-links">
+        <option value="true">Yes</option>
+        <option value="false">No</option>
+        <option value="unknown">Not sure yet</option>
+      </select>
+    </div>
+    <div class="field">
+      <label for="perm-contact">Moderator contact (optional)</label>
+      <input type="text" id="perm-contact" maxlength="200" autocomplete="off">
+    </div>
+    <div class="field">
+      <label for="perm-note">Note (optional)</label>
+      <textarea id="perm-note" maxlength="1000"></textarea>
+      <span class="hint">What the moderator said, and when.</span>
+    </div>
+    <p class="form-error hidden" id="perm-error" role="alert"></p>
+    <div class="modal-actions">
+      <button type="button" class="btn btn-ghost" data-action="perm-cancel">Cancel</button>
+      <button type="submit" class="btn btn-primary" id="perm-submit">Save permission</button>
+    </div>
+  </form>
+</dialog>
 
 <aside class="drawer hidden" id="drawer" aria-label="Mention detail"></aside>
 
@@ -324,6 +550,7 @@
 </dialog>
 
 
+
 <script src="/static/labels.js"></script>
 <script src="/static/app.js"></script>
 <script src="/static/password.js"></script>
@@ -332,5 +559,9 @@
 <script src="/static/charts.js"></script>
 <script src="/static/analytics.js"></script>
 <script src="/static/replies.js"></script>
+<script src="/static/rewrite.js"></script>
+<script src="/static/home.js"></script>
+<script src="/static/hq.js"></script>
+<script src="/static/knowledge.js"></script>
 </body>
 </html>

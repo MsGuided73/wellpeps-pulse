@@ -24,6 +24,9 @@ clinical decision ([CP] cover page, §13; hard rule 3 in CLAUDE.md).
 | [OM] | WellPeps Comprehensive Community Engagement Operations & Training Manual (docx and the `_V1` PDF have the same text) | 2.0, Aug 2026 |
 | [CG] | WellPeps Community Groups and Forums (owner's principles) | undated |
 | [PL] | WellPeps Pre-LegitScript Marketing Community Strategy | Sep 2026 |
+| [SM] | WellPeps_Engagement_Goals_and_Conversation_Selection_Module_V1 (`C:\dev\W\docs\community-engagement-agent\Knowledge Base\`; same file under `Community Engagement\`) and its source note "Community Engagement - Why and When to Engage" | 1.0, Oct 10 2026, internal implementation module |
+| [GP] | WellPeps_Agent_Program_Gameplan (Knowledge Base copy, Oct 8 2026; text dated Aug 17 2026) | planning instrument |
+| [DG] | Derek Goldberg (WellPeps) e-mail decisions on the Pulse review | Oct 10 2026 |
 
 Originals (except [CP]): `C:\dev\W\docs\community-engagement-agent\Community Engagement-20261007T043724Z-1-001.zip` -> `Community Engagement/<file>`.
 Pulse never modifies anything under `C:\dev\W`.
@@ -37,6 +40,13 @@ Pulse never modifies anything under `C:\dev\W`.
    legal, clinical, privacy and compliance directives control over it.
 2. **The other Community Engagement documents** ([AMG], [LR], [CT], [OM],
    [CG], [PL]) override everything that came before.
+   **[SM]** (Oct 10) governs routine conversation selection before drafting.
+   It supplements [CP] and these rules and replaces none of the clinical,
+   privacy, safety, access, disclosure, approval or platform rules ([SM] §1).
+   [DG] (Oct 10): preserve the safety, privacy and clinical overrides first,
+   then let the protocol decide ordinary engagement; internal activity
+   targets are warnings; explicit community restrictions, moderator
+   instructions and platform limits are firm posting blocks.
 3. **Everything earlier** (the Aug 2026 Agent Program Gameplan, the
    registry-derived reply rules R1-R39, the conversion playbook,
    `reply_examples.yaml` and the claims added in commit 9c21c7b, Pulse
@@ -71,6 +81,9 @@ under [Superseded earlier rules](#superseded-earlier-rules).
   opportunity ([CP] §1, §4, §9).
 - When uncertain, do not guess: escalate or hold ([OM] §1; [CT] Appendix A;
   [CP] §4).
+- Enter a conversation only with an opening, a specific approved
+  contribution and permission to participate; a keyword, an available eBook
+  or a large audience is not enough ([SM] §1 "the operating test").
 
 ## 2. Personas and disclosure
 
@@ -139,11 +152,16 @@ rule (R3, `disclosure.within_sentences: 2` in `config/compliance_rules.yaml`):
    reply mode: `draft` (model draft in the template's shape), `boundary_only`
    (the approved response verbatim, no model call), `stop` (empty draft for a
    human) or `no_reply`.
-5. **Drafting** checks the community registry and the stop rules first, then
+5. **Conversation selection** ([SM]; section 4a below) records the review
+   gates on the triage: a competitor's own community, the SKIP reasons, an
+   unverified central fact. Only eligible posts are drafted.
+6. **Drafting** checks the community registry and the stop rules first, then
    drafts. Every draft goes through the deterministic filter (with the
    community's rules) and, for model drafts, the adversarial reviewer.
-6. **A human** approves in the review desk (with the clinical gate for adverse
-   events and emergencies), copies the reply and posts it by hand.
+7. **A human** approves in the review desk (with the clinical gate for adverse
+   events and emergencies), copies the reply and posts it by hand. Approval
+   recomputes the protocol, the selection and the community permission: a
+   reply where posting is held cannot be approved ([SM] §5).
 
 ### Review gates and incident routing (user decision 2026-10-09)
 
@@ -164,10 +182,14 @@ so benefit is never a reason to engage with someone vulnerable, [CP] §1):
    side-effect, dose, lab or treatment posts at all.
 3. **Worth it** (`engagement.worth_it`): a reply could plausibly benefit
    WellPeps: the post is about WellPeps or a competitor, the protocol says
-   APPROPRIATE ALTERNATIVE / EDUCATIONAL ONLY, the person is buying, or the
+   APPROPRIATE ALTERNATIVE / EDUCATIONAL ONLY, the person is buying, the
    question is about process, pricing, choosing or comparing providers, or
-   WellPeps itself. Otherwise `gate:not_worth_it`: no draft. Trends and the
-   language bank still count it.
+   WellPeps itself, or it is a general medication or treatment education
+   question ([SM] §3 "General medication or treatment education: RESPOND";
+   this answers R-14's open question, 2026-10-20). Otherwise
+   `gate:not_worth_it`: no draft. Trends and the language bank still count it.
+   The [SM] SKIP reasons (section 4a) are recorded as
+   `gate:not_worth_it:<reason>`.
 
 **Incident routing** (pending WellPeps clinical / compliance confirmation; this
 narrows [AMG] §10 and [CP] Example 4, which cover adverse events "in any
@@ -178,6 +200,7 @@ thread"):
 | About WellPeps (names it, or the person appears to be a WellPeps patient) | Pages the owner as before; approved boundary reply where the guide has one |
 | Serious health report (emergency, self-harm, an urgent keyword such as ER / hospitalized / gallbladder, a possible minor, possible serious harm) not about WellPeps | **Safety watch**: an escalation row that is never paged, reviewed daily (24 h window), status `escalated`, no reply, not counted as an open escalation |
 | Other companies' legal, privacy or billing issues; expected or cosmetic side effects not about WellPeps | No escalation, no reply; trends only |
+| A medical question or health crisis about someone else ("my father on Ozempic drinks heavily") | **No reply of any kind** (not even a boundary reply). Safety watch; the clinical owner when WellPeps is named. Triage tag `other_person_medical` or the safety screen's `other_person` flag (session safeguard 2026-10-20; [OM] §5.3 individual questions; [GP] §6.1-6.2 "Clinical triage ... Route to humans. Full stop.") |
 
 Basis: Pre-LegitScript plan ("Respond only where WellPeps can add value";
 "Don't respond merely because a keyword appeared"); user decision 2026-10-09;
@@ -212,6 +235,39 @@ is open).
 | Has anyone used WellPeps / how it works / pricing / general education / question | Template A model draft from approved claims | — | reviewer | [AMG] §5, §12, §17-18, §25 A |
 | Competitor mentions and provider switching | See section 5 | per protocol | per protocol | [CP] |
 | Minors (safety screen) and failed screens | Never any reply, boundary or not | as before | — | retained safeguard R33 |
+
+## 4a. Conversation selection ([SM] V1, Oct 10 2026)
+
+`harvey/engagement.py` (`skip_reason`, `unverified_central_fact`,
+`competitor_community`, `selection`, `posting_hold`), recorded at triage time
+as review gates and recomputed at approval (`harvey/review.py`). Every rule
+cites its source; [SM] §6 evaluation cases are tests
+(`tests/test_selection_safeguards.py`).
+
+| Rule | Decision | Enforced | Source |
+|---|---|---|---|
+| Incidents (safety, clinical, privacy, legal, WellPeps support) go to their workflows first and are never opportunity-scored; a skipped marketing reply never suppresses an incident | ROUTE | code (situations, protocol, `escalation_kind`; gates run after) | [SM] §1, §2 step 1; [DG] |
+| A competitor's own community (r/IVIMHEALTH, r/Noom, r/yourmdonline, r/hims...: the community name matches a competitor or alias, `harvey.insights` community index) is listen-only intelligence, never a reply candidate, even if permission is recorded | SKIP (`gate:competitor_community`) and approval refused | code | session safeguard 2026-10-20; [SM] §2 step 2, §3 "Not the intended positioning"; [GP] §7.1 "mostly, stay out"; [CP] §1 |
+| Business participation prohibited | SKIP; no link, no guide by name, no DM workaround | code (R44 red, protocol DO NOT ENGAGE, approval refused) | [SM] §2 step 2, §3; [CP] §4 step 1 |
+| Unknown rules or required moderator permission missing | HOLD posting: drafting for internal review is allowed, approval is refused ("human posts / held until permission") until the rules or the moderator's permission are recorded (config/communities.yaml or the dashboard record); competitor / switching posts are not drafted at all ([CP] HOLD) | code (`posting_hold` in `approval_blockers`) | [SM] §2 step 2, §5 "Never treat a yellow unknown-rule warning as sufficient for approval"; [CP] §2, §10; [DG] |
+| A satisfied-provider update with no question ("Happy with Ro. Month three is going great.") | SKIP `satisfied_provider` | code (triage tag `satisfied_provider` or subtype `competitor_praise`, with no question intent) | [SM] §2 step 3, §3, §6 |
+| A question from another provider's patient ("I use Ro. What does titration mean?") | RESPOND educationally, no switching pitch | code (a question intent keeps it open) + drafter / reviewer | [SM] §3 "CONSIDER", §6 |
+| Only the cheapest seller, a coupon or an undercut ("Who can beat this price? Coupons only.") | SKIP `price_only`, even with an alternatives request; safety still routes first | code (triage tag `price_only`) | [SM] §2 step 4, §3, §6 |
+| Price clarity, affordability or what a price includes ("Money is tight. What extra costs should I check?") | RESPOND (not price-only) | triage prompt (`price_clarity` need) | [SM] §3 "Intent is more important than keywords", §6 |
+| Already answered well / no incremental value | SKIP `no_added_value` | triage tag `already_answered` (thread context the model can see); stale threads and existing good answers are also a human posting check ([CP] §11) | [SM] §2 step 6, §3 |
+| No approved answer or offering for the question | SKIP `knowledge_gap` (useful contribution 0, not about WellPeps); recorded in the gate for a content backlog | code | [SM] §2 step 5, §3, §5 |
+| A direct WellPeps question whose central fact is awaiting verification ("What does WellPeps charge?" while pricing is FINALIZE) | HOLD (`gate:hold_unverified_fact`), nothing drafted | code: the need's direct facts (`switching_protocol.needs.<need>.direct`) exist and none is publishable | [SM] §2 step 5, §3, §6; [CP] §4 step 5 |
+| General medication / treatment education | RESPOND | code (`worth_it`) | [SM] §3, §6 |
+| A complaint about another company that also asks for alternatives | Answered under the protocol; triage's `reply_appropriate` guess never discards it | code (`answers_alternatives_request` in the draftable query) + triage prompt | [DG]; [SM] §5 "Do not let 'complaint about another company' suppress an otherwise eligible alternatives request"; R-2 |
+| Duplicate participation | Rechecked at approval: a thread with the maximum approved WellPeps replies refuses another | code (`thread_blocker`) | [SM] §2 step 6, §5; [AMG] §22 |
+| A medical question or crisis about someone else | ROUTE: safety watch, no reply | code (triage tag + safety screen + `escalation_kind`) | session safeguard 2026-10-20; [GP] §6.2 |
+| Priority among RESPOND cases | high: direct WellPeps questions, clear treatment-education needs, alternatives with an approved fit; standard: broader education and provider selection; never desperation, severity or follower count; scores rank RESPOND only | code (`selection().priority`; protocol score) | [SM] §4; [CP] §9 |
+
+The review desk shows the record ([SM] §5): `engagement.selection` gives
+`engagement_decision` (RESPOND / SKIP / HOLD / ROUTE), `reason_code`,
+`public_permission` (allowed / prohibited / unknown / permission_missing /
+platform_rules_only), `posting_hold` and `priority`; the guide decision
+(section 4) is the resource decision.
 
 ### Answer first and acknowledgements (2026-10-07)
 
@@ -445,10 +501,17 @@ database of each community's rules"). Every community starts `unknown`.
 | Rule status | Effect |
 |---|---|
 | `prohibited` | No reply at all (audit `skipped`, never retried); the protocol says DO NOT ENGAGE; a draft is red (R44). |
-| `unknown` (or not registered) | Competitor / switching posts: HOLD, nothing drafted ([CP] §2). Everything else: drafted, yellow "community rules unverified", no link (a link is red) and no Smart Patient's Guide, even by name (red). Approval of these drafts is still possible today; blocking it until permission is verified is the next planned change ([CP] §2, §10; [OM] §5.1). |
-| `with_permission`, permission not obtained | Yellow; no link and no promotion (red); an alternatives request is downgraded to EDUCATIONAL ONLY. |
+| `unknown` (or not registered) | Competitor / switching posts: HOLD, nothing drafted ([CP] §2). Everything else: drafted for internal review, yellow "community rules unverified", no link (a link is red) and no Smart Patient's Guide, even by name (red). **Approval is refused** ("human posts / held until permission") until the rules or a moderator's permission are recorded ([SM] §2 step 2, §5; [CP] §2, §10; [OM] §5.1; [DG]; 2026-10-20, R-20). |
+| `with_permission`, permission not obtained | Yellow; no link and no promotion (red); an alternatives request is downgraded to EDUCATIONAL ONLY; **approval refused** until the permission is recorded. |
+| a competitor's own community (named for a competitor or alias) | Listen-only: nothing drafted (`gate:competitor_community`) and approval refused whatever is recorded; mentions feed competitor insights ([SM] §3; [GP] §7.1; session safeguard 2026-10-20). |
 | `allowed` | Normal; `links_allowed: false` still makes any link red. |
 | no community (owned channels, review sites, Instagram / TikTok comments) | Platform rules only. |
+
+Firm posting blocks vs warnings ([DG] 2026-10-10): explicit community
+restrictions, a moderator's instruction (record it as `prohibited` or
+`links_allowed: false`) and platform limits (character, link and hashtag
+limits in the filter) block approval; internal activity targets (the 80/20
+share, the per-community volume target) are warnings only.
 
 Platform notes ([OM] §12; [CT] Module 9; [AMG] §17-20; [PL]): Facebook
 groups need admin permission for promotion and consistent participation;
@@ -488,6 +551,13 @@ blocks or flags a reply on it. A reply counts as promotional when it carries
 a link, cites a promotional claim, names a price or uses a call to action
 (`harvey/promotion.py`).
 
+Activity target (2026-10-20, [PL] Channel 3 "Don't overwhelm a single
+subreddit/community"; [DG] "internal activity targets are warnings"): the
+review desk warns (`engagement.activity_warnings`, shown under
+`engagement.warnings`) when WellPeps already has 3 approved replies in the
+community in the last 7 days, or the community's 80/20 share is over. Pulse
+proposes the number; it never blocks.
+
 ## 9. When to stop ([AMG] §22; [OM] §13.3)
 
 - Two approved WellPeps replies in a thread already: no third (empty draft
@@ -502,7 +572,10 @@ a link, cites a promotional claim, names a price or uses a call to action
 - Abusive or threatening thread: no reply; moderation and escalation by hand.
 - A moderator asks WellPeps to stop, or the issue is escalated and public
   discussion could interfere: the human stops (record it in
-  `config/communities.yaml` when it is a community rule).
+  `config/communities.yaml` or the dashboard's community record when it is a
+  community rule; it then blocks approval, [DG]).
+- At approval, a thread that already has the maximum approved WellPeps
+  replies refuses another one ([SM] §5 "Recheck ... duplicate participation").
 
 ## 10. Escalation ([AMG] §23-24; [OM] §14-15, §25; [LR] §14; [CP] §5)
 
@@ -550,6 +623,23 @@ can get anything compounded for you."; "their care is unsafe"; "We prevent
 reactions"; "I'm just a happy independent customer."; "sign up now and we'll
 solve the problem".
 
+Session safeguards (2026-10-20, R-20): never suggest a DM, private message,
+call, text or e-mail ("Give us a call", "email me", "reach out privately",
+"hop on a quick call"; R49, red; [CP] §1, §8, §11; [GP] §7.1); never ask anyone
+to post an order number, account or health details in public ("post your
+order number", "share your dose"; R32, red; [AMG] §8); never claim access to
+the person's records or confirm they are a customer ("we'll look into your
+account", "your WellPeps order", "your order has shipped"; R31, red; [OM] §8;
+[CT] Module 5; [GP] §3.2, §12); never invent a clinical team or authority
+("I'm on the WellPeps clinical team"; R2, red; [SM] §4); never promise
+ungated access to a guide ("no email required", "instant download"; R49, red;
+[SM] §4; [CP] §8). Neutral referral wording ("contact your prescribing
+provider", "ask your provider") is allowed. Routing to WellPeps' approved
+support channel is the approved wording, not a private invitation.
+
+Length: "aim for" 40-90 words ([CP] §7) is a target for the drafter and the
+reviewer, never a filter rule; only the platform's character limit is.
+
 Preferred alternatives ([AMG] §26): "Results vary by individual." "No
 specific outcome can be guaranteed." "A licensed healthcare provider can
 determine whether treatment is appropriate." "I can provide general
@@ -577,6 +667,9 @@ information here."
 | Answer first; program-status claims; reviewer NON_RESPONSIVE -> needs_human | `prompts/draft.md` ("Answer first"), `drafter.ANSWER_FIRST`, `claims.yaml` `program:` (`drafter.programs_for`), `prompts/review.md` | `tests/test_answer_first.py` |
 | One acknowledgement sentence before a verbatim approved response | `harvey/agents/acknowledger.py`, `prompts/acknowledge.md`, `drafting._acknowledged`, `engagement.acknowledged_reply` | `tests/test_acknowledgements.py` |
 | No autonomous posting | no publish / message path in Pulse | `tests/test_protocol_eval.py` |
+| Conversation selection ([SM]): SKIP reasons, central-fact HOLD, competitor communities, general education, selection record, posting hold at approval, duplicate participation, activity warnings | `harvey/engagement.py`, `harvey/review.py` (`_selection_blockers`), `harvey/agents/triager.py`, `prompts/triage.md` | `tests/test_selection_safeguards.py`, `tests/test_review_gates.py`, `tests/test_engagement_state.py` |
+| Someone else's medical question: no reply, safety watch | `prompts/triage.md`, `prompts/safety_screen.md`, `harvey/agents/safety_screen.py`, `harvey/agents/triager.py`, `harvey/escalation.py` | `tests/test_selection_safeguards.py` |
+| Private channels, public details, R31 narrowed, invented clinical authority, ungated guide access, length as a target | `config/compliance_rules.yaml`, `prompts/draft.md`, `prompts/reply_rules.md`, `prompts/review.md` | `tests/test_safeguard_rules.py`, `tests/test_compliance.py` |
 
 ## Superseded earlier rules
 
@@ -598,6 +691,11 @@ information here."
 | Third-party individual medical questions: no reply ([OM] §5.3) | In the protocol's scope: CLINICAL CAUTION with the approved boundary | [CP] §4 step 3, Examples 3, 8, 11 |
 | R31 red for "your care team" | Generic "your care team" allowed; "your WellPeps care team" stays red | [CP] Example 1 ("ask how you can contact your care team") |
 | R31 yellow for "DM us / message me" | Red (R49): no DM migration or unsolicited messages | [CP] §1, §8, §11, Example 15; [OM] §12.1; [AMG] §9 |
+| R31 yellow for "reach out privately"; calls, texts and e-mails unchecked | Red (R49): any call, text, e-mail or private-channel suggestion (2026-10-20) | session safeguard; [CP] §1, §8, §11; [GP] §7.1 |
+| R31 red for the bare phrases "your order", "your prescription", "your provider", "your refill"... | Only record access, order / account status claims and WellPeps-relationship wording are red (2026-10-20) | Derek Goldberg's review (2026-10-07) and Pulse's response; [OM] §8; [CT] Module 5 |
+| R-14: a general education question not about WellPeps or a competitor is "not worth it" | RESPOND when it is a relevant general medication or treatment education question with an opening; the [SM] SKIP reasons still apply | [SM] §1, §3, §6 (Oct 10) |
+| Unknown or not-yet-permitted community: yellow, approval possible | Approval refused until rules or permission are recorded (drafting still allowed) | [SM] §2 step 2, §5; [CP] §2, §10; [DG] |
+| A model draft needs triage's `reply_appropriate` | Also drafted when the protocol answers an explicit alternatives request (APPROPRIATE ALTERNATIVE or EDUCATIONAL ONLY with `alternatives_requested`) | [DG]; [SM] §5 |
 | R7 / R9: personal health question -> thank, general education, suggest a provider (model-written) | The approved boundary wording verbatim (Template B, §6 responses), no model call | [AMG] §6, §25 B; [OM] §9.3 |
 | Prompt line "no medication or brand names" (draft.md) | Medication names only for general education; never which medication or dose is right for someone | as R38 above |
 
@@ -612,7 +710,7 @@ until WellPeps confirms or drops them.
 | R15 / R16: never imply a compounded medication is the same as, equivalent to or a generic of a brand drug, or FDA-approved; no brand name as a WellPeps product | FDA misbranding / warning-letter language | `compliance_rules.yaml` R15, R16 | [LR] §13.1 ("Compounded medications are not FDA-approved as finished drug products") and [PL] "Review first: compounded" support it; no explicit sameness rule |
 | R12: no LegitScript / NABP certification claims while pending, no "certification-pending" wording, no "FDA-approved pharmacy" | LegitScript denial / revocation; false accreditation | R12 (toggle `allow_certification_claims: false`) | [PL] DON'T list ("certification-pending language") agrees; pharmacy accreditation not addressed |
 | R8: no assessment, intake or checkout links and no "Start your assessment" before LegitScript | platform / LegitScript circumvention | R8 | [PL] lists such links as "Review first" (Pulse is stricter: red); [AMG] §15, §19 give assessment-link patterns with a FINALIZE slot |
-| R31: never reference the person's order, prescription, account, records, "your provider" or confirm patient status | HIPAA / patient-status disclosure | R31 (`patient_confirmation`) | [OM] §8, [CT] Module 5 forbid confirming patient status; the phrase list is Pulse's inference |
+| R31 (narrowed 2026-10-20): never claim access to the person's records or account ("we'll look into your account", "your order has shipped") and never confirm or imply they are a WellPeps customer ("as our patient", "your WellPeps order") | HIPAA / patient-status disclosure | R31 (`patient_confirmation`) | [OM] §8, [CT] Module 5, [GP] §3.2, §12 forbid confirming patient status. The bare phrases "your order / prescription / provider" were Pulse's over-broad inference and are no longer red (agreed with Derek Goldberg's reviewer; "contact your prescribing provider" is approved wording) |
 | R33 + safety screen: possible minors never get a reply (boundary or not) | weight-loss marketing to minors | R33, `safety_screen` | not addressed |
 | Self-harm: no reply, clinical owner paged | crisis handling | `self_harm` situation | [OM] §15 (credible safety threats) only in general terms |
 | R13 / R14 / R17 / R27: no outcome numbers, safety absolutes, universality, unsourced statistics | FTC substantiation | prohibited / yellow patterns | consistent with [AMG] §7, §26; [CT] Module 4 |
@@ -668,6 +766,19 @@ prices, Hormone / Mental Wellness status, influencer examples, FDA
 disclaimer) are covered by `pricing`, `program_descriptions`,
 `support_channel`, `influencer_disclosures` and `fda_disclaimer` above.
 
+## PENDING: needs Derek Goldberg's sign-off (not implemented)
+
+Raised in the 2026-10-20 review session; Pulse keeps its current behaviour
+until WellPeps decides.
+
+| Item | Pulse today | Needed |
+|---|---|---|
+| Company voice "we" on owned channels and review sites ("We're the WellPeps team") | Not on the approved disclosure list; drafts use "I work with WellPeps." / "I'm part of the WellPeps team." | Approved company-voice wording for official accounts ([OM] §3.2; [CP] §7; [AMG] §4) |
+| Paraphrasing approved claims | Facts only in an approved claim's words; the acknowledgement sentence is the only adaptation | Whether, and how far, reviewers / the drafter may paraphrase approved wording ([AMG] §1) |
+| Hair Restoration status | "Coming soon" (site gate) vs "available now" ([LR] §3): PENDING | Which is current |
+| Review-time statements ("a provider usually reviews within ...") | No approved response-time fact; R49 red | Approved review-time wording, if any ([CP] §6) |
+| The mandatory "it asks for your email" sentence | Kept (owner instruction 2026-10-07; natural wording); ungated-access promises are red | [SM] §4 says the sentence is not required in every comment when the landing page explains the email requirement: confirm before relaxing |
+
 ## Document conflicts and resolutions
 
 | Conflict | Resolution |
@@ -688,6 +799,9 @@ disclaimer) are covered by `pricing`, `program_descriptions`,
 | "WellPeps is one option you can evaluate" ([CP] §7) is not in [AMG] | Used as connecting wording in APPROPRIATE ALTERNATIVE drafts, not as a factual claim |
 | [PL] "Happy to send you the link if useful" vs [CP] §8 (no outreach, no DM) | Offer only in the thread; Pulse never sends anything |
 | Ops Manual docx vs `_V1` PDF | Same text (both read in full); cited as [OM] |
+| General education "not worth it" (R-14, Oct 9) vs "General medication or treatment education: RESPOND" ([SM] §3, Oct 10) | [SM] (newer WellPeps guidance): RESPOND; the SKIP reasons still apply |
+| Unknown community: HOLD ([CP] §2) vs draft and review ([OM] §28) vs "internal drafting may be allowed, posting approval blocked" ([SM] §2) | Competitor / switching posts HOLD (nothing drafted); other posts drafted for review and approval refused until permission is recorded |
+| Mandatory email-gate sentence (owner 2026-10-07) vs not required in every comment ([SM] §4) | Kept pending Derek's confirmation (PENDING table) |
 
 ## Changing these rules
 

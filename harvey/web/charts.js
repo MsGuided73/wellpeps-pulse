@@ -54,11 +54,11 @@ const Charts = (() => {
   }
 
   function fmtPct(v, digits) {
-    return v === null || v === undefined ? '—' : (v * 100).toFixed(digits === undefined ? 1 : digits) + '%';
+    return v === null || v === undefined ? 'n/a' : (v * 100).toFixed(digits === undefined ? 1 : digits) + '%';
   }
 
   function fmtSigned(v, digits) {
-    if (v === null || v === undefined) return '—';
+    if (v === null || v === undefined) return 'n/a';
     const sign = v > 0 ? '+' : v < 0 ? '−' : '±';
     return sign + Math.abs(v).toFixed(digits === undefined ? 2 : digits);
   }
