@@ -363,3 +363,49 @@ def test_harness_yaml_rejects_unknown_situations_and_topics(tmp_path, monkeypatc
     finally:
         monkeypatch.delenv("PULSE_CONFIG_DIR")
         knowledge.reload()
+
+
+# --- Review follow-ups --------------------------------------------------------------------------------
+
+
+def test_numbered_lines_that_start_lowercase_are_not_headings():
+    text = f"Dosing notes\n{PARA}\n2.5 mg weekly\n{PARA}"
+    paths = headings(harness.split_sections(doc(text=text)))
+
+    assert not any("2.5 mg weekly" in " ".join(p) for p in paths)
+
+
+def test_a_very_long_markdown_heading_is_cut_to_the_heading_cap():
+    text = "# " + "Very long heading words " * 200 + f"\n{PARA}"
+    section = harness.split_sections(doc(text=text))[0]
+
+    assert len(section.heading) <= harness.MAX_HEADING_CHARS
+
+
+def test_pinned_voice_sections_leave_room_for_matching_sections():
+    voice = doc(60, "Voice rules.md", "\n\n".join(f"# Tone rule {i}\nAvoid this tone. {PARA}" for i in range(30)))
+    hair = doc(61, "Hair FAQ.md", f"# Hair restoration questions\nHair loss posts ask about topical finasteride. "
+                                  f"{PARA}", authority="reference", kind="facts_faq")
+    picked = chosen(harness.select(harness.sections_for([voice, hair]), hair_ctx(), 8000))
+
+    assert any(s.doc_name == "Voice rules" for s in picked)
+    assert any(s.doc_name == "Hair FAQ" for s in picked)
+    assert picked[0].doc_name == "Voice rules"     # pinned still come first
+
+
+def test_pinned_sections_use_the_whole_budget_when_nothing_else_matches():
+    voice = doc(60, "Voice rules.md", "\n\n".join(f"# Tone rule {i}\nAvoid this tone. {PARA}" for i in range(30)))
+    selection = harness.select(harness.sections_for([voice]), hair_ctx(), 8000)
+
+    assert selection.chars > 8000 * harness.PINNED_SHARE + 500
+
+
+def test_tagging_is_cached_until_the_config_reloads(monkeypatch):
+    d = doc(70, "Tone.md", f"# Tone\n{PARA}")
+    first = harness.sections_for([d])
+    calls = []
+    monkeypatch.setattr(harness, "tag_section", lambda s, doc=None: calls.append(s) or s)
+
+    again = harness.sections_for([d])
+
+    assert again == first and calls == []

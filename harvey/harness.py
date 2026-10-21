@@ -40,6 +40,7 @@ MIN_SECTION_CHARS = 200
 MAX_HEADING_CHARS = 80
 MAX_SHORT_HEADING_WORDS = 10
 MIN_PARAGRAPH_AFTER_HEADING = 60
+PINNED_SHARE = 0.5          # pinned (voice) sections fill at most half the room while others match
 SLUG_CHARS = 40
 NONCE_CHARS = len(prompting.new_nonce())
 _CACHE_LIMIT = 512
@@ -107,8 +108,9 @@ class Selection:
 
 _MD_HEADING = re.compile(r"^(#{1,3})\s+(\S.*?)\s*#*\s*$")
 # "1. Purpose", "7.1 When to disclose", "§8 Resources", "Section 9 Opportunity score"
-_NUMBERED = re.compile(r"^(?:§\s*(?P<para>\d{1,3}(?:\.\d{1,3})*)\.?|Section\s+(?P<sect>\d{1,3}(?:\.\d{1,3})*)\.?"
-                       r"|(?P<dotted>\d{1,2}(?:\.\d{1,2})+)\.?|(?P<plain>\d{1,2})\.)\s+\S", re.IGNORECASE)
+# The title starts with a capital (or a quote / bracket): "2.5 mg weekly" is a dose line.
+_NUMBERED = re.compile(r"^(?:§\s*(?P<para>\d{1,3}(?:\.\d{1,3})*)\.?|[Ss]ection\s+(?P<sect>\d{1,3}(?:\.\d{1,3})*)\.?"
+                       r"|(?P<dotted>\d{1,2}(?:\.\d{1,2})+)\.?|(?P<plain>\d{1,2})\.)\s+[A-Z\"“'(]")
 _SENTENCE_END = re.compile(r"[.!?,;:]$")
 _ENDS_PARAGRAPH = re.compile(r"[.!?:\"”')]$")
 _BULLET = re.compile(r"^[-*•–·]\s")
@@ -123,13 +125,14 @@ def _numbered_level(line: str) -> int:
     return number.count(".") + 1
 
 
-def _heading(lines: list[str], i: int) -> tuple[int, str] | None:
+def _heading(lines: list[str], i: int, following: str = "") -> tuple[int, str] | None:
     """(level, title) when ``lines[i]`` looks like a heading in extracted text.
 
     The heuristics, in one place: a numbered heading ("1.", "1.2", "§3", "Section 4"),
     an ALL-CAPS line, or a short line (no final period) that starts a paragraph and is
-    followed by a longer line. All are at most 80 characters and never end like a
-    sentence ("1. Read the post twice." is a list item, not a heading)."""
+    followed by a longer line (``following``: the next non-empty line). All are at most
+    80 characters and never end like a sentence ("1. Read the post twice." is a list
+    item, not a heading)."""
     line = lines[i].strip()
     if not line or len(line) > MAX_HEADING_CHARS or _SENTENCE_END.search(line) or _BULLET.match(line):
         return None
@@ -144,16 +147,23 @@ def _heading(lines: list[str], i: int) -> tuple[int, str] | None:
     previous = lines[i - 1].strip() if i > 0 else ""
     if previous and not _ENDS_PARAGRAPH.search(previous):
         return None                                   # the wrapped end of a sentence
-    following = next((ln.strip() for ln in lines[i + 1:] if ln.strip()), "")
     if len(following) < max(MIN_PARAGRAPH_AFTER_HEADING, len(line) + 1) or _numbered_level(following):
         return None
     return 1, line
+
+
+def _short_title(title: str) -> str:
+    title = title.strip()
+    return title if len(title) <= MAX_HEADING_CHARS else title[:MAX_HEADING_CHARS - 4].rstrip() + " ..."
 
 
 def _blocks(text: str) -> list[tuple[tuple[str, ...], str]]:
     """(heading path, body) for each run of text between headings."""
     lines = text.split("\n")
     markdown = any(_MD_HEADING.match(ln) for ln in lines)
+    following = [""] * len(lines)            # the next non-empty line after each line
+    for i in range(len(lines) - 2, -1, -1):
+        following[i] = lines[i + 1].strip() or following[i + 1]
     blocks: list[tuple[tuple[str, ...], str]] = []
     stack: list[tuple[int, str]] = []
     body: list[str] = []
@@ -168,9 +178,9 @@ def _blocks(text: str) -> list[tuple[tuple[str, ...], str]]:
         found = None
         if markdown:
             m = _MD_HEADING.match(raw)
-            found = (len(m.group(1)), m.group(2)) if m else None
+            found = (len(m.group(1)), _short_title(m.group(2))) if m else None
         else:
-            found = _heading(lines, i)
+            found = _heading(lines, i, following[i])
         if found is None:
             body.append(raw)
             continue
@@ -332,11 +342,31 @@ def tag_section(section: Section, doc: dict | None = None) -> Section:
                    situations=_matching(tags.situations, haystack), topics=_matching(tags.topics, haystack))
 
 
+_TAG_CACHE: dict[tuple, tuple] = {}
+
+
+def _tagged(doc: dict) -> tuple[Section, ...]:
+    """Tagged sections of one document, cached until config/ is reloaded (tags come
+    from harness.yaml and the drug lookup; a document id never changes its text)."""
+    sections = split_sections(doc)
+    key = (tuple(s.id for s in sections), hash(tuple(s.text for s in sections)),
+           tuple(str(p) for p in doc.get("programs") or ()))
+    tags, lookup = knowledge.harness(), knowledge.drug_lookup()
+    cached = _TAG_CACHE.get(key)
+    if cached is not None and cached[0] is tags and cached[1] is lookup:
+        return cached[2]
+    tagged = tuple(tag_section(s, doc) for s in sections)
+    if len(_TAG_CACHE) >= _CACHE_LIMIT:
+        _TAG_CACHE.clear()
+    _TAG_CACHE[key] = (tags, lookup, tagged)
+    return tagged
+
+
 def sections_for(docs: list[dict]) -> list[Section]:
     """Every tagged section of ``docs`` (rows with ``text``), in the given order."""
     out: list[Section] = []
     for doc in docs:
-        out.extend(tag_section(s, doc) for s in split_sections(doc))
+        out.extend(_tagged(doc))
     return out
 
 
@@ -401,7 +431,8 @@ def _newest_first(section: Section) -> tuple:
     return (-section.doc_id, section.position, section.id)
 
 
-def _ranked(sections, ctx: TaskContext) -> list[Section]:
+def _ranked(sections, ctx: TaskContext) -> tuple[list[Section], list[Section]]:
+    """(pinned, the rest in rank order)."""
     pinned_topics = set(knowledge.harness().pinned.get(ctx.agent, ()))
     unique = {s.id: s for s in sections}.values()
     pinned = sorted((s for s in unique if s.authority == "must_follow" and pinned_topics & set(s.topics)
@@ -415,7 +446,7 @@ def _ranked(sections, ctx: TaskContext) -> list[Section]:
     # Unmatched reference text is noise; an unmatched must-follow rule still applies everywhere.
     remaining = [s for s in rest if s.id not in taken and (scores[s.id] > 0 or s.authority == "must_follow")]
     remaining.sort(key=lambda s: (-scores[s.id], s.authority != "must_follow", *_newest_first(s)))
-    return pinned + matching_must + remaining
+    return pinned, matching_must + remaining
 
 
 def _entry(section: Section) -> str:
@@ -441,8 +472,30 @@ def fit(sections, budget: int, header_template: str = REFERENCE_HEADER) -> Selec
 
 
 def select(sections, ctx: TaskContext, budget: int) -> Selection:
-    """The sections for ``ctx`` within ``budget`` characters (see the module doc)."""
-    return fit(_ranked(sections, ctx), int(budget))
+    """The sections for ``ctx`` within ``budget`` characters (see the module doc).
+
+    Pinned sections first, but while other sections match they may fill at most
+    ``PINNED_SHARE`` of the room, so a long voice document can't crowd out the
+    sections about this post; pinned sections that didn't fit then use what is left."""
+    budget = int(budget)
+    pinned, others = _ranked(sections, ctx)
+    used = _overhead(REFERENCE_HEADER)
+    cap = used + int((budget - used) * PINNED_SHARE) if others else budget
+    chosen: dict[str, Section] = {}
+
+    def take(candidates, limit: int) -> None:
+        nonlocal used
+        for section in candidates:
+            cost = len(_entry(section)) + (2 if chosen else 0)
+            if section.id not in chosen and used + cost <= limit:
+                chosen[section.id] = section
+                used += cost
+
+    take(pinned, min(cap, budget))
+    take(others, budget)
+    take(pinned, budget)
+    ordered = tuple(s for s in (*pinned, *others) if s.id in chosen)
+    return Selection(sections=ordered, chars=used if ordered else 0)
 
 
 def render(selection: Selection, nonce: str, header_template: str = REFERENCE_HEADER) -> str:

@@ -284,3 +284,17 @@ def test_the_heartbeat_hands_the_harness_config_to_the_drafter_and_reviewer():
     src = Path(main.__file__).read_text(encoding="utf-8")
     assert "drafter = Drafter(brain, acknowledgements=True)\n    drafter.harness = config.harness" in src
     assert "Reviewer(brain, harness=config.harness)" in src
+
+
+def test_a_human_edit_keeps_what_the_draft_relied_on(env):
+    library(env)
+    mid = run(_triaged(env))
+    brain = Brain(env)
+    run(draft_batch(env, Drafter(brain, harness=ON), Reviewer(brain, harness=ON)))
+    before = run(env.get_latest_draft(mid)).context
+
+    run(review.edit(env, mid, CLEAN + " Thanks for the kind words.", CLEAN_IDS, "reviewer@pulse.test",
+                    PulseConfig()))
+
+    after = run(env.get_latest_draft(mid))
+    assert after.model.startswith("human:") and before and after.context == before

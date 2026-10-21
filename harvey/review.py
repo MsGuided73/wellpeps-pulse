@@ -515,10 +515,12 @@ async def edit(state, mention_id: int, text: str, claim_ids: list[str], actor: s
     gate = compliance_filter(text, mention.platform.value, claim_ids, require_publishable=False)
     verdict, reasons, reviewed_by = await _review_edit(reviewer, text, claim_ids, mention, gate, config)
     hits = [f"{h.rule_id}: {h.reason}" + (f" [{h.match}]" if h.match else "") for h in gate.hits]
+    previous = await state.get_latest_draft(mention_id)
     draft_id = await state.add_draft(Draft(
         mention_id=mention_id, text=text, claim_ids=claim_ids, model=f"human:{actor}",
         filter_ok=gate.ok, filter_hits=hits, review_verdict=verdict, review_reasons=reasons,
         tier=gate.tier, link=links.link_record(text),
+        context=previous.context if previous else [],   # an edit keeps the sections the draft relied on
     ))
     if mention.status is MentionStatus.APPROVED:
         await _move(state, mention_id, MentionStatus.IN_REVIEW)  # an edit voids the approval

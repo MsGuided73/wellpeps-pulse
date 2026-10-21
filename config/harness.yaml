@@ -11,7 +11,7 @@ version: 1
 
 # Topic id -> keywords. A section mentioning any keyword gets the topic.
 topics:
-  voice: [voice, tone, style, sound, sounds, avoid, wording, phrasing]
+  voice: [voice, tone, style, sound, avoid]
   links: [link, links, URL, URLs, resource, resources, guide, guides]
   safety: [side effect, side effects, adverse, adverse event, emergency, symptom, symptoms]
   community: [Reddit, subreddit, Facebook group, moderator, moderators, forum, forums, community rules]
