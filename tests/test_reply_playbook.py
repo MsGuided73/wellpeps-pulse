@@ -196,7 +196,7 @@ def test_the_real_tirzepatide_scenario_is_an_example():
     assert "it varies by provider" in example.reply
     assert "What's actually included in the price" in example.reply
     assert "one monthly price" not in example.reply and "CLM-PRICE-FOLLOWUP" not in example.claim_ids
-    assert "just asks for an email" in example.reply
+    assert "get a free copy if you'd like" in example.reply
     assert links.registry_link(GLP1).id == links.find_links(example.reply)[0].link.id
 
 
@@ -207,7 +207,7 @@ def test_examples_follow_the_guidelines_not_the_superseded_playbook():
         assert 30 <= len(example.reply.split()) <= 110                        # 40-90 words, ~110 with the guide
         assert not {"CLM-PRICE-FOLLOWUP", "CLM-PRICE-ALLIN"} & set(example.claim_ids)
         if links.find_links(example.reply):
-            assert re.search(r"\be-?mail\b", example.reply)                   # Protocol §8: the email gate is stated
+            assert re.search(r"\bfree\b", example.reply)                      # Protocol §8: offered as free (Community Agent Voice)
         assert not example.reply.rstrip().lower().endswith(("hope this helps!", "hope this helps."))
         # The provider-boundary line only where treatment choice is the question.
         assert ("CLM-R22-PROVIDER-DETERMINES" in example.claim_ids) == (example.id == "EX-NO-LINK-COMMUNITY")

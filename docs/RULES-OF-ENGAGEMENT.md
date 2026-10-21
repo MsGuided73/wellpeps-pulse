@@ -27,6 +27,7 @@ clinical decision ([CP] cover page, §13; hard rule 3 in CLAUDE.md).
 | [SM] | WellPeps_Engagement_Goals_and_Conversation_Selection_Module_V1 (`C:\dev\W\docs\community-engagement-agent\Knowledge Base\`; same file under `Community Engagement\`) and its source note "Community Engagement - Why and When to Engage" | 1.0, Oct 10 2026, internal implementation module |
 | [GP] | WellPeps_Agent_Program_Gameplan (Knowledge Base copy, Oct 8 2026; text dated Aug 17 2026) | planning instrument |
 | [DG] | Derek Goldberg (WellPeps) e-mail decisions on the Pulse review | Oct 10 2026 |
+| [CAV] | "Community Agent Voice" (Derek Goldberg; e-mailed Oct 10, uploaded to the Knowledge library as Must follow Oct 20): voice principles, avoid list, guide-offer wording, names | Oct 10 2026; owner decisions Oct 20 2026 (R-26) |
 
 Originals (except [CP]): `C:\dev\W\docs\community-engagement-agent\Community Engagement-20261007T043724Z-1-001.zip` -> `Community Engagement/<file>`.
 Pulse never modifies anything under `C:\dev\W`.
@@ -93,8 +94,8 @@ Pulse drafts as one of two personas (`engagement.persona` in
 
 | Persona | When | Disclosure sentence (sentence 1 or 2) | Source |
 |---|---|---|---|
-| `official_account` (default) | WellPeps' own accounts | "I work with WellPeps." | [OM] §3.2; [CG] Option "WellPeps Official Account"; [CP] §7 ("Official accounts use clear company identity") |
-| `identified_employee` | a named team member (`display_name`, no clinical titles) | "Hi, I'm <name> — I work with WellPeps." | [CG] Option 1; [AMG] §4; [PL] Channel 3 / 6 |
+| `official_account` (default) | WellPeps' own accounts | "I work with WellPeps." (drafter default "I work with WellPeps on patient education."); the review desk's "Posting as: WellPeps account" switch makes it "We're the WellPeps team." ([CAV], 2026-10-20) | [OM] §3.2; [CG] Option "WellPeps Official Account"; [CP] §7 ("Official accounts use clear company identity") |
+| `identified_employee` | a named team member (`display_name`, no clinical titles) | "Hi, I'm <name> — I work with WellPeps." The drafter never writes a name: the rep who posts adds their own ([CAV]: a real name only when that person posts; no invented or AI persona) | [CG] Option 1; [AMG] §4; [PL] Channel 3 / 6 |
 
 Approved disclosure forms ([AMG] §4; [CT] Module 2; [OM] §4.2):
 
@@ -321,7 +322,10 @@ answers").
   content, picked by Pulse's deterministic rule, never written by the model. Vary the wording; no
   stock sentence. The provider-determines line follows only when the post is about treatment
   choice, suitability, eligibility or results ([AMG] §3: state the boundary "when necessary").
-  Help, not a pitch. Always "free, it asks for your email". The tracked registry link where the
+  Help, not a pitch. Always say it is free, in Derek Goldberg's wording ([CAV], owner decision
+  2026-10-20): "Our free guide has a section on [topic] that explains [specifics]. Here's a link to
+  get a free copy if you'd like." Naming the email is optional; ungated access is never promised
+  (R49). A "section" names a verbatim chapter title, checked like a chapter. The tracked registry link where the
   community allows links; otherwise the guide by name ("our free GLP-1 Weight Loss guide on the
   WellPeps website": no URL or domain, which would count as a link). Reddit up to ~110 words.
 - **Never**: adverse events, emergencies, self-harm, legal / regulatory, privacy, media,

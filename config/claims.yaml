@@ -23,7 +23,9 @@
 # Smart Patient's Guide claims (CLM-EDU-GUIDE*): approved 2026-10-07 by WellPeps through the
 # user's instruction "We must refer to a relevant guide and point to how the guide can help",
 # which also resolves FINALIZE gated_download_disclosure (engagement_guide.yaml finalize value;
-# docs/RULES-OF-ENGAGEMENT.md). Offer them as free and say the download asks for an email.
+# docs/RULES-OF-ENGAGEMENT.md). Offer them as free in Derek Goldberg's wording (Community Agent
+# Voice; owner decision 2026-10-20): "Here's a link to get a free copy if you'd like." Naming the
+# email is optional; never promise instant or ungated access (R49).
 # Their links stay live: false in links.yaml until the site pages deploy, so a reply carrying
 # one still cannot be approved. Chapters each guide covers: config/guides.yaml.
 #
@@ -209,7 +211,7 @@ claims:
     source: "C:/dev/W/wellpeps-site/src/data/ebooks.ts (EBOOKS) and src/data/guide-pages.ts (series intro: 'know what questions to ask'; LAST_POINT). Only the GLP-1 guide lists a checklist, so the series claim says 'questions to ask'"
     finalize: true
     finalize_key: "gated_download_disclosure"
-    finalize_missing: "Protocol §8, §13: validate the link and the gated-download disclosure (the guide asks for an email; say so when offering it, and 'free' must match the access terms)"
+    finalize_missing: "Protocol §8, §13: validate the link and the gated-download disclosure (say the guide is free (Derek Goldberg's wording, owner 2026-10-20); 'free' must match the access terms and ungated access is never promised)"
 
   - id: CLM-EDU-GUIDE-GLP-1-WEIGHT-LOSS
     text: "Free guide: The Smart Patient's Guide to GLP-1 Weight Loss — What you should know before choosing a GLP-1 weight loss program. It includes questions to ask before choosing a provider and a checklist."
@@ -223,7 +225,7 @@ claims:
     source: "C:/dev/W/wellpeps-site/src/data/ebooks.ts (slug glp-1-weight-loss: title, subtitle); src/data/guide-pages.ts inside: 'Questions to ask before choosing a provider', 'The Smart Patient's GLP-1 checklist'"
     finalize: true
     finalize_key: "gated_download_disclosure"
-    finalize_missing: "Protocol §8, §13: validate the link and the gated-download disclosure (the guide asks for an email; say so when offering it, and 'free' must match the access terms)"
+    finalize_missing: "Protocol §8, §13: validate the link and the gated-download disclosure (say the guide is free (Derek Goldberg's wording, owner 2026-10-20); 'free' must match the access terms and ungated access is never promised)"
 
   - id: CLM-EDU-GUIDE-SEXUAL-WELLNESS
     text: "Free guide: The Smart Patient's Guide to Sexual Wellness — Understanding today's treatment options and finding the right care. It includes questions to ask before choosing care."
@@ -237,7 +239,7 @@ claims:
     source: "C:/dev/W/wellpeps-site/src/data/ebooks.ts (slug sexual-wellness); src/data/guide-pages.ts ('the questions worth asking before choosing care', LAST_POINT). No checklist listed"
     finalize: true
     finalize_key: "gated_download_disclosure"
-    finalize_missing: "Protocol §8, §13: validate the link and the gated-download disclosure (the guide asks for an email; say so when offering it, and 'free' must match the access terms)"
+    finalize_missing: "Protocol §8, §13: validate the link and the gated-download disclosure (say the guide is free (Derek Goldberg's wording, owner 2026-10-20); 'free' must match the access terms and ungated access is never promised)"
 
   - id: CLM-EDU-GUIDE-HAIR-RESTORATION
     text: "Free guide: The Smart Patient's Guide to Hair Restoration — Understanding hair loss, today's treatment options, and what to realistically expect. It includes questions to ask before choosing a treatment program."
@@ -251,7 +253,7 @@ claims:
     source: "C:/dev/W/wellpeps-site/src/data/ebooks.ts (slug hair-restoration); src/data/guide-pages.ts ('the questions worth asking before choosing a treatment program', LAST_POINT). No checklist listed. Hair Restoration is coming_soon (R21: say only 'on the way')"
     finalize: true
     finalize_key: "gated_download_disclosure"
-    finalize_missing: "Protocol §8, §13: validate the link and the gated-download disclosure (the guide asks for an email; say so when offering it, and 'free' must match the access terms)"
+    finalize_missing: "Protocol §8, §13: validate the link and the gated-download disclosure (say the guide is free (Derek Goldberg's wording, owner 2026-10-20); 'free' must match the access terms and ungated access is never promised)"
 
   - id: CLM-EDU-GUIDE-HEALTHY-AGING-VITALITY
     text: "Free guide: The Smart Patient's Guide to Healthy Aging & Vitality — What to know about supporting energy, strength, sleep, recovery and cognitive wellness as you age. It includes questions to ask before choosing a treatment program."
@@ -265,7 +267,7 @@ claims:
     source: "C:/dev/W/wellpeps-site/src/data/ebooks.ts (slug healthy-aging-vitality); src/data/guide-pages.ts (PROGRAM_BAND_COPY healthy-aging, LAST_POINT). No checklist listed. Wellness-outcome wording in the subtitle: yellow (R13/R18)"
     finalize: true
     finalize_key: "gated_download_disclosure"
-    finalize_missing: "Protocol §8, §13: validate the link and the gated-download disclosure (the guide asks for an email; say so when offering it, and 'free' must match the access terms)"
+    finalize_missing: "Protocol §8, §13: validate the link and the gated-download disclosure (say the guide is free (Derek Goldberg's wording, owner 2026-10-20); 'free' must match the access terms and ungated access is never promised)"
 
   - id: CLM-EDU-GUIDE-NAD-THERAPY
     text: "Free guide: The Smart Patient's Guide to NAD+ Therapy — What it is, what we know, and questions to ask before treatment."
@@ -279,7 +281,7 @@ claims:
     source: "C:/dev/W/wellpeps-site/src/data/ebooks.ts (slug nad-therapy: title, subtitle). Names a molecule, so blocked while the R38 toggle is on (the drafter then offers the Healthy Aging guide)"
     finalize: true
     finalize_key: "gated_download_disclosure"
-    finalize_missing: "Protocol §8, §13: validate the link and the gated-download disclosure (the guide asks for an email; say so when offering it, and 'free' must match the access terms)"
+    finalize_missing: "Protocol §8, §13: validate the link and the gated-download disclosure (say the guide is free (Derek Goldberg's wording, owner 2026-10-20); 'free' must match the access terms and ungated access is never promised)"
 
   # --- Approved Messaging & Response Guide v1.0 (Aug 2026), sections 4-26 and
   # Appendix A. Verbatim wording; see the header for the policy. Patterns that
@@ -1036,6 +1038,16 @@ claims:
     source: "Approved Messaging Live Reference v1.0 §2 (Ongoing support)"
     guide: true
     note: "Protocol §6: supports only this fact; never a response-time guarantee, direct physician access, video visits or 24/7 care."
+
+  - id: CLM-CAV-01-PATIENT-DASHBOARD
+    text: "WellPeps includes ongoing support and a personal patient dashboard to chat with your medical provider if treatment is prescribed."
+    products: ["*"]
+    tier: yellow
+    approved_by: "Derek Goldberg (Community Agent Voice, Oct 10 2026); feature confirmed by the owner 2026-10-20"
+    approved_at: 2026-10-20
+    expires: null
+    source: "Community Agent Voice (Derek Goldberg), example reply on ongoing support; owner confirmation 2026-10-20"
+    note: "Derek: 'though I wouldn't promise a particular response time.' Never a response time, 24/7, instant or direct physician access, or video visits (Protocol §6). Yellow: read it in context before approving."
 
   - id: CLM-LR-06-PRICING-PHRASE
     text: "Medication (if prescribed), provider evaluation and ongoing support included. No membership fees."

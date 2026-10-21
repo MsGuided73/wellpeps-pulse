@@ -163,6 +163,12 @@ deterministic compliance filter (`harvey/compliance.py`) exist.
   `gate:not_worth_it:knowledge_gap` or `gate:hold_unverified_fact`, by topic; floor 2; never in
   `model_payload`.
 
+- Community Agent Voice (R-26, 2026-10-20; Derek Goldberg, Must follow): voice principles and avoid list
+  in `prompts/draft.md` (yellow R50 in the filter), reviewer check 15 (`VOICE` notes never change the
+  verdict), guide offers say "free" (`guides.GATE_RX`; "section" checked like "chapter"), disclosure forms
+  include "We're the WellPeps team", the Pulse card's "Posting as" switch (home.js), claim
+  CLM-CAV-01-PATIENT-DASHBOARD. The drafter never writes a person's name.
+
 Later phases add everything else. Don't build ahead of the phase you've
 been asked to do.
 

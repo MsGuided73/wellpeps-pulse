@@ -29,7 +29,7 @@
 # about WellPeps or explicitly asks for alternatives (Protocol §1, §7;
 # Operations Manual §12.2), never "one monthly price" (Live Reference §6
 # needs verification); a resource only when it directly answers the question,
-# with its email gate stated (Protocol §8; Pre-LegitScript strategy "Not every
+# offered as free (Protocol §8; Pre-LegitScript strategy "Not every
 # comment gets a link"); 40-90 words (Protocol §7).
 # tests/test_reply_playbook.py checks each reply passes compliance_filter
 # (only "link not live yet" and the guide's FINALIZE / medication-name review
@@ -45,8 +45,8 @@
 # relevant guide and point to how the guide can help"): every answering reply
 # ends its answer with ONE sentence naming the most relevant guide and the
 # chapter (config/guides.yaml) that helps with THIS question, says it is free
-# and asks for an email (in natural words: "it's free, it just asks for an
-# email"), then carries the tracked link where links are allowed
+# (Derek Goldberg's wording, owner decision 2026-10-20: "Here's a link to get a
+# free copy if you'd like"), then carries the tracked link where links are allowed
 # (EX-NO-LINK-COMMUNITY: named without a link). Up to ~110 words with it.
 
 status: PENDING
@@ -58,7 +58,7 @@ examples:
     platform: reddit
     program: Weight Loss
     post: "anyone tried compounded tirzepatide via telehealth? Trying to figure out which providers include the follow-up visits in the price."
-    reply: "Follow-up visits are exactly the thing to pin down before you pay for anything. I work with WellPeps, so I'm biased, but it varies by provider: ask each one what follow-up with a licensed clinician is included and how dose adjustments are handled. Our free GLP-1 Weight Loss guide has a chapter on exactly this, \"What's actually included in the price\" (it's free, it just asks for an email): https://wellpeps.com/smart-patient-guides/glp-1-weight-loss"
+    reply: "Follow-up visits are exactly the thing to pin down before you pay for anything. I work with WellPeps, so I'm biased, but it varies by provider: ask each one what follow-up with a licensed clinician is included and how dose adjustments are handled. Our free GLP-1 Weight Loss guide has a section, \"What's actually included in the price\", that walks through what to check. Here's a link to get a free copy if you'd like: https://wellpeps.com/smart-patient-guides/glp-1-weight-loss"
     claim_ids: [CLM-AMG-04-WORK-WITH, CLM-R7-PROVIDER-CHECKLIST, CLM-EDU-GUIDE-GLP-1-WEIGHT-LOSS]
 
   - id: EX-AVAILABILITY-HAIR
@@ -66,7 +66,7 @@ examples:
     platform: reddit
     program: Hair Restoration
     post: "Thinking about oral minoxidil through a telehealth service. Is WellPeps hair restoration live yet or still a waitlist?"
-    reply: "Good thing to check before you plan around it. I work with WellPeps, so I can answer that one. Not live yet: WellPeps' Hair Restoration program is coming soon and isn't open yet; there's a list you can join to hear when assessments open. Since you're weighing an oral option, our free Hair Restoration guide has a chapter, \"Oral vs. topical: what actually changes?\" (it's free, it just needs your email): https://wellpeps.com/smart-patient-guides/hair-restoration"
+    reply: "Good thing to check before you plan around it. I work with WellPeps, so I can answer that one. Not live yet: WellPeps' Hair Restoration program is coming soon and isn't open yet; there's a list you can join to hear when assessments open. Since you're weighing an oral option, our free Hair Restoration guide has a section, \"Oral vs. topical: what actually changes?\", that explains the differences. Here's a link to get a free copy if you'd like: https://wellpeps.com/smart-patient-guides/hair-restoration"
     claim_ids: [CLM-AMG-04-WORK-WITH, CLM-STATUS-HAIR, CLM-EDU-GUIDE-HAIR-RESTORATION]
 
   - id: EX-QUESTION-ONLINE-CLINIC
@@ -74,7 +74,7 @@ examples:
     platform: reddit
     program: Sexual Wellness
     post: "How do you tell if an online ED clinic is legit? So many ads lately."
-    reply: "Ha, the ads really are everywhere. I'm part of the WellPeps team, so I'm biased, but I'd check whether you're actually reviewed by a licensed clinician, what follow-up is included, and which pharmacy dispenses the medication. For sorting through the ads, our free Sexual Wellness guide closes with \"The questions every Smart Patient should know to ask\", a list you can take to any clinic (it's free, it just asks for an email): https://wellpeps.com/smart-patient-guides/sexual-wellness"
+    reply: "Ha, the ads really are everywhere. I'm part of the WellPeps team, so I'm biased, but I'd check whether you're actually reviewed by a licensed clinician, what follow-up is included, and which pharmacy dispenses the medication. For sorting through the ads, our free Sexual Wellness guide closes with \"The questions every Smart Patient should know to ask\", a list you can take to any clinic. Here's a link to get a free copy if you'd like: https://wellpeps.com/smart-patient-guides/sexual-wellness"
     claim_ids: [CLM-AMG-04-WORK-WITH, CLM-R7-PROVIDER-CHECKLIST, CLM-EDU-GUIDE-SEXUAL-WELLNESS]
 
   - id: EX-QUESTION-WHAT-TO-ASK

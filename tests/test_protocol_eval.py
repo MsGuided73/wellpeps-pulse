@@ -9,6 +9,7 @@ so whether and what Pulse drafts), and that the protocol's suggested reply
 passes the compliance filter while its "Do not say" line is red.
 """
 
+import re
 from pathlib import Path
 
 import pytest
@@ -253,7 +254,11 @@ def test_ongoing_support_is_never_a_response_time_fact():
     """[CP] §14 Expected grounding: approved ongoing support fits provider
     access only partly (no response-time claim exists)."""
     cap = protocol.capability("provider_access")
-    assert cap.fit == 1 and cap.claim_ids == ("CLM-LR-02-ONGOING-SUPPORT",)
+    # The patient-dashboard claim (Community Agent Voice; owner 2026-10-20) is partial support too:
+    # it names a way to reach the provider, never a response time, so the fit stays partial.
+    assert cap.fit == 1 and cap.claim_ids == ("CLM-LR-02-ONGOING-SUPPORT", "CLM-CAV-01-PATIENT-DASHBOARD")
+    dashboard = knowledge.claims_by_id()["CLM-CAV-01-PATIENT-DASHBOARD"].text.lower()
+    assert not re.search(r"\b(?:24/7|minutes?|hours?|same[- ]day|instant|immediately|response time)\b", dashboard)
     assert protocol.capability("lab_testing_terms").fit == 0
     assert protocol.capability("medication_availability").fit == 0
 

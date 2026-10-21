@@ -26,7 +26,7 @@ recorded with its reason. Chapters come verbatim from config/guides.yaml
 - ``reference_hits``: the deterministic check (compliance filter):
   required but missing -> yellow "missing guide reference" (drafting redrafts
   once, then needs_human); referenced where forbidden -> red; guide linked
-  without the email-gate disclosure -> yellow; a "chapter" that is not a
+  without saying it is free -> yellow; a "chapter" that is not a
   verbatim chapter title of the guides -> yellow.
 """
 
@@ -40,7 +40,10 @@ from harvey.models.knowledge import Guide, GuideChapter
 MISSING_RULE = "GUIDE"
 MISSING_REASON = "missing guide reference"
 FORBIDDEN_REASON = "guide referenced in an excluded situation"
-GATE_REASON = "guide offered without the gated-download disclosure (free, it asks for your email)"
+# Derek Goldberg, Community Agent Voice (owner decision 2026-10-20): the offer says the guide is
+# free ("Here's a link to get a free copy if you'd like"); naming the email gate is no longer
+# required, and promising ungated access is still red (R49).
+GATE_REASON = "guide offered without saying it is free (\"Here's a link to get a free copy if you'd like\")"
 CHAPTER_REASON = "names a guide chapter that is not a verbatim chapter title from config/guides.yaml"
 OMIT_REASON = "no guide chapter answers this question (considered and omitted)"
 UNVERIFIED_REASON = "community rules are unverified: no company resource until participation permission is verified"
@@ -65,7 +68,7 @@ _MINOR_RX = re.compile(
     r"(?=\s*(?:$|[.,!?;:)]|and\b|but\b|so\b|yo\b|y/?o\b|years?\b|[fm]\b))"
     r"|\b1[0-7]\s*(?:yo|y/o|years?\s+old)\b",
     re.IGNORECASE)
-GATE_RX = re.compile(r"\be-?mail\b", re.IGNORECASE)
+GATE_RX = re.compile(r"\bfree\b", re.IGNORECASE)
 MAX_CHAPTERS = 2
 
 
@@ -295,7 +298,8 @@ def satisfied(text: str, requirement: GuideRequirement) -> bool:
     return names_guide(text, pick.guide if pick.specific else None) or names_guide(text)
 
 
-_CHAPTER_WORD_RX = re.compile(r"\bchapters?\b", re.IGNORECASE)
+# "section" too: Derek's guide-offer wording says "a section" (Community Agent Voice).
+_CHAPTER_WORD_RX = re.compile(r"\b(?:chapters?|sections?)\b", re.IGNORECASE)
 
 
 def _norm(text: str) -> str:

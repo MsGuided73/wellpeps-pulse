@@ -652,12 +652,12 @@ switching_protocol:
     provider_access:
       label: "Provider access and support"
       focus: "Questions to ask about messaging and follow-up"
-      partial: [CLM-LR-02-ONGOING-SUPPORT]
+      partial: [CLM-LR-02-ONGOING-SUPPORT, CLM-CAV-01-PATIENT-DASHBOARD]
       note: "Approved ongoing support never becomes a response-time promise, direct physician access, video visits or 24/7 care ([CP] §6, Example 20)."
     care_process:
       label: "Understanding care process"
       focus: "Provider evaluation and ongoing support"
-      direct: [CLM-AMG-05-HOW-IT-WORKS, CLM-LR-02-PROCESS, CLM-LR-02-ONGOING-SUPPORT]
+      direct: [CLM-AMG-05-HOW-IT-WORKS, CLM-LR-02-PROCESS, CLM-LR-02-ONGOING-SUPPORT, CLM-CAV-01-PATIENT-DASHBOARD]
     clinical_evaluation:
       label: "Clinical evaluation and monitoring"
       focus: "Prescriber determines testing needs"
@@ -845,9 +845,9 @@ finalize:
   - key: gated_download_disclosure
     item: "Validated resource links and gated-download disclosures (the Smart Patient Guides need an email: say so when offering one)"
     sources: ["[CP] §8, §13", "[PL] Channel 1, Channel 9"]
-    pulse_effect: "Links not marked live in config/links.yaml still block approval; 'free' must match the access terms (the guides are free and ask for an email)."
+    pulse_effect: "Links not marked live in config/links.yaml still block approval; 'free' must match the access terms (the guides are free; never promise ungated access)."
     blocks_approval: true
-    value: "Approved 2026-10-07 by WellPeps through the user's instruction ('We must refer to a relevant guide and point to how the guide can help'): offer the Smart Patient's Guides as free, stating that the download asks for an email (\"free, it asks for your email\"). Links stay live: false until the site pages deploy."
+    value: "Approved 2026-10-07 by WellPeps through the user's instruction ('We must refer to a relevant guide and point to how the guide can help'): offer the Smart Patient's Guides as free, stating that the download asks for an email (\"free, it asks for your email\"). Updated 2026-10-20 by the owner, in Derek Goldberg's wording (Community Agent Voice): \"Here's a link to get a free copy if you'd like\"; naming the email is optional and ungated access is never promised (R49). Links stay live: false until the site pages deploy."
   - key: data_retention
     item: "Minimum-data storage, restricted incident access, retention, deletion and audit-log configuration; collected health data never sent to unapproved systems"
     sources: ["[CP] §2, §13", "[OM] §22.2"]

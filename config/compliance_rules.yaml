@@ -78,6 +78,9 @@ disclosure:
     - "I work for WellPeps"
     - "I'm with WellPeps"
     - "I am with WellPeps"
+    # The official WellPeps account (Derek Goldberg, Community Agent Voice; owner 2026-10-20).
+    - "We're the WellPeps team"
+    - "We are the WellPeps team"
   influencer_forms:
     - "I'm a WellPeps Brand Ambassador"
     - "I am a WellPeps Brand Ambassador"
@@ -298,6 +301,9 @@ patient_confirmation:
   - {id: R31, pattern: '\b(?:our|the)\s+records\s+show\b|\bin\s+our\s+(?:system|records)\b|\bwe\s+(?:have|received)\s+your\b', reason: "implies access to the person's records", source: "R31", examples: ["our records show", "in our system", "we received your"]}
 
 yellow:
+  # Derek Goldberg, Community Agent Voice (must follow; owner 2026-10-20): canned phrases are a
+  # warning to reword, never a block.
+  - {id: R50, pattern: '\btransform\s+your\s+(?:journey|life)\b|\bunlock\s+your\s+(?:full\s+)?potential\b|\bpremium\s+personali[sz]ed\s+solutions?\b|\bwe\s+understand\s+how\s+frustrating\b|\bI\s+understand\s+your\s+frustration\b|\bI.m\s+so\s+sorry\b|\bready\s+to\s+get\s+started\b|\bmake\s+the\s+switch\s+today\b|\btrust\s+me\b|\bI.ve\s+been\s+there\b|\bour\s+patients\s+tell\s+me\b|\bhope\s+this\s+helps\b|\bhappy\s+to\s+help\b|\btotally\s+get\s+it\b|\bcomprehensive\s+guide\b', reason: "canned or marketing voice (Community Agent Voice avoid list): say it in this person's terms", source: "Community Agent Voice (Derek Goldberg)", examples: ["transform your journey", "Ready to get started?", "Trust me", "Hope this helps!", "Happy to help!"]}
   - {id: R10, pattern: '\$\s?\d', reason: "price mentioned (R11: approved pricing and contexts only)", source: "R10 + R11"}
   - {id: R10, pattern: '\bcompound(?:ed|ing)\b', reason: "compounded-drug discussion", source: "R10 ([CS] Rule 14)"}
   - {id: R10, pattern: '\b(?:vs|versus|compared\s+(?:to|with)|comparison|better\s+than|cheaper\s+than|worse\s+than|switch(?:ed|ing)?\s+(?:from|to))\b', reason: "competitor / treatment comparison", source: "R10"}

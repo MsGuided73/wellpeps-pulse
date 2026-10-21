@@ -296,8 +296,9 @@ def guide_lines(guidance) -> list[str]:
              "actually included in the price' walks through what to check); never a generic 'check out our "
              "guide'. Describe the chapter only by its title plus a neutral phrase such as 'walks through "
              "what to check' or 'explains the differences'; never claim it covers anything else. Write the "
-             f"gate once, in natural words, e.g. 'our free {guidance.guide_short} ... (it's free, it just asks for an "
-             "email)' or '(it just needs your email)'; it must mention the email. Phrase it as "
+             f"offer in Derek's pattern, e.g. 'Our free {guidance.guide_short} has a section, <chapter title>, that "
+             "explains <what it helps with>. Here's a link to get a free copy if you'd like'; it must say the guide "
+             "is free and must never promise instant or ungated access. Phrase it as "
              "help, not a sales pitch; keep answer-first: answer -> guide and how it helps. Vary the wording "
              "naturally; never a stock sentence."]
     if guidance.guide_mode == "link":
@@ -355,7 +356,7 @@ def engagement_block(guidance) -> str:
                          "(WellPeps 2026-10-07: a guide when a chapter materially helps; Protocol §8: never in "
                          "safety or clinical replies).")
         else:
-            lines.append("- Aim for 40 to 90 words. A resource is optional and never required to get the answer.")
+            lines.append("- Usually three to five sentences (about 40 to 90 words). A resource is optional and never required to get the answer.")
     lines.extend(guide_lines(guidance))
     return "\n".join(lines)
 

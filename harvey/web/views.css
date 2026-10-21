@@ -53,6 +53,9 @@
 .quote { color: var(--muted); padding-left: 16px; border-left: 2px solid var(--divider); overflow-wrap: anywhere; max-width: 72ch; }
 .human-note { background: var(--canvas); border: 1px solid var(--divider); border-radius: var(--r-control); padding: 12px 16px; max-width: 72ch; }
 .human-note b { font-weight: 600; }
+.posting-as { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; margin-top: 8px; }
+.posting-as .label { margin: 0 4px 0 0; }
+.posting-as .btn[aria-pressed="true"] { background: var(--action-soft); color: var(--action-hover); }
 .pick { color: var(--ink); border-left: 3px solid var(--divider); padding: 4px 0 4px 12px; max-width: 72ch; display: grid; gap: 4px; }
 .pick b { font-weight: 600; }
 .pick-h { color: var(--muted); font-size: 14px; font-weight: 600; }

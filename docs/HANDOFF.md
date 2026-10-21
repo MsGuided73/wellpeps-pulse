@@ -48,9 +48,10 @@ Where WellPeps Pulse stands after the review-desk merge, and what's left to fina
 ## Waiting on Derek (sign-off)
 
 - Disclosure placement within the first two sentences (R-16) and the rewritten reply examples.
-- Company voice ("we") on owned channels and review sites.
+- ~~Company voice ("we") on owned channels and review sites.~~ Settled by Derek's Community Agent Voice: the official account may say "We're the WellPeps team." (R-26).
 - Paraphrasing approved claims instead of verbatim.
 - Hair Restoration status (Live Reference says open; the site says coming soon).
 - An approved statement for "how long does approval take?".
-- Whether the "(it asks for your email)" sentence can be dropped as the Selection Module allows.
+- ~~Whether the "(it asks for your email)" sentence can be dropped.~~ Dropped in favor of Derek's wording "Here's a link to get a free copy if you'd like" (owner, 2026-10-20; R-26).
+- The patient-dashboard claim (CLM-CAV-01, owner-confirmed) sits close to the Competitor Protocol §6 ban on "direct physician access": confirm the wording is fine (it never promises a response time).
 - The per-community limit of 3 replies per 7 days (a proposal).

@@ -137,6 +137,9 @@ const Home = (() => {
       if (dr.review_verdict === 'pass') out.push(check('', 'A second reviewer agreed'));
       else if (dr.review_verdict === 'needs_human') out.push(check('info', 'Needs a human read'));
       else if (dr.review_verdict === 'reject') out.push(check('warn', 'The reviewer flagged this reply'));
+      // Voice is judged apart from compliance (Community Agent Voice): a note, never a block.
+      (dr.review_reasons || []).filter(r => /^VOICE:/.test(String(r))).slice(0, 2)
+        .forEach(r => out.push(check('info', 'Voice: ' + String(r).replace(/^VOICE:\s*/, ''))));
       const ids = dr.claim_ids || [];
       const info = d.claims || {};
       if (ids.length) {
@@ -170,6 +173,41 @@ const Home = (() => {
 
   // ── Card rendering ──
 
+  // Posting as (Derek Goldberg, Community Agent Voice): the rep posts as themselves
+  // ("I work with WellPeps on patient education.") or as the official account
+  // ("We're the WellPeps team."). Pulse never writes a name; the switch only swaps
+  // the disclosure, and saving re-runs the compliance filter.
+  const BRAND_DISCLOSURE = "We're the WellPeps team";
+  const PERSON_DISCLOSURE = 'I work with WellPeps on patient education';
+  const PERSON_RX = /I work with WellPeps(?: on patient education)?|I'?m part of the WellPeps team|I am part of the WellPeps team/;
+  const BRAND_RX = /We(?:'| a)re the WellPeps team/;
+
+  const postingAs = card => (BRAND_RX.test(card.text) ? 'brand' : 'me');
+
+  function setPostingAs(card, who) {
+    if (postingAs(card) === who) return false;
+    const next = who === 'brand' ? card.text.replace(PERSON_RX, BRAND_DISCLOSURE)
+      : card.text.replace(BRAND_RX, PERSON_DISCLOSURE);
+    if (next === card.text) return false;
+    card.text = next;
+    return true;
+  }
+
+  function postingAsHtml(card) {
+    if (card.phase !== 'review' || card.mode !== 'view' || !reviewer() || !card.text.trim()) return '';
+    // Approved safety replies are posted word for word: no switch there.
+    const situation = card.d && card.d.engagement && card.d.engagement.situation;
+    if (situation && situation.reply === 'boundary_only') return '';
+    if (!PERSON_RX.test(card.text) && !BRAND_RX.test(card.text)) return '';
+    const id = escHtml(String(card.id));
+    const who = postingAs(card);
+    const opt = (value, text) => '<button type="button" class="btn btn-ghost" data-qact="as-' + value + '" data-id="' + id + '"' +
+      ' aria-pressed="' + String(who === value) + '">' + text + '</button>';
+    return '<div class="posting-as" role="group" aria-label="Posting as"><span class="label">Posting as</span>' +
+      opt('me', 'Me') + opt('brand', 'WellPeps account') + '</div>' +
+      (who === 'brand' ? '<p class="note">Check the rest reads as the WellPeps account ("we"); AI rewrite can help.</p>' : '');
+  }
+
   function draftBox(card) {
     const id = escHtml(String(card.id));
     if (card.mode === 'edit') {
@@ -181,7 +219,7 @@ const Home = (() => {
       return '<div class="draft"><p class="label">Drafted reply</p><p class="note">No reply has been drafted for this post yet. Choose Edit to write one.</p></div>';
     }
     return '<div class="draft"><p class="label">' + (card.phase === 'review' ? 'Drafted reply' : 'Reply') + '</p>' +
-      '<p class="txt">' + linkify(card.text) + '</p>' + note + '</div>';
+      '<p class="txt">' + linkify(card.text) + '</p>' + note + postingAsHtml(card) + '</div>';
   }
 
   function actionsHtml(card) {
@@ -567,6 +605,8 @@ const Home = (() => {
     reject: c => { c.mode = 'reject'; renderCard(c, 'select'); },
     'reject-cancel': c => { c.mode = 'view'; renderCard(c, '[data-qact="reject"]'); },
     'reject-go': c => reject(c),
+    'as-me': c => { if (setPostingAs(c, 'me')) renderCard(c, '[data-qact="as-me"]'); },
+    'as-brand': c => { if (setPostingAs(c, 'brand')) renderCard(c, '[data-qact="as-brand"]'); },
     posted: c => markPosted(c),
     copy: c => copyAgain(c),
   };

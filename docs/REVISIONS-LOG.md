@@ -12,6 +12,52 @@ summary for discussion.
 
 ---
 
+## 2026-10-20: Derek Goldberg's Community Agent Voice
+
+### R-26. Voice principles, guide-offer wording, dashboard claim, posting as (Live)
+- **Before:** the drafter's voice rules were Pulse's own; every guide offer
+  had to say "it's free, it just asks for an email"; the drafting prompt even
+  suggested "Happy to help." as filler; the reviewer checked compliance only;
+  "We're the WellPeps team." did not count as a disclosure; and no approved
+  claim covered the patient dashboard.
+- **After:**
+  - **Voice** (prompts/draft.md): Derek's seven principles (answer the actual
+    question; conversational and informed; warm without performing empathy;
+    helpful without pushing; confident within the role; transparent; brief
+    but substantive, usually three to five sentences) and his avoid list
+    (marketing language, scripted empathy, uninvited sales prompts, fake
+    familiarity, stock closings). Preferred disclosure: "I work with WellPeps
+    on patient education." The drafter never writes a person's name or an AI
+    persona.
+  - **Avoid list in the filter:** new yellow rule R50 (a warning to reword,
+    never a block).
+  - **Reviewer voice check** (prompts/review.md, check 15): judged apart from
+    compliance; findings are "VOICE" notes shown in blue on the review card and
+    never change the verdict.
+  - **Guide offers** in Derek's wording: "Our free guide has a section on
+    [topic] that explains [specifics]. Here's a link to get a free copy if
+    you'd like." The filter now requires "free" instead of "email"; promising
+    ungated access stays red (R49); a "section" title is checked against the
+    guide's chapters like a "chapter".
+  - **Disclosure:** "We're the WellPeps team." / "We are the WellPeps team."
+    are accepted forms for the official account.
+  - **Posting as** on each Pulse queue card: Me ("I work with WellPeps on
+    patient education.") or WellPeps account ("We're the WellPeps team."). It
+    swaps the disclosure only; saving re-runs the filter.
+  - **New claim CLM-CAV-01-PATIENT-DASHBOARD** (yellow): "WellPeps includes
+    ongoing support and a personal patient dashboard to chat with your medical
+    provider if treatment is prescribed." Offered for provider-access and
+    care-process questions; never a response time, 24/7, instant or direct
+    physician access (Protocol §6).
+- **Why:** owner, 2026-10-20: "switch to Derek's wording", "Add the dashboard
+  claim from Derek's wording. We do have a personal patient dashboard that
+  allows the user to chat with their medical provider", "Everything else is a
+  go as well".
+- **Source:** "Community Agent Voice" (Derek Goldberg, Oct 10; Knowledge
+  library, Must follow).
+- **Needs from Derek:** confirm the dashboard wording against Protocol §6
+  ("direct physician access").
+
 ## 2026-10-20: Editing Knowledge documents
 
 ### R-24. Edit documents in the Knowledge library (Live)

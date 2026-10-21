@@ -18,6 +18,8 @@ YAML_FILES = ["competitors.yaml", "products.yaml", "keywords.yaml", "compliance_
 USER_APPROVED_GUIDE_CLAIMS = {"CLM-EDU-GUIDES", "CLM-EDU-GUIDE-GLP-1-WEIGHT-LOSS", "CLM-EDU-GUIDE-SEXUAL-WELLNESS",
                               "CLM-EDU-GUIDE-HAIR-RESTORATION", "CLM-EDU-GUIDE-HEALTHY-AGING-VITALITY",
                               "CLM-EDU-GUIDE-NAD-THERAPY"}
+# Signed off by Derek Goldberg (Community Agent Voice) and confirmed by the owner (2026-10-20).
+OWNER_APPROVED_CLAIMS = {"CLM-CAV-01-PATIENT-DASHBOARD"}
 
 # --- Leak guard ------------------------------------------------------------
 # products.md in the registry holds internal cost data from the pricing
@@ -367,6 +369,10 @@ def test_claims_seeded_pending_except_verbatim_guide_wording():
     assert {c.id for c in user} == USER_APPROVED_GUIDE_CLAIMS
     assert all(c.approved_by.startswith("WellPeps via user instruction (2026-10-07)")
                and str(c.approved_at) == "2026-10-07" for c in user)
+    owner = [c for c in others if c.id in OWNER_APPROVED_CLAIMS]
+    assert {c.id for c in owner} == OWNER_APPROVED_CLAIMS
+    assert all(c.approved_by.startswith("Derek Goldberg") and str(c.approved_at) == "2026-10-20" for c in owner)
+    others = [c for c in others if c not in owner]
     assert all(c.approved_by == "PENDING" and c.approved_at is None for c in others if c not in user)
     # ... or a Live Reference item still marked CONFIRM (never approved wording).
     assert all(c.source.startswith("reply-compliance-rules.md R") or "wellpeps-site/src/" in c.source
@@ -385,7 +391,8 @@ def test_claims_seeded_pending_except_verbatim_guide_wording():
 
 
 def _guide_publishable() -> set[str]:
-    return {c.id for c in knowledge.claims() if c.guide and not c.finalize} | USER_APPROVED_GUIDE_CLAIMS
+    return ({c.id for c in knowledge.claims() if c.guide and not c.finalize} | USER_APPROVED_GUIDE_CLAIMS
+            | OWNER_APPROVED_CLAIMS)
 
 
 def test_publishable_claim_ids_are_the_finalized_guide_claims_while_trusted():
@@ -411,7 +418,7 @@ def test_trust_toggle_off_makes_every_guide_claim_pending(tmp_path, monkeypatch)
     _copy_config(tmp_path, monkeypatch,
                  lambda d: d["claims_policy"].update(trust_approved_messaging_guide=False))
     # Only the user-approved Smart Patient's Guide claims (not guide wording) remain.
-    assert knowledge.publishable_claim_ids() == USER_APPROVED_GUIDE_CLAIMS
+    assert knowledge.publishable_claim_ids() == USER_APPROVED_GUIDE_CLAIMS | OWNER_APPROVED_CLAIMS
 
 
 def test_a_finalize_value_makes_its_guide_claims_publishable(tmp_path, monkeypatch):
