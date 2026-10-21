@@ -36,6 +36,8 @@ dependencies = [
     "slack-bolt>=1.21,<2",
     "slack-sdk>=3.33,<4",
     "aiohttp>=3.10,<4",
+    # Text of PDF uploads in the Knowledge library (harvey/knowledge_docs.py).
+    "pypdf>=5.1,<7",
 ]
 
 [project.optional-dependencies]

@@ -14,3 +14,4 @@ asyncpg>=0.29,<1
 slack-bolt>=1.21,<2
 slack-sdk>=3.33,<4
 aiohttp>=3.10,<4
+pypdf>=5.1,<7
