@@ -60,6 +60,7 @@
 .pick b { font-weight: 600; }
 .pick-h { color: var(--muted); font-size: 14px; font-weight: 600; }
 .pick ul { margin-left: 20px; color: var(--muted); }
+.relied { color: var(--muted); font-size: 14px; max-width: 72ch; overflow-wrap: anywhere; }
 .draft { background: var(--canvas); border: 1px solid var(--divider); border-radius: var(--r-control); padding: 16px; display: grid; gap: 8px; }
 .draft .txt { white-space: pre-wrap; overflow-wrap: anywhere; max-width: 72ch; user-select: text; }
 .draft a { font-weight: 600; overflow-wrap: anywhere; }

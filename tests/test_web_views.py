@@ -102,3 +102,17 @@ def test_ui_copy_has_no_em_dashes_in_the_new_views():
     html = (WEB / "index.html").read_text(encoding="utf-8")
     start = html.index('<main id="main"')
     assert "—" not in html[start:html.index('<div id="feed"')]
+
+
+def test_review_card_shows_what_the_draft_relied_on():
+    # Context harness (R-27): one calm gray line under "Why this post" naming the library
+    # sections the draft relied on, from latest_draft.context (names only, escaped).
+    js = (WEB / "home.js").read_text(encoding="utf-8")
+    assert "function reliedHtml(card)" in js and "Relied on: " in js
+    assert "card.phase === 'review' ? pickHtml(card) + reliedHtml(card)" in js
+    body = js.split("function reliedHtml(card)", 1)[1].split("\n  }\n", 1)[0]
+    assert "latest_draft" in body and ".context" in body
+    assert "escHtml(" in body and "style=" not in body and "innerHTML" not in body
+    css = (WEB / "views.css").read_text(encoding="utf-8")
+    rule = re.search(r"\.relied\s*\{([^}]*)\}", css)
+    assert rule and "var(--muted)" in rule.group(1) and "#" not in rule.group(1)

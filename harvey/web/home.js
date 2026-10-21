@@ -123,6 +123,20 @@ const Home = (() => {
       (warns ? '<p class="pick-h">Heads-up</p><ul>' + warns + '</ul>' : '') + '</div>';
   }
 
+  // The Knowledge-library sections the draft relied on (context harness, R-27): names
+  // only, from latest_draft.context; nothing when the harness was off.
+  function reliedHtml(card) {
+    const draft = card.d && card.d.latest_draft;
+    const used = draft && Array.isArray(draft.context) ? draft.context : [];
+    const names = [];
+    used.forEach(c => {
+      const name = String((c && c.doc_name) || '') + (c && c.heading ? ' > ' + c.heading : '');
+      if (name && names.indexOf(name) < 0) names.push(name);
+    });
+    if (!names.length) return '';
+    return '<p class="relied">Relied on: ' + escHtml(names.join('; ')) + '</p>';
+  }
+
   function check(kind, text) {
     return '<span class="chk' + (kind ? ' ' + kind : '') + '">' + escHtml(text) + '</span>';
   }
@@ -288,7 +302,7 @@ const Home = (() => {
     return '<article class="item' + (done ? ' is-done' : '') + '" id="card-' + id + '" data-id="' + id + '" aria-labelledby="ct-' + id + '">' +
       '<div class="src"><b>' + platform + '</b>' + (where ? '<span>' + where + '</span>' : '') + '<span>' + when + '</span>' + url + '</div>' +
       '<h3 id="ct-' + id + '">' + (extLink(m.url, m.title || snippet(m.text).slice(0, 90), 'post-title') || escHtml(m.title || 'Untitled post')) + '</h3>' +
-      '<p class="quote">“' + escHtml(snippet(body)) + '”</p>' + (card.phase === 'review' ? pickHtml(card) : '') +
+      '<p class="quote">“' + escHtml(snippet(body)) + '”</p>' + (card.phase === 'review' ? pickHtml(card) + reliedHtml(card) : '') +
       (done ? '' : note) +
       (card.d ? draftBox(card) : '<div class="draft"><p class="note">Loading the draft…</p></div>') +
       (card.phase === 'review' ? guideChip(card) : '') + checksHtml(card) + (card.phase === 'review' ? needsHtml(card) : '') +
