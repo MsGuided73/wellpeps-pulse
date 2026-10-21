@@ -479,7 +479,10 @@ def build_reference_block(docs: list[dict], programs=(), nonce: str | None = Non
                   and (d.get("text") or "").strip() and _matches(d.get("programs") or [], programs)]
     if not applicable:
         return ""
-    ordered = ([d for d in applicable if d["authority"] == "must_follow"]
+    # Voice and style guidance first (Community Agent Voice, must follow): a newer, long
+    # must-follow document must never push it out of the budget (2026-10-21).
+    voice = [d for d in applicable if d["authority"] == "must_follow" and d.get("kind") == "voice_style"]
+    ordered = (voice + [d for d in applicable if d["authority"] == "must_follow" and d not in voice]
                + [d for d in applicable if d["authority"] == "reference"])
     header = _HEADER.format(nonce=nonce)
     wrapper = len(prompting.untrusted_block("REFERENCE_DOCUMENTS", "", nonce))

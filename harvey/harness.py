@@ -418,6 +418,9 @@ def _allowed(section: Section, ctx: TaskContext, pinned: bool) -> bool:
     section whose own words are only about other programs is left out unless pinned."""
     if section.authority not in SELECTABLE or not section.text.strip():
         return False
+    title = section.title.lower()
+    if any(word.lower() in title for word in knowledge.harness().exclude_headings):
+        return False                                   # training quizzes and answer keys
     wanted = _lower(ctx.programs)
     if section.doc_programs and not (_lower(section.doc_programs) & wanted):
         return False
@@ -431,11 +434,23 @@ def _newest_first(section: Section) -> tuple:
     return (-section.doc_id, section.position, section.id)
 
 
+VOICE_TOPIC, VOICE_KIND = "voice", "voice_style"
+
+
+def _pins(section: Section, pinned_topics: set[str]) -> bool:
+    """Pinned for this agent: the "voice" topic pins every section of a "Voice and
+    style" document and nothing else (a compliance text saying "avoid" or "style" is
+    not voice guidance); other pinned topics match by keyword as before."""
+    if VOICE_TOPIC in pinned_topics and section.kind == VOICE_KIND:
+        return True
+    return bool((pinned_topics - {VOICE_TOPIC}) & set(section.topics))
+
+
 def _ranked(sections, ctx: TaskContext) -> tuple[list[Section], list[Section]]:
     """(pinned, the rest in rank order)."""
     pinned_topics = set(knowledge.harness().pinned.get(ctx.agent, ()))
     unique = {s.id: s for s in sections}.values()
-    pinned = sorted((s for s in unique if s.authority == "must_follow" and pinned_topics & set(s.topics)
+    pinned = sorted((s for s in unique if s.authority == "must_follow" and _pins(s, pinned_topics)
                      and _allowed(s, ctx, pinned=True)), key=_newest_first)
     taken = {s.id for s in pinned}
     rest = [s for s in unique if s.id not in taken and _allowed(s, ctx, pinned=False)]

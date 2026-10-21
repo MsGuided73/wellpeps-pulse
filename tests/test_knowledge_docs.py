@@ -471,3 +471,17 @@ def test_drafter_survives_an_unreadable_document_table(env):
 
 def test_dashboard_import_sanity():
     assert dashboard.app is not None
+
+
+def test_voice_guidance_is_pinned_before_newer_must_follow_documents():
+    # A newer, long must-follow document (the Competitor Protocol, 37,000 characters) must
+    # not push the Community Agent Voice out of the drafter's 6,000 characters (2026-10-21).
+    voice = {**doc("Community Agent Voice.pdf", "Talk to the person. " * 20, authority="must_follow"),
+             "id": 16, "kind": "voice_style"}
+    protocol = {**doc("Competitor Protocol.pdf", "P" * 40_000, authority="must_follow"), "id": 22,
+                "kind": "compliance_rule"}
+
+    block = knowledge_docs.build_reference_block([protocol, voice])
+
+    assert "Talk to the person." in block
+    assert block.index("Community Agent Voice.pdf") < block.index("Competitor Protocol.pdf")

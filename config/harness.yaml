@@ -53,7 +53,13 @@ categories:
   adverse_event: [safety]
   misinformation: [disclosure]
 
+# Sections whose heading contains any of these words are never picked: training
+# quizzes and answer keys help people learn the rules, not the agent write a reply
+# (owner feedback 2026-10-21).
+exclude_headings: [correct answer, answer key, quiz, knowledge check, scenario assessment, training objective, test your knowledge, self-check]
+
 # Topics an agent always gets from must_follow documents (pinned before anything else).
+# "voice" pins every section of a must-follow "Voice and style" document, and only those.
 pinned:
   drafter: [voice]
   reviewer: [voice]

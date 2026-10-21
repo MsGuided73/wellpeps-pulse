@@ -58,7 +58,7 @@ examples:
     platform: reddit
     program: Weight Loss
     post: "anyone tried compounded tirzepatide via telehealth? Trying to figure out which providers include the follow-up visits in the price."
-    reply: "Follow-up visits are exactly the thing to pin down before you pay for anything. I work with WellPeps, so I'm biased, but it varies by provider: ask each one what follow-up with a licensed clinician is included and how dose adjustments are handled. Our free GLP-1 Weight Loss guide has a section, \"What's actually included in the price\", that walks through what to check. Here's a link to get a free copy if you'd like: https://wellpeps.com/smart-patient-guides/glp-1-weight-loss"
+    reply: "Smart to pin this down before you pay for anything, because follow-up is where plans tend to differ. I work with WellPeps on patient education, so I'm biased, but it varies by provider: ask each one what follow-up with a licensed clinician is included and how dose adjustments are handled. Our free GLP-1 Weight Loss guide has a section, \"What's actually included in the price\", that walks through what to check. Here's a link to get a free copy if you'd like: https://wellpeps.com/smart-patient-guides/glp-1-weight-loss"
     claim_ids: [CLM-AMG-04-WORK-WITH, CLM-R7-PROVIDER-CHECKLIST, CLM-EDU-GUIDE-GLP-1-WEIGHT-LOSS]
 
   - id: EX-AVAILABILITY-HAIR
@@ -66,7 +66,7 @@ examples:
     platform: reddit
     program: Hair Restoration
     post: "Thinking about oral minoxidil through a telehealth service. Is WellPeps hair restoration live yet or still a waitlist?"
-    reply: "Good thing to check before you plan around it. I work with WellPeps, so I can answer that one. Not live yet: WellPeps' Hair Restoration program is coming soon and isn't open yet; there's a list you can join to hear when assessments open. Since you're weighing an oral option, our free Hair Restoration guide has a section, \"Oral vs. topical: what actually changes?\", that explains the differences. Here's a link to get a free copy if you'd like: https://wellpeps.com/smart-patient-guides/hair-restoration"
+    reply: "Good call checking before you plan around it. I work with WellPeps on patient education, so I can answer that one. Not live yet: WellPeps' Hair Restoration program is coming soon and isn't open yet, and there's a list you can join to hear when assessments open. Since you're weighing an oral option, our free Hair Restoration guide has a section, \"Oral vs. topical: what actually changes?\", that explains the differences. Here's a link to get a free copy if you'd like: https://wellpeps.com/smart-patient-guides/hair-restoration"
     claim_ids: [CLM-AMG-04-WORK-WITH, CLM-STATUS-HAIR, CLM-EDU-GUIDE-HAIR-RESTORATION]
 
   - id: EX-QUESTION-ONLINE-CLINIC
@@ -74,7 +74,7 @@ examples:
     platform: reddit
     program: Sexual Wellness
     post: "How do you tell if an online ED clinic is legit? So many ads lately."
-    reply: "Ha, the ads really are everywhere. I'm part of the WellPeps team, so I'm biased, but I'd check whether you're actually reviewed by a licensed clinician, what follow-up is included, and which pharmacy dispenses the medication. For sorting through the ads, our free Sexual Wellness guide closes with \"The questions every Smart Patient should know to ask\", a list you can take to any clinic. Here's a link to get a free copy if you'd like: https://wellpeps.com/smart-patient-guides/sexual-wellness"
+    reply: "Ha, the ads really are everywhere. I'm part of the WellPeps team, so I'm biased, but here's what I'd check with any clinic: whether a licensed clinician actually reviews you, what follow-up is included, and which pharmacy dispenses the medication. Our free Sexual Wellness guide closes with \"The questions every Smart Patient should know to ask\", a list you can take to any clinic. Here's a link to get a free copy if you'd like: https://wellpeps.com/smart-patient-guides/sexual-wellness"
     claim_ids: [CLM-AMG-04-WORK-WITH, CLM-R7-PROVIDER-CHECKLIST, CLM-EDU-GUIDE-SEXUAL-WELLNESS]
 
   - id: EX-QUESTION-WHAT-TO-ASK
@@ -82,7 +82,7 @@ examples:
     platform: facebook
     program: Healthy Aging & Vitality
     post: "Thinking about peptide therapy through an online clinic. What should I ask first?"
-    reply: "Asking before you sign up is the right order. Full disclosure, I work with WellPeps, but this holds for any clinic: find out whether you're actually reviewed by a licensed clinician, what follow-up is included, and which pharmacy dispenses the medication. Our free Healthy Aging & Vitality guide has a chapter, \"Where do wellness therapies fit?\", that helps you frame those questions (it's free, it just needs your email): https://wellpeps.com/smart-patient-guides/healthy-aging-vitality"
+    reply: "Asking before you sign up is exactly the right order. Full disclosure, I work with WellPeps, but this holds for any clinic: find out whether a licensed clinician actually reviews you, what follow-up is included, and which pharmacy dispenses the medication. Our free Healthy Aging & Vitality guide has a section, \"Where do wellness therapies fit?\", that helps you frame those questions. Here's a link to get a free copy if you'd like: https://wellpeps.com/smart-patient-guides/healthy-aging-vitality"
     claim_ids: [CLM-AMG-04-WORK-WITH, CLM-R7-PROVIDER-CHECKLIST, CLM-EDU-GUIDE-HEALTHY-AGING-VITALITY]
 
   - id: EX-NO-LINK-COMMUNITY
@@ -90,5 +90,5 @@ examples:
     platform: facebook
     program: Weight Loss
     post: "Is the oral GLP-1 as good as the shots? Group rules say no links please."
-    reply: "Totally fair question, and no links, got it. I work with WellPeps, so I'm biased, but in general how a form compares depends on the person, and a licensed healthcare provider determines whether treatment is appropriate. If it helps, our free GLP-1 Weight Loss guide on the WellPeps website has a chapter, \"Injections, oral tablets and additives\", that explains the differences in plain terms (it's free, it just asks for an email)."
+    reply: "Fair question, and no links, got it. I work with WellPeps, so I'm biased, but honestly it depends on the person, and a licensed healthcare provider decides whether a treatment is appropriate for you. If you want to dig into the differences, our free GLP-1 Weight Loss guide on the WellPeps website has a section, \"Injections, oral tablets and additives\", that explains them in plain terms."
     claim_ids: [CLM-AMG-04-WORK-WITH, CLM-EDU-GUIDE-GLP-1-WEIGHT-LOSS, CLM-R22-PROVIDER-DETERMINES]

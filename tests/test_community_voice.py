@@ -59,3 +59,10 @@ def test_review_card_has_the_posting_as_switch_and_voice_notes():
     assert "We're the WellPeps team" in js and "I work with WellPeps on patient education" in js
     assert "'as-me':" in js and "'as-brand':" in js and 'aria-label="Posting as"' in js
     assert "/^VOICE:/" in js
+
+
+def test_drafter_is_told_never_to_echo_personal_health_details():
+    # 2026-10-21 comparison: "Since you mentioned compounded semaglutide" was rejected under Guide §8.
+    draft = " ".join((PROMPTS / "draft.md").read_text(encoding="utf-8").split())
+    assert "Never repeat their personal health details back to them" in draft
+    assert "Approved Messaging Guide §8" in draft

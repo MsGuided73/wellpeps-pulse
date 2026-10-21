@@ -409,3 +409,35 @@ def test_tagging_is_cached_until_the_config_reloads(monkeypatch):
     again = harness.sections_for([d])
 
     assert again == first and calls == []
+
+
+# --- owner feedback 2026-10-21: friendlier drafts -------------------------------------------------------
+
+TRAINING_TEXT = f"""Compliance Training
+
+# Platform Rule
+Avoid overly promotional style on every platform and keep the tone educational. {PARA}
+
+# 10. Correct answer: C
+Avoid answering individual dosing questions; the right style is a boundary. {PARA}
+"""
+
+
+def test_only_voice_style_documents_are_pinned_as_voice():
+    training = doc(5, "Compliance Training.docx", TRAINING_TEXT, kind="strategy_training")
+    sections = harness.sections_for([doc(16, "Community Agent Voice.pdf", VOICE_TEXT), training])
+
+    pinned, _ = harness._ranked(sections, hair_ctx())
+
+    assert {s.doc_name for s in pinned} == {"Community Agent Voice"}   # "avoid"/"style" in training isn't voice
+    voice_ids = {s.id for s in sections if s.doc_name == "Community Agent Voice"}
+    assert voice_ids == {s.id for s in pinned}                          # the whole voice guide is pinned
+
+
+def test_quiz_and_answer_key_sections_are_never_picked():
+    training = doc(5, "Compliance Training.docx", TRAINING_TEXT, kind="strategy_training")
+    sections = harness.sections_for([training])
+
+    picked = chosen(harness.select(sections, hair_ctx(), 8000))
+
+    assert all("Correct answer" not in s.title for s in picked)

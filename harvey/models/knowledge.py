@@ -694,6 +694,7 @@ class HarnessFile(_Strict):
     needs: dict[HarnessId, list[HarnessId]] = Field(default_factory=dict)
     categories: dict[HarnessId, list[HarnessId]] = Field(default_factory=dict)
     pinned: dict[HarnessId, list[HarnessId]] = Field(default_factory=dict)
+    exclude_headings: list[HarnessKeyword] = Field(default_factory=list)
 
     @model_validator(mode="after")
     def _topics_exist(self) -> "HarnessFile":
