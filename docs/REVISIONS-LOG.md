@@ -12,6 +12,46 @@ summary for discussion.
 
 ---
 
+## 2026-10-20: Context harness example (Proposal B)
+
+### R-27. The drafter and reviewer get the library sections that fit the post (Live, off by default)
+- **Before:** the drafter saw the first 6,000 characters of the Knowledge
+  library (about 2% of it), in document order; the reviewer saw none of it.
+- **After (only once `harness.enabled: true` is set in harvey.yaml; it ships
+  `false`, so live drafting is unchanged):**
+  - Library documents are split into sections at their headings (markdown,
+    or numbered / ALL-CAPS / short-line headings in extracted Word and PDF
+    text), at most about 1,500 characters each, and tagged with programs,
+    medications, situations and topics (`config/harness.yaml`, public words
+    only).
+  - The drafter gets, within 8,000 characters: the Must-follow voice sections
+    first (at most half the room while other sections match, so a long voice
+    document can't crowd them out), then Must-follow sections that match the post, then reference
+    sections by how well they match (program, medication, situation, unmet
+    need, topic). Whole sections only; never Example documents; a document
+    for another program is left out, as today.
+  - The reviewer gets exactly the same sections, under "Reference sections
+    the drafter used (guidance, not facts)".
+  - The header is unchanged: library text guides tone and scope only; facts,
+    numbers and prices still come only from approved claims.
+  - Each draft records which sections it relied on (`drafts.context_json`:
+    ids and names, never text); the drafted audit event lists the ids. The
+    Pulse queue card shows one gray line: "Relied on: Community Agent Voice >
+    Voice principles; ...".
+  - Any harness error falls back to today's block for the drafter and to no
+    block for the reviewer; drafting never fails because of it.
+  - `scripts/harness_compare.py` drafts chosen mentions with the harness off
+    and on, on a copy of the database, and prints both (records nothing;
+    Claude on the subscription only).
+- **Why:** owner-approved design for WellPeps' compliance lead ("Pulse
+  knowledge design", Proposal B); built as a working example to compare
+  before turning it on.
+- **Source:** `docs/HARNESS-HANDOFF.md`.
+- **Needs:** the owner runs the comparison and decides whether to turn it on;
+  the 7 older PDFs with no extracted text need a re-upload to take part.
+
+---
+
 ## 2026-10-20: Derek Goldberg's Community Agent Voice
 
 ### R-26. Voice principles, guide-offer wording, dashboard claim, posting as (Live)

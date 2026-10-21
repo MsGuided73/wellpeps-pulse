@@ -169,6 +169,15 @@ deterministic compliance filter (`harvey/compliance.py`) exist.
   include "We're the WellPeps team", the Pulse card's "Posting as" switch (home.js), claim
   CLM-CAV-01-PATIENT-DASHBOARD. The drafter never writes a person's name.
 
+- Context harness (R-27, 2026-10-20; Live, off by default): `harvey/harness.py` (split library documents
+  into sections, tag them from `config/harness.yaml`, select whole sections per agent within
+  `harness.budgets`, render under the unchanged reference header), `harness:` in harvey.yaml (`enabled:
+  false`), `HarnessConfig`. `Drafter(harness=...)` uses it instead of `knowledge_docs.reference_block`
+  (any error -> today's block); `Reviewer(harness=...)` sees exactly `DraftProposal.context_sections`
+  via `{{references}}` in prompts/review.md ("" when none). `drafts.context_json` (migration v10,
+  `db/postgres/0006_draft_context.sql`): ids and names, never text; the drafted audit event carries the
+  ids; the Pulse card shows "Relied on: ...". `scripts/harness_compare.py`: off vs on, DB copy only.
+
 Later phases add everything else. Don't build ahead of the phase you've
 been asked to do.
 
