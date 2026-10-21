@@ -210,10 +210,11 @@ def test_harness_is_off_by_default_with_per_agent_budgets():
     assert {"triage", "safety", "rewriter"} <= set(config.harness.budgets.model_dump())
 
 
-def test_repo_harvey_yaml_keeps_the_harness_off():
+def test_repo_harvey_yaml_turns_the_harness_on():
+    # Owner, 2026-10-21 ("let's give it a go"), after the off/on comparison (R-28).
     config = load_config(str(PROJECT_ROOT / "harvey.yaml"))
 
-    assert config.harness.enabled is False
+    assert config.harness.enabled is True
     assert config.harness.budgets.drafter == 8000 and config.harness.budgets.reviewer == 8000
 
 

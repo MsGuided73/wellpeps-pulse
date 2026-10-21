@@ -12,6 +12,42 @@ summary for discussion.
 
 ---
 
+## 2026-10-21: Friendlier drafts, harness on
+
+### R-28. Warmer drafting voice; the context harness is on (Live)
+- **Before:** after R-26 the drafts read stiffer: the voice section was mostly
+  prohibitions, approved claims were pasted in as written, the drafter saw the
+  opening of the Compliance Training, and approving the 37,000-character
+  Competitor Protocol (a newer must-follow document) would have pushed the
+  voice guide out of the drafter's 6,000 characters. The harness pinned any
+  must-follow section that said "avoid" or "style", and picked training-quiz
+  sections ("10. Correct answer: C").
+- **After:**
+  - Voice section rewritten as a positive picture first (a kind,
+    well-informed friend who works on patient education: react to what they
+    are trying to figure out, answer their question, talk to them, end on
+    something useful); Derek's avoid list kept, shortened, at the end.
+  - Approved facts in the drafter's own sentences: talk to the person, split
+    long claims, contractions; every fact and qualifier kept; only the one to
+    three claims the person needs.
+  - Never repeat a poster's personal health details back to them (Approved
+    Messaging Guide §8): the 2026-10-21 comparison caught "since you mentioned
+    compounded semaglutide" (reviewer reject).
+  - The library block always puts must-follow "Voice and style" documents
+    first, harness off or on.
+  - Harness: only "Voice and style" documents are pinned as voice (all their
+    sections); `exclude_headings` in config/harness.yaml skips quizzes and
+    answer keys.
+  - Style examples rewritten warmer (same claims; all pass the filter).
+  - **`harness.enabled: true`** in harvey.yaml (the code default stays off).
+- **Why:** owner, 2026-10-21: "The answers have lost the finesse they
+  previously exhibited", then "let's give it a go!!" after the off/on
+  comparison (post 28: harness on passed review; off was rejected).
+- **Watch:** replies still fall back to general process facts when no
+  approved claim answers the question (post 28 asked about records and
+  doses): more approved claims, and Derek's decision on paraphrasing claims,
+  matter more than tone now.
+
 ## 2026-10-20: Context harness example (Proposal B)
 
 ### R-27. The drafter and reviewer get the library sections that fit the post (Live, off by default)

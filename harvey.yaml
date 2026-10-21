@@ -102,7 +102,7 @@ rewrite:
 # the library, and the reviewer sees the same sections. Budgets are characters,
 # header and markers included; triage, safety and rewriter are not wired yet.
 harness:
-  enabled: false
+  enabled: true            # owner, 2026-10-21, after the off/on comparison (R-28)
   budgets:
     drafter: 8000
     reviewer: 8000
