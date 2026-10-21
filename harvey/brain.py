@@ -82,7 +82,9 @@ class Brain:
         dashboard can attribute tokens and cost to specific work.
         """
         cmd = [
-            "claude", "-p", prompt,
+            # The prompt goes on stdin, not argv: Windows caps a command line at
+            # 32,767 characters and the drafting prompt is longer (2026-10-21).
+            "claude", "-p",
             # JSON output carries exact token/cost accounting per call.
             "--output-format", "json",
             "--dangerously-skip-permissions",
@@ -138,16 +140,16 @@ class Brain:
             try:
                 process = await asyncio.create_subprocess_exec(
                     *cmd,
-                    # DEVNULL: the CLI reads inherited stdin as prompt input,
-                    # stealing the terminal (and any piped answers) from Harvey.
-                    stdin=asyncio.subprocess.DEVNULL,
+                    # PIPE, never the inherited stdin: the prompt is written to it
+                    # below, so the CLI can't steal the terminal from Harvey.
+                    stdin=asyncio.subprocess.PIPE,
                     stdout=asyncio.subprocess.PIPE,
                     stderr=asyncio.subprocess.PIPE,
                     env=env,
                 )
                 try:
                     stdout, stderr = await asyncio.wait_for(
-                        process.communicate(), timeout=timeout
+                        process.communicate(input=prompt.encode("utf-8")), timeout=timeout
                     )
                 except asyncio.TimeoutError:
                     logger.error(f"Claude call timed out after {timeout:.0f}s. Killing process.")

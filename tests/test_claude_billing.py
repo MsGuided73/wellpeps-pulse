@@ -77,7 +77,7 @@ def _capture(monkeypatch):
         class P:
             returncode = 0
 
-            async def communicate(self):
+            async def communicate(self, input=None):
                 return b'{"result": "ok"}', b""
 
         return P()

@@ -22,10 +22,15 @@ async def state():
         yield sm
 
 
+STDIN_SEEN: list = []
+captured_kwargs: list = []
+
+
 class _FakeProcess:
     returncode = 0
 
-    async def communicate(self):
+    async def communicate(self, input=None):
+        STDIN_SEEN.append(input)
         return json.dumps({"type": "result", "result": "ok", "usage": {}}).encode(), b""
 
 
@@ -35,6 +40,7 @@ def _capture_cmd(monkeypatch) -> list:
 
     async def fake_exec(*cmd, **kwargs):
         captured.append(list(cmd))
+        captured_kwargs.append(kwargs)
         return _FakeProcess()
 
     monkeypatch.setattr(asyncio, "create_subprocess_exec", fake_exec)
@@ -110,3 +116,21 @@ def test_empty_models_map_opts_out_of_routing():
 def test_blank_model_name_is_rejected():
     with pytest.raises(ValidationError):
         UsageConfig(models={"scout": "  "})
+
+
+@pytest.mark.asyncio
+async def test_a_long_prompt_goes_on_stdin_not_the_command_line(state, monkeypatch):
+    """Windows caps a command line at 32,767 characters, and the drafting prompt is now
+    longer than that (2026-10-21): the prompt must reach the CLI on stdin."""
+    captured = _capture_cmd(monkeypatch)
+    STDIN_SEEN.clear()
+    captured_kwargs.clear()
+    prompt = "x" * 40_000
+
+    assert await Brain(state).think(prompt, agent="drafter") == "ok"
+
+    cmd = captured[-1]
+    assert cmd[:2] == ["claude", "-p"] and prompt not in cmd
+    assert sum(len(part) for part in cmd) < 20_000
+    assert captured_kwargs[-1]["stdin"] == asyncio.subprocess.PIPE
+    assert STDIN_SEEN[-1] == prompt.encode("utf-8")
