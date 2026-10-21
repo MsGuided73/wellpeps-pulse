@@ -96,6 +96,20 @@ rewrite:
   # Claude call; this caps rewrites per signed-in user per UTC day.
   daily_cap_per_user: 60
 
+# Context harness (R-27, harvey/harness.py; docs/HARNESS-HANDOFF.md). OFF by
+# default. On: the drafter gets the Knowledge-library sections relevant to the
+# post (tags in config/harness.yaml) instead of the first 6,000 characters of
+# the library, and the reviewer sees the same sections. Budgets are characters,
+# header and markers included; triage, safety and rewriter are not wired yet.
+harness:
+  enabled: false
+  budgets:
+    drafter: 8000
+    reviewer: 8000
+    triage: 4000
+    safety: 4000
+    rewriter: 6000
+
 # Days to keep mention text before purging (pending legal sign-off).
 # Live collection (Phase 9, harvey/collect.py). OFF until WellPeps' legal
 # sign-off on scraping (docs/PLAN.md). Every run costs Apify credit: capped

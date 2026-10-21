@@ -12,7 +12,8 @@ from harvey.paths import PROJECT_ROOT
 
 CONFIG_DIR = PROJECT_ROOT / "config"
 YAML_FILES = ["competitors.yaml", "products.yaml", "keywords.yaml", "compliance_rules.yaml", "claims.yaml",
-              "links.yaml", "reply_examples.yaml", "engagement_guide.yaml", "communities.yaml", "guides.yaml", "insights.yaml"]
+              "links.yaml", "reply_examples.yaml", "engagement_guide.yaml", "communities.yaml", "guides.yaml", "insights.yaml",
+              "harness.yaml"]
 # Smart Patient's Guide claims approved by WellPeps through the user's
 # instruction (2026-10-07; FINALIZE gated_download_disclosure resolved).
 USER_APPROVED_GUIDE_CLAIMS = {"CLM-EDU-GUIDES", "CLM-EDU-GUIDE-GLP-1-WEIGHT-LOSS", "CLM-EDU-GUIDE-SEXUAL-WELLNESS",

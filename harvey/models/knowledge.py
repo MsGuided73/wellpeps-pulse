@@ -676,3 +676,30 @@ class InsightsFile(_Strict):
     community_min_chars: int = Field(default=4, ge=1, le=20)
     community_ambiguous: list[str] = Field(default_factory=list)
     segments: list[Segment] = Field(default_factory=list)
+
+
+# --- harness.yaml (context harness, harvey/harness.py) ----------------------
+
+HarnessId = Annotated[str, Field(pattern=r"^[a-z][a-z0-9_]*$", max_length=60)]
+HarnessKeyword = Annotated[str, Field(min_length=2, max_length=80)]
+
+
+class HarnessFile(_Strict):
+    """Section tags for the context harness: topic / situation keywords and
+    which topics serve a need, a category or an agent. Public words only."""
+
+    version: int = 1
+    topics: dict[HarnessId, list[HarnessKeyword]] = Field(default_factory=dict)
+    situations: dict[HarnessId, list[HarnessKeyword]] = Field(default_factory=dict)
+    needs: dict[HarnessId, list[HarnessId]] = Field(default_factory=dict)
+    categories: dict[HarnessId, list[HarnessId]] = Field(default_factory=dict)
+    pinned: dict[HarnessId, list[HarnessId]] = Field(default_factory=dict)
+
+    @model_validator(mode="after")
+    def _topics_exist(self) -> "HarnessFile":
+        known = set(self.topics)
+        unknown = sorted({t for group in (self.needs, self.categories, self.pinned)
+                          for topics in group.values() for t in topics} - known)
+        if unknown:
+            raise ValueError(f"unknown topic ids {unknown}; define them under topics:")
+        return self

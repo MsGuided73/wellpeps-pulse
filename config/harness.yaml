@@ -1,0 +1,59 @@
+# Source: docs/HARNESS-HANDOFF.md (Proposal B, approved by the owner as a design for
+# WellPeps' compliance lead); keywords are Pulse's own, edit freely.
+# Generated: 2026-10-20 for WellPeps Pulse (context harness, harvey/harness.py).
+# Public, non-sensitive words only: do not add internal costs, prices or partner names.
+#
+# Tags for Knowledge-library sections, so each agent gets the few sections that
+# fit the post in front of it instead of the first 6,000 characters of the
+# library. Turned on with `harness.enabled` in harvey.yaml (off by default).
+# Keywords match whole words, case-insensitively.
+version: 1
+
+# Topic id -> keywords. A section mentioning any keyword gets the topic.
+topics:
+  voice: [voice, tone, style, sound, sounds, avoid, wording, phrasing]
+  links: [link, links, URL, URLs, resource, resources, guide, guides]
+  safety: [side effect, side effects, adverse, adverse event, emergency, symptom, symptoms]
+  community: [Reddit, subreddit, Facebook group, moderator, moderators, forum, forums, community rules]
+  process: [assessment, provider review, follow-up, follow up, onboarding, intake]
+  pricing: [price, prices, pricing, cost, costs, membership, cancel, cancellation, refund]
+  disclosure: [disclosure, disclose, "I work with WellPeps", transparent, transparency]
+  competitors: [competitor, competitors, switching, switch providers, other provider, other providers]
+
+# Optional extra keywords per situation id in config/engagement_guide.yaml.
+situations:
+  pricing_question: [price, pricing, cost, membership]
+  process_question: [assessment, provider review, follow-up, how it works]
+  competitor_comparison: [competitor, comparison, compare, switching]
+  competitor_comparison_wellpeps: [competitor, comparison, compare, switching]
+  protocol_appropriate_alternative: [switching, alternative, other provider]
+  protocol_educational_only: [education, educational, general information]
+  general_education: [education, educational, general information]
+  misinformation: [misinformation, myth, myths, correction]
+  misinformation_about_wellpeps: [misinformation, myth, correction]
+  has_anyone_used_wellpeps: [experience, reviews, legit]
+  safety_question: [side effect, safety, symptom]
+
+# Protocol unmet need (harvey.models.mention.PROTOCOL_NEEDS) -> topic ids that serve it.
+needs:
+  price_clarity: [pricing]
+  care_process: [process]
+  provider_access: [process]
+  clinical_evaluation: [process, safety]
+  continuity: [process, competitors]
+  treatment_education: [links]
+  lab_testing_terms: [process]
+
+# Triage category -> topic ids that usually help with it.
+categories:
+  purchase_intent: [pricing, process, links]
+  question: [process, links]
+  complaint: [competitors]
+  praise: [disclosure]
+  adverse_event: [safety]
+  misinformation: [disclosure]
+
+# Topics an agent always gets from must_follow documents (pinned before anything else).
+pinned:
+  drafter: [voice]
+  reviewer: [voice]

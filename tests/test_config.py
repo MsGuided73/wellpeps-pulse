@@ -196,3 +196,35 @@ def test_config_sections_use_default_factories():
         for name, field in model.model_fields.items():
             if isinstance(field.default, (dict, list)) or hasattr(field.default, "model_fields"):
                 raise AssertionError(f"{model.__name__}.{name} has a shared mutable default")
+
+
+# --- Context harness (harvey/harness.py) -------------------------------------
+
+
+def test_harness_is_off_by_default_with_per_agent_budgets():
+    config = PulseConfig()
+
+    assert config.harness.enabled is False
+    assert config.harness.budget_for("drafter") == 8000
+    assert config.harness.budget_for("reviewer") == 8000
+    assert {"triage", "safety", "rewriter"} <= set(config.harness.budgets.model_dump())
+
+
+def test_repo_harvey_yaml_keeps_the_harness_off():
+    config = load_config(str(PROJECT_ROOT / "harvey.yaml"))
+
+    assert config.harness.enabled is False
+    assert config.harness.budgets.drafter == 8000 and config.harness.budgets.reviewer == 8000
+
+
+@pytest.mark.parametrize("harness", [
+    {"enabled": True, "surprise": 1},
+    {"budgets": {"drafter": 8000, "planner": 100}},
+    {"budgets": {"drafter": 10}},
+])
+def test_harness_config_rejects_unknown_keys_and_tiny_budgets(tmp_path, harness):
+    path = tmp_path / "harvey.yaml"
+    path.write_text(yaml.safe_dump({**MINIMAL, "harness": harness}))
+
+    with pytest.raises((ConfigError, ValidationError)):
+        load_config(str(path))

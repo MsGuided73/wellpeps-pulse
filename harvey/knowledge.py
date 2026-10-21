@@ -37,6 +37,7 @@ from harvey.models.knowledge import (
     CompetitorsFile,
     EngagementGuideFile,
     GuidesFile,
+    HarnessFile,
     InsightsFile,
     ComplianceRulesFile,
     KeywordsFile,
@@ -390,8 +391,24 @@ def _insights(directory: Path) -> InsightsFile:
     return data
 
 
+@lru_cache(maxsize=None)
+def _harness(directory: Path) -> HarnessFile:
+    # Like insights.yaml: a custom config dir may predate harness.yaml.
+    if not (directory / "harness.yaml").is_file():
+        directory = PROJECT_ROOT / "config"
+    data = _load(directory, "harness.yaml", HarnessFile)
+    situation_ids = {s.id for s in _engagement_guide(directory).situations} if (
+        directory / "engagement_guide.yaml").is_file() else set(data.situations)
+    bad = sorted(set(data.situations) - situation_ids)
+    bad += sorted(set(data.needs) - set(PROTOCOL_NEEDS))
+    bad += sorted(set(data.categories) - {c.value for c in Category})
+    if bad:
+        raise KnowledgeError(f"harness.yaml: unknown situations / needs / categories {bad}")
+    return data
+
+
 _CACHED = (
-    _insights, _competitors, _products, _keywords, _compliance_rules, _claims_file, _claims, _links, _reply_examples,
+    _harness, _insights, _competitors, _products, _keywords, _compliance_rules, _claims_file, _claims, _links, _reply_examples,
     _engagement_guide, _communities, _guides,
     _competitor_lookup, _product_lookup, _urgent_patterns, _drug_lookup,
     _wellpeps_rx,
@@ -443,6 +460,11 @@ def engagement_guide() -> EngagementGuideFile:
 def insights() -> InsightsFile:
     """Pain-point / ICP roll-up settings and segment rules (config/insights.yaml)."""
     return _insights(config_dir())
+
+
+def harness() -> HarnessFile:
+    """Section tags for the context harness (config/harness.yaml; harvey/harness.py)."""
+    return _harness(config_dir())
 
 
 def communities() -> tuple[CommunityEntry, ...]:

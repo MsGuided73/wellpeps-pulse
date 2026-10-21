@@ -298,6 +298,34 @@ class RewriteConfig(BaseModel):
     daily_cap_per_user: int = Field(default=60, ge=1, le=1000)
 
 
+class HarnessBudgets(BaseModel):
+    """Characters of Knowledge-library sections per agent (block header and
+    markers included). Only the drafter and reviewer use the harness so far;
+    triage, safety and rewriter are listed for later and unused."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    drafter: int = Field(default=8000, ge=1000, le=40000)
+    reviewer: int = Field(default=8000, ge=1000, le=40000)
+    triage: int = Field(default=4000, ge=1000, le=40000)
+    safety: int = Field(default=4000, ge=1000, le=40000)
+    rewriter: int = Field(default=6000, ge=1000, le=40000)
+
+
+class HarnessConfig(BaseModel):
+    """The context harness (harvey/harness.py; docs/HARNESS-HANDOFF.md). Off by
+    default: the drafter keeps today's 6,000-character reference block and the
+    reviewer sees no library text until the owner turns it on."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    enabled: bool = False
+    budgets: HarnessBudgets = Field(default_factory=HarnessBudgets)
+
+    def budget_for(self, agent: str) -> int:
+        return int(getattr(self.budgets, agent, self.budgets.drafter))
+
+
 REDDIT_SORTS = ("relevance", "new", "top", "hot", "comments")
 # Market words checked by the keyword gate on top of the keywords.yaml / competitors.yaml families.
 DEFAULT_REDDIT_EXTRA_TERMS = (
@@ -352,6 +380,7 @@ class PulseConfig(BaseModel):
     slack_query: SlackQueryConfig = Field(default_factory=SlackQueryConfig)
     rewrite: RewriteConfig = Field(default_factory=RewriteConfig)
     collectors: CollectorsConfig = Field(default_factory=CollectorsConfig)
+    harness: HarnessConfig = Field(default_factory=HarnessConfig)
     retention_days: int = Field(default=180, ge=1)
 
 
