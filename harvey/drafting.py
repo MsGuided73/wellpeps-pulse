@@ -129,7 +129,9 @@ async def _review(reviewer, proposal, mention: Mention, gate: GateResult, guidan
         ]
     by_id = knowledge.claims_by_id()
     claims = [by_id[cid] for cid in proposal.claim_ids if cid in by_id]
-    result = await reviewer.review(proposal.reply, mention.platform.value, mention, claims, guidance=guidance)
+    extra = {"context_sections": _context_ids(proposal)} if _context_ids(proposal) else {}
+    result = await reviewer.review(proposal.reply, mention.platform.value, mention, claims, guidance=guidance,
+                                   **extra)
     return result.verdict, [_reason_line(r) for r in result.reasons], REVIEWER_ACTOR, result.reasons
 
 
@@ -138,10 +140,23 @@ async def _advance(state, mention_id: int):
     await state.set_mention_status(mention_id, MentionStatus.IN_REVIEW)
 
 
+def _context_ids(proposal) -> tuple[str, ...]:
+    """The library section ids the drafter used (context harness), () when off."""
+    return tuple(getattr(proposal, "context_sections", ()) or ())
+
+
+def _context_refs(proposal) -> list[dict]:
+    """{section_id, doc_id, doc_name, heading} records for drafts.context_json (never text)."""
+    return [dict(r) for r in getattr(proposal, "context_refs", ()) or ()]
+
+
 def _attempt_verdict(proposal, attempt: int, **extra) -> dict:
-    return {"model": proposal.model, "rationale": proposal.rationale,
-            "needs_human_reason": extra.pop("needs_human_reason", proposal.needs_human_reason),
-            "dropped_claim_ids": proposal.dropped_claim_ids, "attempt": attempt, **extra}
+    verdict = {"model": proposal.model, "rationale": proposal.rationale,
+               "needs_human_reason": extra.pop("needs_human_reason", proposal.needs_human_reason),
+               "dropped_claim_ids": proposal.dropped_claim_ids, "attempt": attempt, **extra}
+    if _context_ids(proposal):
+        verdict["context_sections"] = list(_context_ids(proposal))   # ids only: the audit log never holds text
+    return verdict
 
 
 def _filter_result(gate: GateResult, attempt: int) -> dict:
@@ -152,7 +167,7 @@ async def _record_empty(state, mention: Mention, proposal, attempt: int = 1) -> 
     reason = proposal.needs_human_reason or "no reply drafted"
     draft_id = await state.add_draft(Draft(
         mention_id=mention.id, text="", claim_ids=[], model=proposal.model,
-        review_verdict=ReviewVerdict.NEEDS_HUMAN, review_reasons=[reason],
+        review_verdict=ReviewVerdict.NEEDS_HUMAN, review_reasons=[reason], context=_context_refs(proposal),
     ))
     await state.append_audit(AuditEvent(
         mention_id=mention.id, draft_id=draft_id, event=AuditEventType.DRAFTED,
@@ -175,7 +190,7 @@ async def _record_superseded(state, mention: Mention, proposal, gate: GateResult
         mention_id=mention.id, text=proposal.reply, claim_ids=proposal.claim_ids,
         model=proposal.model, filter_ok=gate.ok, filter_hits=lines,
         review_verdict=ReviewVerdict.REJECT, review_reasons=[SUPERSEDED, *lines], tier=gate.tier,
-        link=links.link_record(proposal.reply),
+        link=links.link_record(proposal.reply), context=_context_refs(proposal),
     ))
     common = {"mention_id": mention.id, "draft_id": draft_id, "permalink": mention.url}
     await state.append_audit(AuditEvent(
@@ -196,7 +211,7 @@ async def _record_reply(state, mention: Mention, proposal, gate, verdict, lines,
         mention_id=mention.id, text=proposal.reply, claim_ids=proposal.claim_ids,
         model=proposal.model, filter_ok=gate.ok, filter_hits=[_hit_line(h) for h in gate.hits],
         review_verdict=verdict, review_reasons=lines, tier=gate.tier,
-        link=links.link_record(proposal.reply),
+        link=links.link_record(proposal.reply), context=_context_refs(proposal),
     ))
     common = {"mention_id": mention.id, "draft_id": draft_id, "permalink": mention.url}
     await state.append_audit(AuditEvent(

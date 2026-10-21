@@ -39,6 +39,10 @@ templates with an unfilled [slot] are never offered.
 Reference documents (harvey/knowledge_docs.py): approved must_follow / reference documents for the
 mention's program are appended to the user message as a delimited guidance block (at most 6000
 characters). They shape tone and scope only; facts and claims still come from the claims list.
+With the context harness on (``harness.enabled`` in harvey.yaml; harvey/harness.py) the block holds
+the library *sections* relevant to this post instead, within the drafter's budget, and
+``DraftProposal.context_sections`` names them so the reviewer gets the same ones. Any harness
+error falls back to today's block; drafting never fails because of the harness.
 
 The drafter never decides whether a reply is safe. The compliance filter,
 the adversarial reviewer, and a human do that downstream.
@@ -50,7 +54,7 @@ from dataclasses import dataclass, field, replace
 from pydantic import BaseModel, ConfigDict, ValidationError
 
 from harvey import knowledge as knowledge_module
-from harvey import guides, knowledge_docs, links
+from harvey import communities, guides, harness, knowledge_docs, links
 from harvey.agents import prompting
 from harvey.agents.acknowledger import AGENT as ACK_AGENT
 from harvey.agents.acknowledger import TASK as ACK_TASK
@@ -121,6 +125,10 @@ class DraftProposal:
     offered_claim_ids: list[str] = field(default_factory=list)
     dropped_claim_ids: list[str] = field(default_factory=list)
     calls: int = 1  # drafter model calls spent on this proposal (incl. retries)
+    # Context harness (harvey/harness.py): the library sections in the prompt, as ids and as
+    # {section_id, doc_id, doc_name, heading} records (never text); () when the harness was off.
+    context_sections: tuple[str, ...] = ()
+    context_refs: tuple[dict, ...] = ()
 
 
 def _about(product: str, drug: str) -> set[str]:
@@ -427,10 +435,14 @@ def _split_claim_ids(raw: list, offered: list[str]) -> tuple[list[str], list[str
 class Drafter:
     """Drafts replies through a brain-like object (``think_json``)."""
 
-    def __init__(self, brain, knowledge=None, max_attempts: int = MAX_ATTEMPTS, acknowledgements: bool = False):
+    def __init__(self, brain, knowledge=None, max_attempts: int = MAX_ATTEMPTS, acknowledgements: bool = False,
+                 harness=None):
         """``acknowledgements``: approved (boundary-only) replies may get one
-        short, validated acknowledgement clause (harvey/agents/acknowledger.py)."""
+        short, validated acknowledgement clause (harvey/agents/acknowledger.py).
+        ``harness``: the ``harness`` config (harvey.config.HarnessConfig); None or
+        ``enabled: false`` keeps today's reference block."""
         self.brain = brain
+        self.harness = harness
         self.knowledge = knowledge or knowledge_module
         self.max_attempts = max(1, int(max_attempts))
         self.acknowledgements = bool(acknowledgements)
@@ -457,6 +469,44 @@ class Drafter:
         except Exception as exc:
             logger.warning(f"reference documents unavailable for mention {mention.id}: {type(exc).__name__}")
             return ""
+
+    @property
+    def harness_on(self) -> bool:
+        return bool(getattr(self.harness, "enabled", False))
+
+    def task_context(self, mention: Mention, triage: Triage, guidance=None) -> harness.TaskContext:
+        """What the harness selects for: this post's programs, medication, situation,
+        category, unmet need and community."""
+        return harness.TaskContext(
+            agent=AGENT,
+            programs=tuple(programs_for(triage.product, triage.drug, _post_text(mention))),
+            medications=tuple(m for m in (harness.normalize_medication(triage.drug),) if m),
+            situation_id=getattr(guidance, "situation_id", "") or "",
+            category=_category(triage.category),
+            need=getattr(triage, "unmet_need", "") or "",
+            community_id=communities.community_id(mention.url or ""),
+            platform=mention.platform.value,
+        )
+
+    async def _harness_block(self, mention: Mention, triage: Triage, guidance) -> tuple[str, harness.Selection]:
+        state = getattr(self.brain, "state", None)
+        if state is None:
+            return "", harness.Selection()
+        sections = await harness.load_sections(state)
+        selection = harness.select(sections, self.task_context(mention, triage, guidance),
+                                   self.harness.budget_for(AGENT))
+        return harness.render(selection, prompting.new_nonce()), selection
+
+    async def _references(self, mention: Mention, triage: Triage, guidance) -> tuple[str, harness.Selection]:
+        """(block, selection): the harness's sections when it is on, else (and on any
+        harness error) today's reference block with an empty selection."""
+        if self.harness_on:
+            try:
+                return await self._harness_block(mention, triage, guidance)
+            except Exception as exc:
+                logger.warning(f"context harness failed for mention {mention.id} ({type(exc).__name__}); "
+                               "using the plain reference block")
+        return await self._reference_block(mention, triage), harness.Selection()
 
     async def _ask(self, prompt: str) -> tuple[DraftAnswer | None, str]:
         try:
@@ -497,7 +547,9 @@ class Drafter:
         offered = [c.id for c in claims]
         model = _model_name(self.brain, AGENT, TASK)
         prompt = build_prompt(mention, triage, claims, guidance=guidance)
-        references = await self._reference_block(mention, triage)
+        references, selection = await self._references(mention, triage, guidance)
+        used = {"context_sections": selection.section_ids,
+                "context_refs": tuple(harness.context_records(selection))}
         if references:
             prompt += "\n\n" + references
         if feedback:
@@ -507,14 +559,14 @@ class Drafter:
             answer, problem = await self._ask(prompt)
             if answer is not None:
                 proposal = self._proposal(answer, offered, model, calls=attempt)
-                return replace(proposal, reply=links.track_registry_links(proposal.reply, mention))
+                return replace(proposal, reply=links.track_registry_links(proposal.reply, mention), **used)
             logger.warning(f"draft attempt {attempt} for mention {mention.id} invalid: {problem}")
             prompt = (
                 f"{prompt}\n\nYour previous answer was invalid ({problem}). "
                 "Return one JSON object with exactly the fields listed above."
             )
         return DraftProposal(reply="", claim_ids=[], needs_human_reason=FAILED_REASON,
-                             model=model, offered_claim_ids=offered, calls=attempts)
+                             model=model, offered_claim_ids=offered, calls=attempts, **used)
 
     @staticmethod
     def _proposal(answer: DraftAnswer, offered: list[str], model: str, calls: int = 1) -> DraftProposal:

@@ -108,12 +108,15 @@ def situation_line(guidance=None) -> str:
     return f"{guidance.label}{template}; required disclosure (within the first two sentences, before any other WellPeps mention): \"{guidance.disclosure}\"{extra}"
 
 
-def build_prompt(reply: str, platform: str, mention: Mention, claims: list[Claim], guidance=None) -> str:
+def build_prompt(reply: str, platform: str, mention: Mention, claims: list[Claim], guidance=None,
+                 references: str = "") -> str:
+    """``references``: the drafter's library sections (harvey.harness.review_block), or ""."""
     return prompting.render(PROMPT_PATH, {
         "situation": situation_line(guidance),
         "guide": guide_line(guidance),
         "rules": RULES_PATH.read_text(encoding="utf-8").strip(),
         "claims": _claims_block(claims),
+        "references": references,
         "platform": platform,
         "draft_nonce": prompting.new_nonce(),
         "draft": reply,
@@ -131,9 +134,29 @@ def _failed(model: str) -> ReviewResult:
 
 
 class Reviewer:
-    def __init__(self, brain, max_attempts: int = MAX_ATTEMPTS):
+    def __init__(self, brain, max_attempts: int = MAX_ATTEMPTS, harness=None):
+        """``harness``: the ``harness`` config (harvey.config.HarnessConfig); when it is
+        enabled, the reviewer sees the library sections the drafter used."""
         self.brain = brain
         self.max_attempts = max(1, int(max_attempts))
+        self.harness = harness
+
+    async def _references(self, context_sections, mention: Mention) -> str:
+        """The drafter's sections under their own heading, or "" (harness off, none, or
+        any harness error: the review goes ahead without them)."""
+        state = getattr(self.brain, "state", None)
+        if not context_sections or not getattr(self.harness, "enabled", False) or state is None:
+            return ""
+        from harvey import harness
+
+        try:
+            sections = await harness.load_sections(state)
+            block, _ = harness.review_block(sections, tuple(context_sections), self.harness.budget_for(AGENT))
+            return block
+        except Exception as exc:
+            logger.warning(f"context harness failed for the review of mention {mention.id} "
+                           f"({type(exc).__name__}); reviewing without reference sections")
+            return ""
 
     async def _ask(self, prompt: str) -> tuple[ReviewAnswer | None, str]:
         try:
@@ -148,9 +171,12 @@ class Reviewer:
             return None, f"schema error: {exc.error_count()} invalid field(s)"
 
     async def review(self, reply: str, platform: str, mention: Mention, claims: list[Claim],
-                     guidance=None) -> ReviewResult:
+                     guidance=None, context_sections=()) -> ReviewResult:
+        """``context_sections``: the ids of the library sections the drafter used
+        (DraftProposal.context_sections); rendered only while the harness is on."""
         model = _model_name(self.brain, AGENT, TASK)
-        prompt = build_prompt(reply, platform, mention, claims, guidance)
+        references = await self._references(context_sections, mention)
+        prompt = build_prompt(reply, platform, mention, claims, guidance, references)
         for attempt in range(1, self.max_attempts + 1):
             answer, problem = await self._ask(prompt)
             if answer is not None:

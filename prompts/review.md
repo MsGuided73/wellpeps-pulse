@@ -178,7 +178,7 @@ Guide: {{guide}}
 
 ## Approved claims used by the draft
 
-{{claims}}
+{{claims}}{{references}}
 
 ## Verdict
 
