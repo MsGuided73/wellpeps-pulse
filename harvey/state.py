@@ -547,6 +547,13 @@ MIGRATIONS: list[str] = [
         recorded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     );
     """,
+    # ── v10: context harness (harvey/harness.py; docs/HARNESS-HANDOFF.md) ──
+    # context_json: the Knowledge-library sections the drafter relied on, as a
+    # JSON list of {section_id, doc_id, doc_name, heading} (never the text), or
+    # NULL when the harness was off or picked nothing.
+    """
+    ALTER TABLE drafts ADD COLUMN context_json TEXT;
+    """,
 ]
 
 
@@ -1024,10 +1031,10 @@ class StateManager:
                 """INSERT INTO drafts
                    (mention_id, version, text, claim_ids_json, model,
                     filter_ok, filter_hits_json, review_verdict,
-                    review_reasons_json, tier, created_at, link_json)
+                    review_reasons_json, tier, created_at, link_json, context_json)
                    VALUES (?, (SELECT COALESCE(MAX(version), 0) + 1
                                FROM drafts WHERE mention_id = ?),
-                           ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                           ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                    RETURNING id""",
                 (
                     draft.mention_id, draft.mention_id, draft.text,
@@ -1038,6 +1045,7 @@ class StateManager:
                     json.dumps(draft.review_reasons), draft.tier,
                     _ts(draft.created_at),
                     json.dumps(draft.link) if draft.link else None,
+                    json.dumps(draft.context) if draft.context else None,
                 ),
             )
             (draft_id,) = await cursor.fetchone()
@@ -1065,6 +1073,7 @@ class StateManager:
         d["filter_hits"] = _loads(d.pop("filter_hits_json", None), [])
         d["review_reasons"] = _loads(d.pop("review_reasons_json", None), [])
         d["link"] = _loads(d.pop("link_json", None), {}) or None
+        d["context"] = _loads(d.pop("context_json", None), []) or []
         if d["filter_ok"] is not None:
             d["filter_ok"] = bool(d["filter_ok"])
         return Draft(**d)

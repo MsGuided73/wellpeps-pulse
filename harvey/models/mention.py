@@ -296,6 +296,9 @@ class Draft(BaseModel):
     created_at: datetime = Field(default_factory=_utcnow)
     # The registry link the text carries (harvey.links.link_record), or None.
     link: dict | None = None
+    # Knowledge-library sections the drafter relied on (harvey.harness.context_records):
+    # [{section_id, doc_id, doc_name, heading}], never the text; [] when the harness was off.
+    context: list[dict] = Field(default_factory=list)
 
 
 class Escalation(BaseModel):
