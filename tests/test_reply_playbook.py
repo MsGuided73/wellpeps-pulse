@@ -40,6 +40,7 @@ from harvey.paths import PROJECT_ROOT
 from harvey.state import MIGRATIONS, StateManager
 from tests.pulse_helpers import FakeBrain
 from tests.test_knowledge import leak_hits
+from tests.link_helpers import links_not_live
 
 EXAMPLE_POST = ("anyone tried compounded tirzepatide via telehealth? Trying to figure out which "
                 "providers include the follow-up visits in the price.")
@@ -175,7 +176,8 @@ def test_every_example_passes_the_filter_except_link_not_live(example):
         assert len(example.reply.split()) <= REDDIT_MAX_WORDS_WITH_GUIDE
 
 
-def test_link_examples_show_only_the_not_live_yellow():
+def test_link_examples_show_only_the_not_live_yellow(monkeypatch):
+    links_not_live(monkeypatch)
     linked = [e for e in knowledge.reply_examples().examples if links.find_links(e.reply)]
     assert len(linked) >= 2
     for example in linked:
@@ -409,6 +411,7 @@ def _pipeline(tmp_path):
 
 
 def test_fakebrain_example_post_drafts_yellow_with_a_stored_tracked_link(tmp_path, monkeypatch):
+    links_not_live(monkeypatch)
     _config_copy(tmp_path, monkeypatch)
     state, mention_id, report = _pipeline(tmp_path)
 
@@ -423,6 +426,7 @@ def test_fakebrain_example_post_drafts_yellow_with_a_stored_tracked_link(tmp_pat
 
 
 def test_approval_is_blocked_while_the_link_is_not_live(tmp_path, monkeypatch):
+    links_not_live(monkeypatch)
     _config_copy(tmp_path, monkeypatch, approve=GOOD_IDS)
     state, mention_id, _ = _pipeline(tmp_path)
     draft = run(state.get_latest_draft(mention_id))
@@ -507,7 +511,8 @@ def _link(mention_id, term="x"):
             "utm_content": f"m{mention_id}", "utm_term": term}
 
 
-def test_reply_analytics_counts_by_platform_and_link(tmp_path):
+def test_reply_analytics_counts_by_platform_and_link(tmp_path, monkeypatch):
+    links_not_live(monkeypatch)
     state = StateManager(str(tmp_path / "r.db"))
     run(state.init_db())
     a = run(_approved_reply(state, "a", link=_link(1)))

@@ -241,7 +241,7 @@ def test_missing_guide_reference_is_yellow():
 def test_guide_with_link_and_email_gate_satisfies_the_rule():
     result = compliance_filter(WITH_GUIDE, "reddit", GUIDE_IDS, guide=_requirement(ALLOWED))
     assert _guide_hits(result) == []
-    assert [h.reason for h in result.hits] == ["link not live yet"]     # real config: links not live
+    assert "link not live yet" not in [h.reason for h in result.hits]  # guide pages live (2026-10-22)
 
 
 def test_the_wrong_guide_link_does_not_satisfy_the_rule():
@@ -320,8 +320,8 @@ def test_gated_download_finalize_is_resolved_and_guide_claims_are_publishable():
     item = next(f for f in knowledge.engagement_guide().finalize if f.key == "gated_download_disclosure")
     assert "2026-10-07" in item.value and "user's instruction" in item.value
     assert {g.claim_id for g in guides.all_guides()} <= knowledge.publishable_claim_ids()
-    # Approval of a reply carrying a guide link still waits for the deployed page.
-    assert not any(link.live for link in knowledge.links())
+    # The guide pages are deployed (checked 2026-10-22), so a reply carrying a guide link can be approved.
+    assert all(link.live for link in knowledge.links())
 
 
 # --- Drafter and reviewer prompts --------------------------------------------------------------------

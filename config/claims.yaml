@@ -187,14 +187,14 @@ claims:
     note: "Superseded for drafting (2026-10-07) by the Live Reference's approved CLM-LR-02-ONGOING-SUPPORT; see docs/RULES-OF-ENGAGEMENT.md."
 
   - id: CLM-PRICE-ALLIN
-    text: "One monthly price covers the licensed clinician's review, follow-up care, the medication if prescribed, messaging with the care team, and standard shipping."
+    text: "One monthly price covers the provider visit, ongoing support through the patient portal, the medication if prescribed, and shipping. There's no membership fee. Lab tests are extra: optional for most treatments, required only for hormone therapy, and offered at low cost."
     products: ["*"]
     tier: yellow
     approved_by: PENDING
     approved_at: null
     expires: null
     promotional: true
-    source: "C:/dev/W/wellpeps-site/src/config.ts PRICE_NOTE (first sentence; 'your' -> 'the' because R31 blocks 'your care team'; the lab-billing and pay-nothing-unless-prescribed sentences are left out). CHECK: the owner confirmed on 2026-10-21 that the one monthly price covers the provider visit, ongoing support through the patient portal and the prescribed medication, with no membership fee; lab tests are extra (optional for most treatments, required only for hormone therapy) and low cost; shipping was not confirmed. Owner prefers 'one monthly price' over 'all-inclusive'"
+    source: "C:/dev/W/wellpeps-site/src/config.ts PRICE_NOTE (first sentence; 'your' -> 'the' because R31 blocks 'your care team'; the lab-billing and pay-nothing-unless-prescribed sentences are left out). CHECK: the owner confirmed on 2026-10-21 that the one monthly price covers the provider visit, ongoing support through the patient portal and the prescribed medication, with no membership fee; lab tests are extra (optional for most treatments, required only for hormone therapy) and low cost; shipping is included (owner, 2026-10-22). Owner prefers 'one monthly price' over 'all-inclusive'. Text redrafted 2026-10-22 from the owner's facts; still PENDING Derek"
     finalize: true
     finalize_key: "pricing"
     finalize_missing: "Live Reference §6-7: standard shipping inclusion is CONFIRM and 'One Simple Price. Everything Included.' needs operational verification (Protocol §6: never assume 'everything included')"

@@ -15,6 +15,7 @@ from harvey import state as state_module
 from harvey.compliance import compliance_filter
 from harvey.models import Mention, Platform
 from harvey.state import StateManager
+from tests.link_helpers import links_not_live
 
 GLP1 = "https://wellpeps.com/smart-patient-guides/glp-1-weight-loss"
 DISCLOSURE = "Disclosure: I work with WellPeps, so I am not neutral."
@@ -54,14 +55,14 @@ def _mention(mention_id=42, url="https://www.reddit.com/r/Tirzepatide/comments/a
 # --- Registry ---------------------------------------------------------------------
 
 
-def test_registry_loads_guides_all_https_on_wellpeps_and_not_live():
+def test_registry_loads_guides_all_https_on_wellpeps_and_live():
     entries = knowledge.links()
     ids = {link.id for link in entries}
     assert {"LNK-GUIDES", "LNK-GUIDE-GLP-1-WEIGHT-LOSS", "LNK-GUIDE-SEXUAL-WELLNESS",
             "LNK-GUIDE-HAIR-RESTORATION", "LNK-GUIDE-HEALTHY-AGING-VITALITY", "LNK-GUIDE-NAD-THERAPY"} <= ids
     assert all(link.url.startswith("https://wellpeps.com/smart-patient-guides") for link in entries)
-    # The guide pages 404 as of 2026-10-06: nothing may be marked live yet.
-    assert not any(link.live for link in entries)
+    # The guide pages are live on wellpeps.com (checked 2026-10-22).
+    assert all(link.live and link.checked_at for link in entries)
     assert knowledge.allowed_link_domains() == ["wellpeps.com"]
 
 
@@ -187,7 +188,8 @@ def test_track_registry_links_leaves_other_links_alone():
     assert links.track_registry_links(text, _mention()) == text
 
 
-def test_link_record_and_describe():
+def test_link_record_and_describe(monkeypatch):
+    links_not_live(monkeypatch)
     url = links.tracked_url(GLP1, platform="reddit", mention_id=5, community="loseit")
     record = links.link_record(f"{DISCLOSURE} Guide: {url}.")
     assert record == {"id": "LNK-GUIDE-GLP-1-WEIGHT-LOSS", "label": "Smart Patient's Guide: GLP-1 Weight Loss",
@@ -217,7 +219,8 @@ def test_registry_link_without_a_backing_claim_is_red():
     assert any("not backed by a cited claim" in h.reason for h in _hits(result))
 
 
-def test_backed_registry_link_not_live_is_yellow():
+def test_backed_registry_link_not_live_is_yellow(monkeypatch):
+    links_not_live(monkeypatch)
     result = compliance_filter(f"{DISCLOSURE} {ANSWER} Guide: {GLP1}", "reddit", GUIDE_CLAIMS)
     assert result.ok is True and result.tier == "yellow"
     assert [(h.match, h.reason) for h in _hits(result)] == [("LNK-GUIDE-GLP-1-WEIGHT-LOSS", "link not live yet")]
@@ -235,7 +238,8 @@ def test_backed_live_registry_link_is_clean(tmp_path, monkeypatch):
     assert result.tier == "green", result.hits
 
 
-def test_words_inside_our_tracked_url_are_not_read_as_reply_wording():
+def test_words_inside_our_tracked_url_are_not_read_as_reply_wording(monkeypatch):
+    links_not_live(monkeypatch)
     # A subreddit named after a drug lands in utm_term; R38 must not fire on it.
     url = links.tracked_url(GLP1, platform="reddit", mention_id=1, community="tirzepatide")
     result = compliance_filter(f"{DISCLOSURE} {ANSWER} Guide: {url}", "reddit", GUIDE_CLAIMS)
@@ -306,6 +310,7 @@ def test_suggestions_never_edit_but_say_what_to_flip():
 
 
 def test_cli_links_check_prints_records_and_leaves_yaml_alone(tmp_path, monkeypatch, capsys):
+    links_not_live(monkeypatch)
     monkeypatch.setattr(state_module, "DB_PATH", tmp_path / "pulse.db")
     before = (knowledge.config_dir() / "links.yaml").read_text(encoding="utf-8")
 

@@ -21,9 +21,8 @@
 pricing:
   model: one_monthly_price
   summary: "One monthly price per treatment. No membership fee."
-  includes: [the provider visit, ongoing support through the patient portal, the medication if prescribed]
+  includes: [the provider visit, ongoing support through the patient portal, the medication if prescribed, shipping]
   not_included: ["lab tests: optional for most treatments, required only for hormone therapy; offered at low cost"]
-  unconfirmed: [whether shipping is included]
 
 categories:
   - name: Weight Loss
