@@ -194,7 +194,7 @@ claims:
     approved_at: null
     expires: null
     promotional: true
-    source: "C:/dev/W/wellpeps-site/src/config.ts PRICE_NOTE (first sentence; 'your' -> 'the' because R31 blocks 'your care team'; the lab-billing and pay-nothing-unless-prescribed sentences are left out). CHECK: config/products.yaml membership.shipping_note says shipping is shown at checkout"
+    source: "C:/dev/W/wellpeps-site/src/config.ts PRICE_NOTE (first sentence; 'your' -> 'the' because R31 blocks 'your care team'; the lab-billing and pay-nothing-unless-prescribed sentences are left out). CHECK: the owner confirmed on 2026-10-21 that the one monthly price covers the provider visit, ongoing support through the patient portal and the prescribed medication, with no membership fee; lab tests are extra (optional for most treatments, required only for hormone therapy) and low cost; shipping was not confirmed. Owner prefers 'one monthly price' over 'all-inclusive'"
     finalize: true
     finalize_key: "pricing"
     finalize_missing: "Live Reference §6-7: standard shipping inclusion is CONFIRM and 'One Simple Price. Everything Included.' needs operational verification (Protocol §6: never assume 'everything included')"
@@ -243,14 +243,14 @@ claims:
 
   - id: CLM-EDU-GUIDE-HAIR-RESTORATION
     text: "Free guide: The Smart Patient's Guide to Hair Restoration — Understanding hair loss, today's treatment options, and what to realistically expect. It includes questions to ask before choosing a treatment program."
-    products: [Topical Treatments, Oral Treatments, Combination Therapy, Advanced Liposomal Formulas]
+    products: [Oral Finasteride, Oral Minoxidil, Topical Minoxidil, "Topical Minoxidil + Finasteride", "Topical Finasteride + Minoxidil + Tretinoin"]
     tier: green
     link_id: LNK-GUIDE-HAIR-RESTORATION
     approved_by: "WellPeps via user instruction (2026-10-07): guide references and gated-download disclosure"
     approved_at: 2026-10-07
     expires: null
     promotional: true
-    source: "C:/dev/W/wellpeps-site/src/data/ebooks.ts (slug hair-restoration); src/data/guide-pages.ts ('the questions worth asking before choosing a treatment program', LAST_POINT). No checklist listed. Hair Restoration is coming_soon (R21: say only 'on the way')"
+    source: "C:/dev/W/wellpeps-site/src/data/ebooks.ts (slug hair-restoration); src/data/guide-pages.ts ('the questions worth asking before choosing a treatment program', LAST_POINT). No checklist listed. Hair Restoration is live (site and Derek's sign-off, 2026-10-22; CLM-STATUS-HAIR)"
     finalize: true
     finalize_key: "gated_download_disclosure"
     finalize_missing: "Protocol §8, §13: validate the link and the gated-download disclosure (say the guide is free (Derek Goldberg's wording, owner 2026-10-20); 'free' must match the access terms and ungated access is never promised)"
@@ -436,7 +436,7 @@ claims:
 
   - id: CLM-AMG-07-HAIR
     text: "Individual results vary, and hair-restoration results can't be guaranteed. A licensed provider can determine whether a treatment may be appropriate after evaluating your individual circumstances."
-    products: ["Topical Treatments", "Oral Treatments", "Combination Therapy", "Advanced Liposomal Formulas"]
+    products: [Oral Finasteride, Oral Minoxidil, Topical Minoxidil, "Topical Minoxidil + Finasteride", "Topical Finasteride + Minoxidil + Tretinoin"]
     tier: yellow
     approved_by: "Approved Messaging & Response Guide v1.0 (Aug 2026)"
     approved_at: null
@@ -1160,15 +1160,15 @@ claims:
     note: "Status wording adapted from the Live Reference §3 row; the site agrees (programs.ts 'Healthy Aging & Vitality' status live). Peptide prices are CONFIRM (LR §5.3)."
 
   - id: CLM-STATUS-HAIR
-    text: "WellPeps' Hair Restoration program is coming soon and isn't open yet; there's a list you can join to hear when assessments open."
+    text: "WellPeps' Hair Restoration program is available now."
     products: []
     program: Hair Restoration
     tier: green
-    approved_by: PENDING
-    approved_at: null
+    approved_by: "Derek Goldberg (sign-off relayed by the owner 2026-10-22)"
+    approved_at: 2026-10-22
     expires: null
-    source: "C:/dev/W/wellpeps-site/src/data/programs.ts (Hair Restoration status coming-soon while HAIR_COMING_SOON) and src/data/hair.ts soonLead ('opens soon. Join the list ... the moment assessments are available'); products.yaml status coming_soon"
-    note: "PENDING: the Approved Messaging Live Reference v1.0 §3 lists Hair Restoration as APPROVED with 'Start Free Assessment', which conflicts with the site's Coming Soon gate. Never say hair restoration is available or live (R21)."
+    source: "wellpeps.com/hair-restoration/ (live 2026-10-22: five products with prices and 'See If You Qualify'; owner's inventory); Approved Messaging Live Reference v1.0 §3 (Hair Restoration: APPROVED, public next step Start Free Assessment); products.yaml status live"
+    note: "Derek signed off on Hair Restoration being available (owner, 2026-10-22); the site shows the program live. Filter rule R21 no longer blocks saying it is available; its regrowth-promise pattern stays."
 
   - id: CLM-STATUS-HORMONE
     text: "WellPeps' Hormone Optimization program is coming soon; there is a waitlist."
@@ -1180,14 +1180,3 @@ claims:
     expires: null
     source: "C:/dev/W/wellpeps-site/src/data/programs.ts (Hormone Optimization status coming-soon) and src/data/knowledge.ts ('Hormone Optimization is coming soon - you can join the waitlist'); products.yaml status waitlist"
     note: "PENDING: the Approved Messaging Live Reference v1.0 §3 marks Hormone Optimization 'Coming Soon' with status CONFIRM (final status needs confirmation before public use; finalize program_descriptions)."
-
-  - id: CLM-STATUS-MENTAL
-    text: "WellPeps' Mental Wellness program is coming soon and isn't open yet."
-    products: []
-    program: Mental Wellness
-    tier: green
-    approved_by: PENDING
-    approved_at: null
-    expires: null
-    source: "Approved Messaging Live Reference v1.0 §3 (Mental Wellness: Coming Soon, status CONFIRM); products.yaml status waitlist"
-    note: "PENDING: the Live Reference marks it CONFIRM (final status needs confirmation before public use; finalize program_descriptions). Not on the site."

@@ -257,6 +257,8 @@ cites its source; [SM] §6 evaluation cases are tests
 | Price clarity, affordability or what a price includes ("Money is tight. What extra costs should I check?") | RESPOND (not price-only) | triage prompt (`price_clarity` need) | [SM] §3 "Intent is more important than keywords", §6 |
 | Already answered well / no incremental value | SKIP `no_added_value` | triage tag `already_answered` (thread context the model can see); stale threads and existing good answers are also a human posting check ([CP] §11) | [SM] §2 step 6, §3 |
 | No approved answer or offering for the question | SKIP `knowledge_gap` (useful contribution 0, not about WellPeps); recorded in the gate for a content backlog | code | [SM] §2 step 5, §3, §5 |
+| Something WellPeps offers comes up only in passing ("how do you cope with sleeping apart? ...maybe GLP-1 if all else fails"): the main topic isn't one WellPeps covers, nothing calls for what WellPeps offers, AND a reply would look like WellPeps injecting itself | SKIP `passing_mention` (all three must hold; never for a post about or asking WellPeps; safety routes first) | triage tags `topic_not_covered`, `no_natural_fit`, `reply_would_intrude` + code | owner decision 2026-10-21 (R-31); [SM] §1 "Do not treat every medication mention as a prospect", "A relevant keyword ... is insufficient"; Why and When to Engage |
+| Only emotional, relationship or coping support is asked | SKIP `no_useful_role` | triage tag `emotional_support_only` + code | [OM] §5.3 "Highly emotional disputes where WellPeps has no useful role"; R-31 |
 | A direct WellPeps question whose central fact is awaiting verification ("What does WellPeps charge?" while pricing is FINALIZE) | HOLD (`gate:hold_unverified_fact`), nothing drafted | code: the need's direct facts (`switching_protocol.needs.<need>.direct`) exist and none is publishable | [SM] §2 step 5, §3, §6; [CP] §4 step 5 |
 | General medication / treatment education | RESPOND | code (`worth_it`) | [SM] §3, §6 |
 | A complaint about another company that also asks for alternatives | Answered under the protocol; triage's `reply_appropriate` guess never discards it | code (`answers_alternatives_request` in the draftable query) + triage prompt | [DG]; [SM] §5 "Do not let 'complaint about another company' suppress an otherwise eligible alternatives request"; R-2 |
@@ -282,8 +284,9 @@ platform_rules_only), `posting_hold` and `priority`; the guide decision
 - **Program-status claims** (`program:` in `config/claims.yaml`): offered whenever a post is about
   that program (product, drug or words). Weight Management, Sexual Wellness and Peptides &
   Wellness Therapies are "available now" ([LR] §3 APPROVED, site live). Hair Restoration is
-  "coming soon" (site gate; conflicts with [LR] §3, so PENDING); Hormone Optimization and Mental
-  Wellness are "coming soon" ([LR] §3 CONFIRM, PENDING).
+  "available now" (site live; Derek's sign-off relayed by the owner 2026-10-22; R21 no longer blocks
+  it). Hormone Optimization is "coming soon" ([LR] §3 CONFIRM, PENDING). Mental Wellness was
+  removed (no longer on the site, 2026-10-22).
 - **Acknowledgement on approved replies** ([AMG] §1 "adapt ordinary conversational wording only
   as needed"): a `boundary_only` reply may carry ONE sentence between the disclosure and the
   verbatim approved response that restates the stated issue neutrally ("the shipping delay
@@ -502,6 +505,15 @@ reclassified; nothing auto-replies.
 `config/communities.yaml` is the registry ([PL] Channel 3: "maintain a
 database of each community's rules"). Every community starts `unknown`.
 
+| Rule status | Effect |
+|---|---|
+| `prohibited` | No reply at all (audit `skipped`, never retried); the protocol says DO NOT ENGAGE; a draft is red (R44). |
+| `unknown` (or not registered) | Competitor / switching posts: HOLD, nothing drafted ([CP] §2). Everything else: drafted for internal review, yellow "community rules unverified", no link (a link is red) and no Smart Patient's Guide, even by name (red). **Approval is refused** ("human posts / held until permission") until the rules or a moderator's permission are recorded ([SM] §2 step 2, §5; [CP] §2, §10; [OM] §5.1; [DG]; 2026-10-20, R-20). |
+| `with_permission`, permission not obtained | Yellow; no link and no promotion (red); an alternatives request is downgraded to EDUCATIONAL ONLY; **approval refused** until the permission is recorded. |
+| a competitor's own community (named for a competitor or alias) | Listen-only: nothing drafted (`gate:competitor_community`) and approval refused whatever is recorded; mentions feed competitor insights ([SM] §3; [GP] §7.1; session safeguard 2026-10-20). |
+| `allowed` | Normal; `links_allowed: false` still makes any link red. |
+| no community (owned channels, review sites, Instagram / TikTok comments) | Platform rules only. |
+
 **Advisory mode (owner decision 2026-10-21, R-30; needs Derek Goldberg's
 sign-off).** The table above is the `enforced` mode. With `posting_holds:
 advisory` (the shipped setting) the rules no longer stop drafting or
@@ -514,15 +526,6 @@ audit record. A rep may post Pulse's reply or their own and records what was
 posted (text, who, when, link) as a `posted` audit event, checked by the
 compliance filter. Safety, clinical and privacy routing, clinical approval,
 the filter, approved claims and one reply per thread are unchanged.
-
-| Rule status | Effect |
-|---|---|
-| `prohibited` | No reply at all (audit `skipped`, never retried); the protocol says DO NOT ENGAGE; a draft is red (R44). |
-| `unknown` (or not registered) | Competitor / switching posts: HOLD, nothing drafted ([CP] §2). Everything else: drafted for internal review, yellow "community rules unverified", no link (a link is red) and no Smart Patient's Guide, even by name (red). **Approval is refused** ("human posts / held until permission") until the rules or a moderator's permission are recorded ([SM] §2 step 2, §5; [CP] §2, §10; [OM] §5.1; [DG]; 2026-10-20, R-20). |
-| `with_permission`, permission not obtained | Yellow; no link and no promotion (red); an alternatives request is downgraded to EDUCATIONAL ONLY; **approval refused** until the permission is recorded. |
-| a competitor's own community (named for a competitor or alias) | Listen-only: nothing drafted (`gate:competitor_community`) and approval refused whatever is recorded; mentions feed competitor insights ([SM] §3; [GP] §7.1; session safeguard 2026-10-20). |
-| `allowed` | Normal; `links_allowed: false` still makes any link red. |
-| no community (owned channels, review sites, Instagram / TikTok comments) | Platform rules only. |
 
 Firm posting blocks vs warnings ([DG] 2026-10-10): explicit community
 restrictions, a moderator's instruction (record it as `prohibited` or
@@ -726,7 +729,7 @@ until WellPeps confirms or drops them.
 |---|---|---|---|
 | R15 / R16: never imply a compounded medication is the same as, equivalent to or a generic of a brand drug, or FDA-approved; no brand name as a WellPeps product | FDA misbranding / warning-letter language | `compliance_rules.yaml` R15, R16 | [LR] §13.1 ("Compounded medications are not FDA-approved as finished drug products") and [PL] "Review first: compounded" support it; no explicit sameness rule |
 | R12: no LegitScript / NABP certification claims while pending, no "certification-pending" wording, no "FDA-approved pharmacy" | LegitScript denial / revocation; false accreditation | R12 (toggle `allow_certification_claims: false`) | [PL] DON'T list ("certification-pending language") agrees; pharmacy accreditation not addressed |
-| R8: no assessment, intake or checkout links and no "Start your assessment" before LegitScript | platform / LegitScript circumvention | R8 | [PL] lists such links as "Review first" (Pulse is stricter: red); [AMG] §15, §19 give assessment-link patterns with a FINALIZE slot |
+| R8: no assessment, intake or checkout links before LegitScript (the "Start your assessment" phrase ban was dropped by the owner 2026-10-22) | platform / LegitScript circumvention | R8 | [PL] lists such links as "Review first" (Pulse is stricter: red); [AMG] §15, §19 give assessment-link patterns with a FINALIZE slot |
 | R31 (narrowed 2026-10-20): never claim access to the person's records or account ("we'll look into your account", "your order has shipped") and never confirm or imply they are a WellPeps customer ("as our patient", "your WellPeps order") | HIPAA / patient-status disclosure | R31 (`patient_confirmation`) | [OM] §8, [CT] Module 5, [GP] §3.2, §12 forbid confirming patient status. The bare phrases "your order / prescription / provider" were Pulse's over-broad inference and are no longer red (agreed with Derek Goldberg's reviewer; "contact your prescribing provider" is approved wording) |
 | R33 + safety screen: possible minors never get a reply (boundary or not) | weight-loss marketing to minors | R33, `safety_screen` | not addressed |
 | Self-harm: no reply, clinical owner paged | crisis handling | `self_harm` situation | [OM] §15 (credible safety threats) only in general terms |
@@ -792,7 +795,6 @@ until WellPeps decides.
 |---|---|---|
 | Company voice "we" on owned channels and review sites ("We're the WellPeps team") | Not on the approved disclosure list; drafts use "I work with WellPeps." / "I'm part of the WellPeps team." | Approved company-voice wording for official accounts ([OM] §3.2; [CP] §7; [AMG] §4) |
 | Paraphrasing approved claims | Facts only in an approved claim's words; the acknowledgement sentence is the only adaptation | Whether, and how far, reviewers / the drafter may paraphrase approved wording ([AMG] §1) |
-| Hair Restoration status | "Coming soon" (site gate) vs "available now" ([LR] §3): PENDING | Which is current |
 | Review-time statements ("a provider usually reviews within ...") | No approved response-time fact; R49 red | Approved review-time wording, if any ([CP] §6) |
 | The mandatory "it asks for your email" sentence | Kept (owner instruction 2026-10-07; natural wording); ungated-access promises are red | [SM] §4 says the sentence is not required in every comment when the landing page explains the email requirement: confirm before relaxing |
 

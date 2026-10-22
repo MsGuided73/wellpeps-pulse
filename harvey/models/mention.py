@@ -131,6 +131,12 @@ PROTOCOL_INTENTS: tuple[str, ...] = (
     "price_only",                   # only wants the cheapest seller, a coupon or an undercut
     "already_answered",             # the thread already has a complete, accurate answer
     "other_person_medical",         # a medical question or crisis about someone else (a parent, partner...)
+    # Passing mentions (owner decision 2026-10-21, R-31; harvey/engagement.py
+    # ``skip_reason``): the post is skipped only when all three hold.
+    "topic_not_covered",            # its main question or topic isn't about anything WellPeps covers
+    "no_natural_fit",               # nothing in it naturally calls for what WellPeps offers
+    "reply_would_intrude",          # a reply would seem out of touch, WellPeps injecting itself
+    "emotional_support_only",       # asks only for emotional, relationship or coping support
 )
 # The underlying needs of §3 (config/engagement_guide.yaml switching_protocol.needs).
 PROTOCOL_NEEDS: tuple[str, ...] = (

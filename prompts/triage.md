@@ -138,6 +138,25 @@ Return one JSON object with exactly these fields:
     or whether they should start, stop or change something ("my father on
     Ozempic drinks heavily, is that dangerous?"). A general process, price or
     provider-choice question asked on someone's behalf is not this tag.
+  - Passing mentions. A post can name a medication, treatment or service
+    WellPeps offers without being about it. Answer these three questions
+    separately and add each tag that is true:
+    - `topic_not_covered`: the post's main question or topic is not about
+      anything WellPeps covers (its programs, treatments, medications,
+      telehealth care, labs or prices).
+    - `no_natural_fit`: nothing in the post naturally calls for a product or
+      service WellPeps offers.
+    - `reply_would_intrude`: a WellPeps reply would seem out of touch with
+      the post's main point, as if WellPeps were injecting itself into the
+      conversation for commercial reasons.
+    Pulse skips the post only when all three are true, so judge each one on
+    its own. Example: a spouse asks how others cope with sleeping apart
+    because of snoring and mentions GLP-1 once as a last resort; all three
+    are true. If the same post also asks "does GLP-1 help snoring?", none
+    of them is.
+  - `emotional_support_only`: the author asks only for emotional,
+    relationship or coping support ("how did you get over it?"), with no
+    question that a treatment, medication or care service could answer.
   A competitor's name alone is not an intent: classify what is asked. Never
   infer satisfaction or dissatisfaction from a provider's name alone: use the
   person's own words.

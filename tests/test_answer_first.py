@@ -28,7 +28,7 @@ DRAFT_MD = (PROJECT_ROOT / "prompts" / "draft.md").read_text(encoding="utf-8")
 REVIEW_MD = (PROJECT_ROOT / "prompts" / "review.md").read_text(encoding="utf-8")
 STATUS = {"Weight Loss": "CLM-LR-03-STATUS-WEIGHT", "Sexual Wellness": "CLM-LR-03-STATUS-SEXUAL",
           "Healthy Aging & Vitality": "CLM-LR-03-STATUS-PEPTIDES", "Hair Restoration": "CLM-STATUS-HAIR",
-          "Hormone Optimization": "CLM-STATUS-HORMONE", "Mental Wellness": "CLM-STATUS-MENTAL"}
+          "Hormone Optimization": "CLM-STATUS-HORMONE"}
 
 
 def _mention(text: str) -> Mention:
@@ -94,26 +94,29 @@ def test_status_claims_follow_the_sources():
         assert claim.guide and claim.approved_by == LIVE_REFERENCE_APPROVER
         assert claim.source.startswith("Approved Messaging Live Reference v1.0 §3") and "APPROVED" in claim.source
         assert "available now" in claim.text
-    # Site-only, conflicting or CONFIRM: pending.
-    for cid in ("CLM-STATUS-HAIR", "CLM-STATUS-HORMONE", "CLM-STATUS-MENTAL"):
-        claim = by_id[cid]
-        assert claim.approved_by == "PENDING" and not claim.guide
-        assert "coming soon" in claim.text
-    assert "waitlist" in by_id["CLM-STATUS-HORMONE"].text
-    assert "CONFIRM" in by_id["CLM-STATUS-MENTAL"].source
-    assert "§3" in by_id["CLM-STATUS-HAIR"].note
+    # CONFIRM: pending.
+    hormone = by_id["CLM-STATUS-HORMONE"]
+    assert hormone.approved_by == "PENDING" and not hormone.guide
+    assert "coming soon" in hormone.text and "waitlist" in hormone.text
+    # Hair Restoration: live on the site and signed off by Derek (relayed by the owner, 2026-10-22).
+    hair = by_id["CLM-STATUS-HAIR"]
+    assert "available now" in hair.text and hair.approved_by.startswith("Derek Goldberg")
     publishable = knowledge.publishable_claim_ids(date.today())
-    assert {"CLM-LR-03-STATUS-WEIGHT", "CLM-LR-03-STATUS-SEXUAL", "CLM-LR-03-STATUS-PEPTIDES"} <= publishable
-    assert not {"CLM-STATUS-HAIR", "CLM-STATUS-HORMONE", "CLM-STATUS-MENTAL"} & publishable
+    assert {"CLM-LR-03-STATUS-WEIGHT", "CLM-LR-03-STATUS-SEXUAL", "CLM-LR-03-STATUS-PEPTIDES",
+            "CLM-STATUS-HAIR"} <= publishable
+    assert "CLM-STATUS-HORMONE" not in publishable
 
 
-def test_status_claims_pass_the_filter_and_never_call_hair_available():
+def test_status_claims_pass_the_filter_and_hair_may_now_be_called_available():
     for cid in STATUS.values():
         result = compliance_filter(f"I work with WellPeps. {knowledge.claims_by_id()[cid].text}", "reddit", [cid])
         assert result.tier != "red", (cid, result.red_hits)
     hair = compliance_filter("I work with WellPeps. Hair restoration is now available.", "reddit",
                              ["CLM-AMG-04-WORK-WITH"])
-    assert any(h.rule_id == "R21" for h in hair.red_hits)
+    assert not any(h.rule_id == "R21" for h in hair.red_hits)
+    promise = compliance_filter("I work with WellPeps. You'll have a full head of hair.", "reddit",
+                                ["CLM-AMG-04-WORK-WITH"])
+    assert any(h.rule_id == "R21" for h in promise.red_hits)          # regrowth promises stay red
 
 
 @pytest.mark.parametrize("product, drug, text, program", [
@@ -122,7 +125,6 @@ def test_status_claims_pass_the_filter_and_never_call_hair_available():
     ("Compounded Tirzepatide", "", "", "Weight Loss"),               # product only
     ("", "tadalafil", "anyone use an online service?", "Sexual Wellness"),
     ("", "", "When does WellPeps hormone care open?", "Hormone Optimization"),
-    ("", "", "Is there anything for mental health yet?", "Mental Wellness"),
 ])
 def test_programs_come_from_product_drug_or_words(product, drug, text, program):
     assert program in programs_for(product, drug, text)
@@ -183,7 +185,7 @@ def test_examples_cover_availability_and_follow_up_pricing_answer_first():
     examples = {e.post: e for e in knowledge.reply_examples().examples}
     hair = examples[HAIR_POST]
     assert "CLM-STATUS-HAIR" in hair.claim_ids
-    assert _sentence_after_disclosure(hair.reply).startswith("Not live yet")     # the answer follows the disclosure
+    assert _sentence_after_disclosure(hair.reply).startswith("Yes")     # the answer follows the disclosure
     followup = examples[FOLLOWUP_POST]
     assert "it varies by provider" in _disclosure_sentence(followup.reply).lower()   # woven into the disclosure
     for example in examples.values():
@@ -208,7 +210,8 @@ def _availability_input(**overrides):
 def test_availability_question_holds_while_the_status_claim_is_pending():
     from harvey import protocol
 
-    record = protocol.decide(_availability_input())                      # real config: CLM-STATUS-HAIR pending
+    # Real config: the Hormone Optimization status claim is still pending (Hair was approved 2026-10-22).
+    record = protocol.decide(_availability_input(program_status=("CLM-STATUS-HORMONE",)))
     assert record.decision == protocol.HOLD
 
 

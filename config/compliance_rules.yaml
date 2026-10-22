@@ -97,8 +97,7 @@ prohibited:
   - {id: R2, pattern: '\b(?:I.m|I\s+am)\s+(?:a|an|your)\s+(?:doctor|physician|nurse|pharmacist|clinician|MD|medical\s+provider)\b|\bas\s+a\s+(?:doctor|physician|nurse|pharmacist|clinician|medical\s+professional)\b', reason: "claims a clinical identity", source: "R2 ([PB] §04)", examples: ["as a doctor", "I'm a nurse"]}
   - {id: R2, pattern: '\b(?:I.m|I\s+am)\s+(?:just\s+)?(?:a\s+)?(?:happy|satisfied|real|regular|independent)\s+(?:customer|patient|user)\b|\b(?:I.m|I\s+am)\s+not\s+(?:affiliated|sponsored|paid)\b', reason: "poses as an independent customer (astroturfing)", source: "R2 ([PB] §05, §14 RED)"}
 
-  # --- R8: pre-certification CTA limits
-  - {id: R8, pattern: '\bstart\s+(?:your|an|the|a)\s+(?:free\s+|online\s+)?assessment\b', reason: 'pre-certification: never "Start your assessment"', source: "R8 ([SC] Assessment links)"}
+  # --- R8: link limits (the "Start your assessment" ban was dropped by the owner 2026-10-22)
   - {id: R8, pattern: '\bwellpeps\.com/\S*(?:assessment|intake|checkout|get-started|cart|buy)', reason: "social links go to Why WellPeps or a Learning Center article only", source: "R8 ([SC]; [CS] Rule 14)"}
 
   # --- R10 (escalated): competitor disparagement
@@ -149,8 +148,6 @@ prohibited:
   - {id: R17, pattern: '\b(?:right|perfect|safe)\s+for\s+everyone\b|\beveryone\s+qualifies\b', reason: "treatment presented as right for everyone", source: "R17 ([CS] Rule 5)"}
   - {id: R17, pattern: '\b(?:B12|B6|glycine|L-carnitine|levocarnitine|niacinamide)\b[^.!?]{0,40}?\b(?:boosts?|enhances?|amplif(?:y|ies)|more\s+effective|work\s+better|works\s+better)\b', reason: "additives claimed to make GLP-1s work better", source: "R17 ([CS] Rule 10)"}
 
-  # --- R18: Healthy Aging line: never say WellPeps offers it (pre-certification)
-  - {id: R18, pattern: '\b(?:we|WellPeps)\s+(?:now\s+)?(?:offers?|provides?|carry|carries|sells?)\s+(?:NAD\+?|glutathione|sermorelin|MIC(?:\s*\+\s*B12)?|Lipo-C|methylene\s+blue)', reason: "pre-certification: explain the molecule, never say WellPeps offers it", source: "R18 ([SC] Compounded products)"}
 
   # --- R19: Tier 3 peptides and performance framing
   - {id: R19, pattern: '\b(?:we|WellPeps)\s+(?:now\s+)?(?:offers?|provides?|carry|carries|sells?|prescribes?|recommends?)\b[^.!?]{0,30}?(?:BPC-?157|TB-?500|CJC-?1295|ipamorelin|AOD-?9604|Melanotan|Selank|Semax|KPV|DSIP|Epitalon|MOTS-?c|thymosin|LL-?37|DiHexa|PEG-?MGF|GHRP-?[26]|GHK-?Cu|HGH|somatropin|MK-?677|retatrutide)', reason: "Tier 3 peptide presented as a WellPeps treatment", source: "R19 ([CHS] §1)"}
@@ -165,7 +162,6 @@ prohibited:
 
   # --- R21: hair
   - {id: R21, pattern: '\bfull\s+head\s+of\s+hair\b|\beveryone\s+(?:responds|sees\s+results|regrows)\b', reason: "hair regrowth promise", source: "R21 ([CS] Rule 7)"}
-  - {id: R21, pattern: '\bhair\s+(?:restoration|treatments?|loss\s+treatments?)\s+(?:is|are)\s+(?:now\s+)?(?:available|live)\b', reason: 'pre-certification hair is only "on the way"', source: "R21 ([SC] Hair Restoration)"}
 
   # --- R22: prescribing language
   - {id: R22, pattern: '\bget\s+prescribed\b', reason: '"get prescribed X"', source: "R22 ([CS] Rule 2-3)"}

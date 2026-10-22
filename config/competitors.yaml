@@ -462,7 +462,7 @@ competitors:
     tier: peptides
 
 # --- Tier G: lab testing (adjacent, not direct competitors) ----------------
-# Relevant because the WellPeps membership includes access to low-cost labs.
+# Relevant because WellPeps offers low-cost lab tests alongside its monthly treatment prices.
 # Complaint themes are not recorded for these in the registry.
 adjacent:
   - {name: Function Health, aliases: [], categories: [lab], website: functionhealth.com, handles: [], complaint_themes: [], tier: lab}

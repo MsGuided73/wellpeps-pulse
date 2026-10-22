@@ -66,7 +66,7 @@ examples:
     platform: reddit
     program: Hair Restoration
     post: "Thinking about oral minoxidil through a telehealth service. Is WellPeps hair restoration live yet or still a waitlist?"
-    reply: "Good call checking before you plan around it. I work with WellPeps on patient education, so I can answer that one. Not live yet: WellPeps' Hair Restoration program is coming soon and isn't open yet, and there's a list you can join to hear when assessments open. Since you're weighing an oral option, our free Hair Restoration guide has a section, \"Oral vs. topical: what actually changes?\", that explains the differences. Here's a link to get a free copy if you'd like: https://wellpeps.com/smart-patient-guides/hair-restoration"
+    reply: "Good call checking before you plan around it. I work with WellPeps on patient education, so I can answer that one. Yes: WellPeps' Hair Restoration program is available now. Since you're weighing an oral option, our free Hair Restoration guide has a section, \"Oral vs. topical: what actually changes?\", that explains the differences. Here's a link to get a free copy if you'd like: https://wellpeps.com/smart-patient-guides/hair-restoration"
     claim_ids: [CLM-AMG-04-WORK-WITH, CLM-STATUS-HAIR, CLM-EDU-GUIDE-HAIR-RESTORATION]
 
   - id: EX-QUESTION-ONLINE-CLINIC

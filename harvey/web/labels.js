@@ -74,6 +74,8 @@ const LABELS = {
     NO_ADDED_VALUE: 'the thread already has a good answer',
     SATISFIED_PROVIDER: "they're happy with their current provider",
     KNOWLEDGE_GAP: "there's no approved answer for this yet",
+    PASSING_MENTION: "our topic only comes up in passing; a reply would look like we're injecting ourselves",
+    NO_USEFUL_ROLE: "they're asking for emotional or personal support, where we have no useful role",
     NO_OPENING: "there's no question or need to answer",
     CLINICAL_ROUTE: 'a health or safety concern goes to the care team',
     LEGAL_ROUTE: 'a legal concern goes to the right person',

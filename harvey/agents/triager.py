@@ -339,7 +339,8 @@ class Triager:
             )
         if result is None:
             result = _fallback(mention, model)
-        return apply_safety_net(result, mention.text)
+        # Title and body: many posts name the drug only in the title (R-31 check, 2026-10-21).
+        return apply_safety_net(result, _post_text(mention))
 
 
 # --- Batch ------------------------------------------------------------------------

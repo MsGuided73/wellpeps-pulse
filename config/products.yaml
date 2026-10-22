@@ -1,4 +1,6 @@
 # Source: C:\dev\hyperagents\wellpeps\registry\products.md (registry built 2026-09-27)
+# Prices, statuses and the hair line-up updated from the live wellpeps.com category pages
+# 2026-10-22 (owner's inventory); pricing model per the owner 2026-10-21 (no membership fee).
 # Generated: 2026-09-27 for WellPeps Pulse Phase 2.
 # PUBLIC-FACING FIELDS ONLY. Do not add internal costs: no per-unit prices WellPeps
 # pays, no pharmacy / partner names, no pricing-workbook columns. If a value is not
@@ -6,24 +8,27 @@
 #
 # Brand-name equivalents are for MATCHING consumer posts only. WellPeps products
 # are not the branded drugs, and replies must never imply they are (R15, R16).
-# site_price = price on wellpeps.com today. Weight Loss prices are member prices.
+# site_price = the one monthly price on wellpeps.com today (see pricing:). Pulse never
+# quotes these: prices in replies come only from approved claims.
 # status: live | coming_soon | waitlist
 # keywords (categories): plain words that point a post at the program (drafter
 # program-status claims).
 # aliases: {term, inferred}. inferred: true = consumer slang / misspelling that
 # does not appear in any WellPeps source file.
 
-membership:
-  name: WellPeps membership
-  price_text: "$49 first month, then $79 per month"
-  covers: [Weight Loss, Hormone Optimization]
-  shipping_note: "Shipping costs are shown at checkout."
+# No membership fee (owner, 2026-10-21): each treatment has one monthly price. Say "one monthly
+# price", never "all-inclusive" or "everything included" (labs are extra; filter rule R49).
+pricing:
+  model: one_monthly_price
+  summary: "One monthly price per treatment. No membership fee."
+  includes: [the provider visit, ongoing support through the patient portal, the medication if prescribed]
+  not_included: ["lab tests: optional for most treatments, required only for hormone therapy; offered at low cost"]
+  unconfirmed: [whether shipping is included]
 
 categories:
   - name: Weight Loss
     page: /weight-loss
     status: live
-    membership: true
     keywords: [weight loss, weight management, weight-loss program]
     aliases:
       - {term: GLP-1, inferred: false}
@@ -45,7 +50,6 @@ categories:
   - name: Sexual Wellness
     page: /sexual-wellness
     status: live
-    membership: false
     keywords: [sexual wellness, sexual health]
     aliases:
       - {term: ED, inferred: false}
@@ -60,8 +64,7 @@ categories:
       - {term: chewables, inferred: false}
   - name: Hair Restoration
     page: /hair-restoration
-    status: coming_soon
-    membership: false
+    status: live
     keywords: [hair, hair loss]
     aliases:
       - {term: fin + minox, inferred: false}
@@ -92,7 +95,6 @@ categories:
   - name: Healthy Aging & Vitality
     page: /healthy-aging
     status: live
-    membership: false
     keywords: [healthy aging, peptides & wellness therapies, wellness therapies]
     aliases:
       - {term: peptides, inferred: false}
@@ -104,24 +106,17 @@ categories:
   - name: Hormone Optimization
     page: null
     status: waitlist
-    membership: true
     keywords: [hormone, hormones]
-    aliases: []
-  - name: Mental Wellness
-    page: null
-    status: waitlist
-    membership: false
-    keywords: [mental wellness, mental health]
     aliases: []
 
 products:
-  # --- Weight Loss (GLP-1), member prices ---------------------------------
+  # --- Weight Loss (GLP-1) --------------------------------------------------
   - name: Compounded Semaglutide
     generic_names: [semaglutide]
     brand_equivalents: [Ozempic, Wegovy, Wegovy pill]
     form: weekly injection (subcutaneous)
     category: Weight Loss
-    site_price: {amount_usd: 109, per: month, member_price: true}
+    site_price: {amount_usd: 179, per: month}
     status: live
     aliases:
       - {term: compounded semaglutide, inferred: false}
@@ -142,7 +137,7 @@ products:
     brand_equivalents: [Mounjaro, Zepbound]
     form: weekly injection (subcutaneous)
     category: Weight Loss
-    site_price: {amount_usd: 269, per: month, member_price: true}
+    site_price: {amount_usd: 249, per: month}
     status: live
     aliases:
       - {term: compounded tirzepatide, inferred: false}
@@ -167,7 +162,7 @@ products:
     brand_equivalents: [Rybelsus, Wegovy pill]
     form: daily oral tablet
     category: Weight Loss
-    site_price: {amount_usd: 119, per: month, member_price: true}
+    site_price: {amount_usd: 229, per: month}
     status: live
     aliases:
       - {term: oral semaglutide, inferred: false}
@@ -177,7 +172,7 @@ products:
     brand_equivalents: [Mounjaro, Zepbound]
     form: oral tablet
     category: Weight Loss
-    site_price: null
+    site_price: {amount_usd: 229, per: month}
     status: live
     aliases:
       - {term: oral tirz, inferred: true}
@@ -188,7 +183,7 @@ products:
     brand_equivalents: [Cialis, Cialis Daily]
     form: low-dose daily oral tablet
     category: Sexual Wellness
-    site_price: {amount_usd: 69, per: month, member_price: false}
+    site_price: {amount_usd: 79, per: month}
     status: live
     aliases:
       - {term: daily Cialis, inferred: true}
@@ -202,7 +197,7 @@ products:
     brand_equivalents: [Cialis]
     form: high-dose oral tablet
     category: Sexual Wellness
-    site_price: null
+    site_price: {amount_usd: 85, per: month}
     status: live
     aliases:
       - {term: the weekend pill, inferred: true}
@@ -212,7 +207,7 @@ products:
     brand_equivalents: [Viagra, Revatio]
     form: as-needed oral tablet
     category: Sexual Wellness
-    site_price: null
+    site_price: {amount_usd: 79, per: month}
     status: live
     aliases:
       - {term: the blue pill, inferred: true}
@@ -222,57 +217,75 @@ products:
       - {term: sildenifil, inferred: true}
       - {term: sildanafil, inferred: true}
 
-  # --- Hair Restoration (site gated "Coming Soon"; say only "on the way") ----
-  - name: Topical Treatments
-    generic_names: [minoxidil, finasteride, fluocinolone, tretinoin]
-    brand_equivalents: [Rogaine, Propecia]
-    formulations: ["Minoxidil + Finasteride", "Minoxidil + Fluocinolone + Tretinoin"]
-    form: topical solution / topical foam
+  # --- Hair Restoration (live on wellpeps.com 2026-10-22) -------------------
+  # Derek signed off on the program being available (owner, 2026-10-22): CLM-STATUS-HAIR.
+  - name: Oral Finasteride
+    generic_names: [finasteride]
+    brand_equivalents: [Propecia]
+    form: oral tablet
     category: Hair Restoration
-    site_price: {amount_usd: 79, per: month, member_price: false}
-    status: coming_soon
+    site_price: {amount_usd: 49, per: month}
+    status: live
     aliases:
-      - {term: topical minoxidil, inferred: true}
-  - name: Oral Treatments
-    generic_names: [finasteride, minoxidil, dutasteride]
-    brand_equivalents: [Propecia, Avodart, oral Rogaine]
-    formulations: [Finasteride, Oral Minoxidil, "Minoxidil + Biotin", Dutasteride]
-    form: oral capsule
+      - {term: oral finasteride, inferred: false}
+      - {term: fin, inferred: true}
+      - {term: oral fin, inferred: true}
+      - {term: generic Propecia, inferred: true}
+  - name: Oral Minoxidil
+    generic_names: [minoxidil]
+    brand_equivalents: [Loniten]
+    form: oral tablet
     category: Hair Restoration
-    site_price: {amount_usd: 59, per: month, member_price: false}
-    status: coming_soon
+    site_price: {amount_usd: 49, per: month}
+    status: live
     aliases:
-      - {term: hair pills, inferred: true}
-      - {term: dut, inferred: true}
-      - {term: dutas, inferred: true}
-  - name: Combination Therapy
+      - {term: oral minoxidil, inferred: false}
+      - {term: oral minox, inferred: true}
+      - {term: low-dose oral minoxidil, inferred: true}
+      - {term: LDOM, inferred: true}
+  - name: Topical Minoxidil
+    generic_names: [minoxidil]
+    brand_equivalents: [Rogaine]
+    form: topical
+    category: Hair Restoration
+    site_price: {amount_usd: 99, per: month}
+    status: live
+    aliases:
+      - {term: topical minoxidil, inferred: false}
+      - {term: minox, inferred: true}
+  - name: Topical Minoxidil + Finasteride
     generic_names: [minoxidil, finasteride]
-    brand_equivalents: [Rogaine, Propecia]
-    formulations: ["Topical Minoxidil + Finasteride + Oral Minoxidil", "Minoxidil + Finasteride + Biotin"]
-    form: topical + oral
-    category: Hair Restoration
-    site_price: {amount_usd: 99, per: month, member_price: false}
-    status: coming_soon
-    aliases: []
-  - name: Advanced Liposomal Formulas
-    generic_names: [minoxidil, finasteride, fluocinolone, tretinoin]
     brand_equivalents: []
-    formulations: ["Minoxidil + Fluocinolone + Tretinoin", "Minoxidil + Finasteride + Fluocinolone + Tretinoin"]
-    form: topical solution
+    form: topical foam
     category: Hair Restoration
-    site_price: {amount_usd: 109, per: month, member_price: false}
-    status: coming_soon
-    aliases: []
+    site_price: {amount_usd: 139, per: month}
+    status: live
+    aliases:
+      - {term: fin + minox, inferred: false}
+      - {term: topical fin, inferred: false}
+      - {term: topical finasteride, inferred: true}
+  - name: Topical Finasteride + Minoxidil + Tretinoin
+    generic_names: [finasteride, minoxidil, tretinoin]
+    brand_equivalents: []
+    formulations: [three strength formulations]
+    form: topical foam
+    category: Hair Restoration
+    site_price: {amount_usd: 149, per: month}
+    status: live
+    aliases:
+      - {term: the big 3, inferred: true}
+      - {term: fin minox tretinoin, inferred: true}
 
   # --- Healthy Aging & Vitality ---------------------------------------------
   # Site footnote: some treatments may be compounded; compounded medications are
-  # not FDA-approved finished drug products. Replies: mechanism only (R18).
+  # not FDA-approved finished drug products. Replies may say WellPeps offers these (R18 dropped by
+  # the owner 2026-10-22), but facts still come only from approved claims.
   - name: Sermorelin
     generic_names: [sermorelin]
     brand_equivalents: [Geref]
     form: subcutaneous injection
     category: Healthy Aging & Vitality
-    site_price: {amount_usd: 149, per: null, member_price: false}
+    site_price: {amount_usd: 149, per: month}
     status: live
     aliases:
       - {term: serm, inferred: true}
@@ -284,9 +297,10 @@ products:
   - name: NAD+
     generic_names: [NAD+, nicotinamide adenine dinucleotide]
     brand_equivalents: []
-    form: injection
+    formulations: ["injection ($169/month)", "nasal spray ($139/month)"]
+    form: injection or nasal spray (the patient's choice)
     category: Healthy Aging & Vitality
-    site_price: {amount_usd: 169, per: null, member_price: false}
+    site_price: {amount_usd: 139, per: month}
     status: live
     aliases:
       - {term: NAD, inferred: false}
@@ -295,12 +309,14 @@ products:
       - {term: NAD IV, inferred: true}
       - {term: NAD drip, inferred: true}
       - {term: NAD plus, inferred: true}
+      - {term: NAD nasal spray, inferred: true}
+      - {term: NAD spray, inferred: true}
   - name: Glutathione
     generic_names: [glutathione]
     brand_equivalents: []
     form: injection
     category: Healthy Aging & Vitality
-    site_price: {amount_usd: 129, per: null, member_price: false}
+    site_price: {amount_usd: 99, per: month}
     status: live
     aliases:
       - {term: gluta, inferred: true}
@@ -314,7 +330,7 @@ products:
     formulations: ["methionine / inositol / choline chloride / cyanocobalamin"]
     form: injection
     category: Healthy Aging & Vitality
-    site_price: {amount_usd: 119, per: null, member_price: false}
+    site_price: {amount_usd: 119, per: month}
     status: live
     aliases:
       - {term: B12, inferred: false}
@@ -326,7 +342,7 @@ products:
     brand_equivalents: [Carnitor]
     form: injection
     category: Healthy Aging & Vitality
-    site_price: {amount_usd: 109, per: null, member_price: false}
+    site_price: {amount_usd: 119, per: month}
     status: live
     aliases:
       - {term: L-carnitine, inferred: false}
@@ -337,7 +353,7 @@ products:
     brand_equivalents: [ProvayBlue]
     form: oral capsule
     category: Healthy Aging & Vitality
-    site_price: {amount_usd: 79, per: null, member_price: false}
+    site_price: {amount_usd: 99, per: month}
     status: live
     aliases:
       - {term: MB, inferred: true}

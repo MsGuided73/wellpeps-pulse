@@ -744,9 +744,9 @@ finalize:
     blocks_approval: true
     value: null
   - key: program_descriptions
-    item: "Approved program and treatment-category descriptions (Hormone Optimization and Mental Wellness status; final sexual-wellness catalog)"
+    item: "Approved program and treatment-category descriptions (Hormone Optimization status; final sexual-wellness catalog)"
     sources: ["[AMG] Appendix B", "[LR] §3-4 CONFIRM"]
-    pulse_effect: "Only program-status claims exist (claims.yaml program:); Hair Restoration, Hormone Optimization and Mental Wellness status claims stay PENDING until confirmed; medication names in replies are yellow for review (R38 blanket ban superseded)."
+    pulse_effect: "Only program-status claims exist (claims.yaml program:); Hair Restoration is approved as available (Derek, 2026-10-22); the Hormone Optimization status claim stays PENDING until confirmed; medication names in replies are yellow for review (R38 blanket ban superseded)."
     value: null
   - key: adverse_event_contact
     item: "Named adverse-event / clinical safety contact and reporting procedure"

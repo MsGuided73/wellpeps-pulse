@@ -33,7 +33,7 @@ COMMUNITIES = {
 PHOTO_ACCOUNTS = {
     "slimscript_rx": "Fall reset: start your weight program this month. Message us for details.",
     "glowpath_health": "Real members, real routines. Tell us about your week in the comments.",
-    "wellpeps_demo": "Questions about your membership? Our support team answers in the member portal.",
+    "wellpeps_demo": "Questions about your treatment? Our support team answers in the patient portal.",
 }
 
 # --- Threads around the fixture mentions (keyed by fixture external_id) -------------

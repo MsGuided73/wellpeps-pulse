@@ -62,7 +62,6 @@ class Alias(_Strict):
 class SitePrice(_Strict):
     amount_usd: int = Field(gt=0)
     per: Literal["month"] | None = None
-    member_price: bool = False
 
 
 Status = Literal["live", "coming_soon", "waitlist"]
@@ -84,22 +83,25 @@ class ProductCategory(_Strict):
     name: str
     page: str | None
     status: Status
-    membership: bool
     aliases: list[Alias] = Field(default_factory=list)
     # Plain words that point a post at this program ("hair" -> Hair
     # Restoration), so the drafter can offer the program-status claim.
     keywords: list[str] = Field(default_factory=list)
 
 
-class Membership(_Strict):
-    name: str
-    price_text: str
-    covers: list[str]
-    shipping_note: str
+class Pricing(_Strict):
+    """How WellPeps prices treatments (owner, 2026-10-21: no membership fee; one
+    monthly price per treatment; labs extra). Reference only: replies quote
+    prices and inclusions only through approved claims."""
+    model: Literal["one_monthly_price"]
+    summary: str
+    includes: list[str]
+    not_included: list[str] = Field(default_factory=list)
+    unconfirmed: list[str] = Field(default_factory=list)
 
 
 class ProductsFile(_Strict):
-    membership: Membership
+    pricing: Pricing
     categories: list[ProductCategory]
     products: list[Product]
     never_offered: list[str] = Field(default_factory=list)

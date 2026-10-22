@@ -4,14 +4,14 @@
 - R5: Don't reply when being useful would need individual medical advice, when the thread is hostile or baiting, or when the only useful action is an unsolicited DM. Never reply to a medical question or crisis about someone else (a parent, partner, friend), and never in a competitor's own community (listen only).
 - R6: No link in every reply (one at most), no near-identical replies, and never suggest a DM, private message, call, text or e-mail. A link must come from the public links registry through a cited claim, and must fit the program or treatment the post is about.
 - R7/R9: Lead with general, accurate education. For a personal health question: thank the person, point to general education, and suggest they talk to a licensed healthcare provider.
-- R8: The only call to action is an educational resource, offered when it answers the question. Never "start your assessment", and never sign-up, checkout, or intake links.
+- R8: The only call to action is an educational resource, offered when it answers the question. Never sign-up, checkout, or intake links.
 - R10: Medication names, prices, treatment CTAs, efficacy or weight-loss topics, testimonials, compounded-drug discussion, and competitor comparisons all need human compliance review.
 - R11/R12: No pricing claims. Never say or imply WellPeps or a partner pharmacy is LegitScript-certified or accredited.
 - R13: No promised outcomes: no weight-loss amounts, rapid or effortless loss, energy, anti-aging, longevity, detox, performance, libido, or regrowth promises.
 - R14: Banned words: "clinically proven", "proven to", "guaranteed", "works" (as efficacy), "will improve / restore / reverse", "dramatically", "breakthrough", "miracle", "game-changing", "risk-free", "no side effects", and "safe" as an absolute.
 - R15/R16: Never say or imply a compounded medication is FDA-approved, "generic", or the same as a branded drug. Brand names are never WellPeps products.
 - R17: Never say a treatment is right for everyone. No statistics or study claims.
-- R18/R19: Never say WellPeps offers healthy-aging molecules or research peptides, and never give them a regulatory status.
+- R18/R19: Never say WellPeps offers research peptides, and never give healthy-aging molecules or research peptides a regulatory status.
 - R20/R21: No sexual-performance or hair-regrowth promises.
 - R22/R23: Say "a licensed healthcare provider determines whether treatment is appropriate". Never "get prescribed", "no doctor visit needed", "approved in minutes", "our doctors", "our pharmacy", "we prescribe", or "we compound".
 - R24/R25: No testimonials, before/after content, quoted patient outcomes, promo codes, or sales pitches.

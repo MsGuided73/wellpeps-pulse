@@ -64,6 +64,14 @@ SKIP_PRICE_ONLY = "price_only"
 SKIP_NO_ADDED_VALUE = "no_added_value"
 SKIP_SATISFIED_PROVIDER = "satisfied_provider"
 SKIP_KNOWLEDGE_GAP = "knowledge_gap"
+# Owner decision 2026-10-21 (R-31), grounded in the Selection Module ("do not treat every
+# medication mention as a prospect"; "a relevant keyword ... is insufficient on its own"),
+# Why and When to Engage ("relevance to a medication alone is too broad") and the
+# Operations Manual §5.3 ("highly emotional disputes where WellPeps has no useful role").
+SKIP_PASSING_MENTION = "passing_mention"
+SKIP_NO_USEFUL_ROLE = "no_useful_role"
+# All three must hold for a passing mention (the owner's three questions).
+PASSING_MENTION_TESTS = frozenset({"topic_not_covered", "no_natural_fit", "reply_would_intrude"})
 # Intents that are a genuine question or invitation (an opening, Module §2 step 3).
 OPENING_INTENTS = frozenset({"alternatives_requested", "general_information", "comparison_request",
                              "wellpeps_question"})
@@ -197,8 +205,19 @@ def skip_reason(triage: Triage) -> str:
       question ("Happy with Ro. Month three is going great.").
     - knowledge_gap: triage says no useful general answer exists (useful
       contribution 0) for a post not about WellPeps: skip, do not improvise.
+    - passing_mention: something WellPeps offers comes up only in passing, and
+      all three hold: the main topic isn't one WellPeps covers, nothing in it
+      calls for what WellPeps offers, and a reply would seem to inject WellPeps
+      for commercial reasons (owner, 2026-10-21).
+    - no_useful_role: only emotional, relationship or coping support is asked.
+    Neither of the last two applies to a post about WellPeps or asking WellPeps.
     """
     intents = set(triage.intents or ())
+    about_wellpeps = triage.subject_type == "wellpeps" or "wellpeps_question" in intents
+    if not about_wellpeps and PASSING_MENTION_TESTS <= intents:
+        return SKIP_PASSING_MENTION
+    if not about_wellpeps and "emotional_support_only" in intents:
+        return SKIP_NO_USEFUL_ROLE
     if "price_only" in intents:
         return SKIP_PRICE_ONLY
     if "already_answered" in intents:

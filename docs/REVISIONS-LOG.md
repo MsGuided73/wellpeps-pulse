@@ -12,6 +12,77 @@ summary for discussion.
 
 ---
 
+## 2026-10-22: Product list matches wellpeps.com; no membership fee
+
+### R-33. Two pre-certification phrase rules dropped (Live; owner decision)
+- **Before:** the filter blocked "Start your (free) assessment" (R8) and any reply
+  saying WellPeps offers NAD+, sermorelin, glutathione, MIC + B12, Lipo-C or methylene
+  blue (R18). Both dated from before the site's programs went live.
+- **After** (owner, 2026-10-22): both phrase rules are gone. Unchanged: R8's link
+  rules (no checkout, intake or assessment links; only registry links backed by a
+  claim), R13 (anti-aging / longevity / detox claims), R19 (research peptides), and
+  facts only from approved claims.
+
+### R-32. Catalog and pricing model brought up to date; Hair Restoration is available (Live)
+- **Source:** the owner's inventory of the live wellpeps.com category pages
+  (2026-10-22) and the owner's pricing note (2026-10-21): no membership fee; each
+  treatment has one monthly price covering the provider visit, ongoing support
+  through the patient portal and the medication if prescribed. Lab tests are extra:
+  optional for most treatments, required only for hormone therapy, and low cost.
+  The owner prefers "one monthly price" to "all-inclusive" (labs are extra).
+- **After:** `config/products.yaml` lists the 18 live offerings with today's prices
+  (reference only: Pulse never quotes them; prices in replies come only from
+  approved claims). The membership block is replaced by `pricing:` (one monthly price).
+  Hair Restoration is live as five named products (Oral Finasteride, Oral
+  Minoxidil, Topical Minoxidil, Topical Minoxidil + Finasteride, Topical Finasteride
+  + Minoxidil + Tretinoin) instead of four older category cards. NAD+ comes as an
+  injection or a nasal spray. Mental Wellness, no longer on the site, is removed
+  with its pending status claim.
+- **Hair Restoration is available:** Derek signed off (relayed by the owner,
+  2026-10-22). CLM-STATUS-HAIR now reads "WellPeps' Hair Restoration program is
+  available now." and is approved; filter rule R21 no longer blocks saying so (its
+  regrowth-promise pattern stays); the hair reply example answers "Yes".
+- **Still open:** Rule R49 keeps
+  blocking "all inclusive" / "everything included", which the owner agrees with. The
+  pending pricing claim CLM-PRICE-ALLIN mentions standard shipping, which the owner
+  has not confirmed; suggested wording for Derek: "One monthly price covers the
+  provider visit, ongoing support through the patient portal, and the medication if
+  prescribed. No membership fee. Lab tests are extra: optional for most treatments,
+  required only for hormone therapy, and offered at low cost."
+- **Unchanged:** listening words and compliance patterns that mention "membership"
+  (people still discuss other companies' memberships).
+
+## 2026-10-21: Passing mentions and posts with no useful role are skipped
+
+### R-31. A post that only mentions what WellPeps offers in passing gets no reply (Live; owner decision)
+- **Why:** r/snoring "Psychology of separate beds" reached the review desk. A spouse
+  asked how others cope with sleeping apart; GLP-1 came up once, as a last resort in
+  their ENT plan. Triage called it general education, and the selection rules said
+  RESPOND. Only the drafter's refusal kept a reply from being written.
+- **Source:** WellPeps' own documents already say this: "Do not treat every
+  medication mention as a prospect" and "A relevant keyword ... is insufficient on
+  its own" (Selection Module); "Relevance to a medication alone is too broad" (Why
+  and When to Engage); avoid "Highly emotional disputes where WellPeps has no useful
+  role" ([OM] §5.3). The owner set the test (2026-10-21).
+- **After:** triage answers three questions separately. The post is skipped as
+  `passing_mention` only when all three are true:
+  1. its main question or topic isn't about anything WellPeps covers;
+  2. it doesn't naturally call for anything WellPeps offers;
+  3. a reply would seem out of touch, as if WellPeps were injecting itself for
+     commercial reasons.
+  A post that asks only for emotional, relationship or coping support is skipped as
+  `no_useful_role`. Neither applies to a post about WellPeps or one that asks
+  WellPeps something, and safety, clinical and privacy routing still come first.
+  Skipped posts are still collected and counted for insights; the card's "Why this
+  post" line says why. A personal post that also asks a real medication question
+  ("does GLP-1 help snoring?") is still answered.
+- **Checked:** today's triage run with and without the new questions on every
+  relevant live post: the separate-beds post and a UGC casting call are now skipped;
+  no question WellPeps should answer was skipped.
+- **Bug fixed alongside:** the on-topic check read only a post's body, not its
+  title, so a post naming the drug only in the title ("Trying to find the cheapest
+  legit compounded tirzepatide...") was dropped as off-topic. It now reads both.
+
 ## 2026-10-21: Community rules become advisory; record what was posted
 
 ### R-30. Pulse drafts in every community; the rep decides and records what they posted (Needs sign-off)

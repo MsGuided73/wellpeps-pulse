@@ -188,6 +188,11 @@ deterministic compliance filter (`harvey/compliance.py`) exist.
   (text, responder, posted_at, link -> POSTED audit event; filter without the CLAIMS rule; status -> posted from
   triaged / in_review / approved / rejected), UI in `harvey/web/posted.js` and the Pulse card (home.js).
 
+- Passing mentions (R-31, 2026-10-21; owner decision): triage tags `topic_not_covered`, `no_natural_fit`,
+  `reply_would_intrude` (all three -> SKIP `passing_mention`) and `emotional_support_only` (-> SKIP
+  `no_useful_role`) in `engagement.skip_reason`; never for a post about or asking WellPeps. The triager's topic
+  gate reads title + body (`_post_text`).
+
 Later phases add everything else. Don't build ahead of the phase you've
 been asked to do.
 

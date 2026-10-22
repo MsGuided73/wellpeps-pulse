@@ -21,6 +21,8 @@ USER_APPROVED_GUIDE_CLAIMS = {"CLM-EDU-GUIDES", "CLM-EDU-GUIDE-GLP-1-WEIGHT-LOSS
                               "CLM-EDU-GUIDE-NAD-THERAPY"}
 # Signed off by Derek Goldberg (Community Agent Voice) and confirmed by the owner (2026-10-20).
 OWNER_APPROVED_CLAIMS = {"CLM-CAV-01-PATIENT-DASHBOARD"}
+# Derek's sign-offs relayed by the owner after 2026-10-20.
+RELAYED_APPROVALS = {"CLM-STATUS-HAIR": "2026-10-22"}
 
 # --- Leak guard ------------------------------------------------------------
 # products.md in the registry holds internal cost data from the pricing
@@ -232,14 +234,17 @@ def test_competitor_lookup_excludes_supplier_lookalike():
 
 def test_products_public_fields_only():
     prods = knowledge.products()
-    assert len(prods.products) == 17
+    assert len(prods.products) == 18          # wellpeps.com inventory, 2026-10-22
     by_name = {p.name: p for p in prods.products}
     sema = by_name["Compounded Semaglutide"]
-    assert sema.site_price.amount_usd == 109
-    assert sema.site_price.member_price is True
+    assert sema.site_price.amount_usd == 179
     assert "Ozempic" in sema.brand_equivalents
-    assert by_name["Oral Tirzepatide"].site_price is None
-    assert by_name["Topical Treatments"].status == "coming_soon"
+    assert by_name["Oral Tirzepatide"].site_price.amount_usd == 229
+    assert by_name["Topical Finasteride + Minoxidil + Tretinoin"].status == "live"
+    # No membership fee (owner, 2026-10-21): one monthly price; labs are extra.
+    assert prods.pricing.model == "one_monthly_price" and "membership" not in prods.model_dump()
+    assert "all-inclusive" not in prods.pricing.summary.lower()
+    assert any("lab" in item for item in prods.pricing.not_included)
     assert by_name["Sermorelin"].status == "live"
     allowed = {"name", "generic_names", "brand_equivalents", "form", "category", "site_price", "status", "aliases", "formulations"}
     for p in prods.products:
@@ -373,11 +378,16 @@ def test_claims_seeded_pending_except_verbatim_guide_wording():
     owner = [c for c in others if c.id in OWNER_APPROVED_CLAIMS]
     assert {c.id for c in owner} == OWNER_APPROVED_CLAIMS
     assert all(c.approved_by.startswith("Derek Goldberg") and str(c.approved_at) == "2026-10-20" for c in owner)
-    others = [c for c in others if c not in owner]
+    relayed = [c for c in others if c.id in RELAYED_APPROVALS]
+    assert {c.id for c in relayed} == set(RELAYED_APPROVALS)
+    assert all(c.approved_by.startswith("Derek Goldberg") and str(c.approved_at) == RELAYED_APPROVALS[c.id]
+               for c in relayed)
+    others = [c for c in others if c not in owner and c not in relayed]
     assert all(c.approved_by == "PENDING" and c.approved_at is None for c in others if c not in user)
     # ... or a Live Reference item still marked CONFIRM (never approved wording).
     assert all(c.source.startswith("reply-compliance-rules.md R") or "wellpeps-site/src/" in c.source
                or (c.source.startswith("Approved Messaging Live Reference v1.0 §") and "CONFIRM" in c.source)
+               or c.source.startswith("wellpeps.com/")
                for c in others)
     # Guide wording is WellPeps' approved messaging, cited by section.
     amg = [c for c in guide if c.id.startswith("CLM-AMG-")]
@@ -393,7 +403,7 @@ def test_claims_seeded_pending_except_verbatim_guide_wording():
 
 def _guide_publishable() -> set[str]:
     return ({c.id for c in knowledge.claims() if c.guide and not c.finalize} | USER_APPROVED_GUIDE_CLAIMS
-            | OWNER_APPROVED_CLAIMS)
+            | OWNER_APPROVED_CLAIMS | set(RELAYED_APPROVALS))
 
 
 def test_publishable_claim_ids_are_the_finalized_guide_claims_while_trusted():
@@ -419,7 +429,8 @@ def test_trust_toggle_off_makes_every_guide_claim_pending(tmp_path, monkeypatch)
     _copy_config(tmp_path, monkeypatch,
                  lambda d: d["claims_policy"].update(trust_approved_messaging_guide=False))
     # Only the user-approved Smart Patient's Guide claims (not guide wording) remain.
-    assert knowledge.publishable_claim_ids() == USER_APPROVED_GUIDE_CLAIMS | OWNER_APPROVED_CLAIMS
+    assert knowledge.publishable_claim_ids() == (USER_APPROVED_GUIDE_CLAIMS | OWNER_APPROVED_CLAIMS
+                                                 | set(RELAYED_APPROVALS))
 
 
 def test_a_finalize_value_makes_its_guide_claims_publishable(tmp_path, monkeypatch):

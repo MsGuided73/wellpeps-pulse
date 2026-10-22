@@ -117,7 +117,6 @@ PROHIBITED_CASES = [
     ("R22", "Get prescribed today, no doctor visit needed."),
     ("R22", "Approved in minutes by our doctors."),
     ("R23", "Our pharmacy ships next day and we compound everything in-house."),
-    ("R8", "Start your assessment at the link."),
     ("R39", "Spots are limited, today only!"),
     ("R37", "Great question #ozempic"),
     ("R2", "Reply from the team, Sarah Jones, MD"),
@@ -270,7 +269,7 @@ def test_length_limit_per_platform(platform, limit, claim_id):
 @pytest.mark.parametrize(
     "text",
     [
-        "Membership pricing starts at $49 for the first month.",
+        "Pricing starts at $179 a month.",
         "Some people compare telehealth providers versus local clinics.",
         "Compounded medications are a common topic here.",
     ],
@@ -322,3 +321,21 @@ def test_red_hits_are_the_blocking_subset():
 def test_filter_is_deterministic(claim_id):
     text = "Guaranteed results, clinically proven, spots are limited."
     assert compliance_filter(text, "facebook", [claim_id]) == compliance_filter(text, "facebook", [claim_id])
+
+
+# --- Pre-certification phrase rules dropped (owner decision 2026-10-22, R-33) ------------------------
+
+
+@pytest.mark.parametrize("text", [
+    "Start your free assessment on the Hair Restoration page.",
+    "WellPeps offers NAD+ as an injection or a nasal spray.",
+])
+def test_pre_certification_phrase_rules_are_gone(text):
+    result = compliance_filter(f"{DISCLOSURE} {text}", "reddit", ["CLM-AMG-04-WORK-WITH"])
+    assert not any(h.rule_id in ("R8", "R18") for h in result.red_hits), result.red_hits
+
+
+def test_r8_link_rules_stay():
+    result = compliance_filter(f"{DISCLOSURE} Sign up here: https://wellpeps.com/weight-loss/checkout", "reddit",
+                               ["CLM-AMG-04-WORK-WITH"])
+    assert any(h.rule_id == "R8" for h in result.red_hits)
