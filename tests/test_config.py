@@ -215,7 +215,8 @@ def test_repo_harvey_yaml_turns_the_harness_on():
     config = load_config(str(PROJECT_ROOT / "harvey.yaml"))
 
     assert config.harness.enabled is True
-    assert config.harness.budgets.drafter == 8000 and config.harness.budgets.reviewer == 8000
+    # Owner, 2026-10-22: 12,000 for the drafter and the reviewer (was 8,000).
+    assert config.harness.budgets.drafter == 12000 and config.harness.budgets.reviewer == 12000
 
 
 @pytest.mark.parametrize("harness", [

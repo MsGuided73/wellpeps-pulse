@@ -92,6 +92,9 @@ class TaskContext:
     need: str = ""
     community_id: str = ""
     platform: str = ""
+    # The Smart Patient's Guide chapters Pulse already chose for this post (harvey/guides.py);
+    # their sections come first after the pinned voice guide (owner, 2026-10-22).
+    guide_chapters: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -413,6 +416,10 @@ def score(section: Section, ctx: TaskContext) -> int:
     return total
 
 
+# A heading that names one of these is about that platform only (owner, 2026-10-22).
+PLATFORM_HEADINGS = ("reddit", "facebook", "instagram", "tiktok", "linkedin", "youtube", "threads", "trustpilot")
+
+
 def _allowed(section: Section, ctx: TaskContext, pinned: bool) -> bool:
     """Today's document rule (a document for other programs is left out), and a
     section whose own words are only about other programs is left out unless pinned."""
@@ -421,6 +428,9 @@ def _allowed(section: Section, ctx: TaskContext, pinned: bool) -> bool:
     title = section.title.lower()
     if any(word.lower() in title for word in knowledge.harness().exclude_headings):
         return False                                   # training quizzes and answer keys
+    named = {p for p in PLATFORM_HEADINGS if re.search(r"\b" + p + r"\b", title)}
+    if named and (ctx.platform or "").lower() not in named:
+        return False                                   # a section about another platform's rules
     wanted = _lower(ctx.programs)
     if section.doc_programs and not (_lower(section.doc_programs) & wanted):
         return False
@@ -446,6 +456,18 @@ def _pins(section: Section, pinned_topics: set[str]) -> bool:
     return bool((pinned_topics - {VOICE_TOPIC}) & set(section.topics))
 
 
+def _plain(text: str) -> str:
+    return re.sub(r"[^a-z0-9]+", " ", (text or "").lower().replace("’", "'").replace("'", "")).strip()
+
+
+def _chosen_chapter(section: Section, ctx: TaskContext) -> bool:
+    """A section of a guide whose heading is one of the chapters Pulse chose for this post."""
+    if not ctx.guide_chapters or section.kind != "guide" or not section.heading_path:
+        return False
+    heading = _plain(section.heading_path[-1])
+    return any(ch and (heading == ch or heading.startswith(ch)) for ch in map(_plain, ctx.guide_chapters))
+
+
 def _ranked(sections, ctx: TaskContext) -> tuple[list[Section], list[Section]]:
     """(pinned, the rest in rank order)."""
     pinned_topics = set(knowledge.harness().pinned.get(ctx.agent, ()))
@@ -454,6 +476,9 @@ def _ranked(sections, ctx: TaskContext) -> tuple[list[Section], list[Section]]:
                      and _allowed(s, ctx, pinned=True)), key=_newest_first)
     taken = {s.id for s in pinned}
     rest = [s for s in unique if s.id not in taken and _allowed(s, ctx, pinned=False)]
+    chapters = sorted((s for s in rest if _chosen_chapter(s, ctx)), key=_newest_first)
+    taken |= {s.id for s in chapters}
+    rest = [s for s in rest if s.id not in taken]
     scores = {s.id: score(s, ctx) for s in rest}
     matching_must = sorted((s for s in rest if s.authority == "must_follow" and scores[s.id] > 0),
                            key=lambda s: (-scores[s.id], *_newest_first(s)))
@@ -461,7 +486,7 @@ def _ranked(sections, ctx: TaskContext) -> tuple[list[Section], list[Section]]:
     # Unmatched reference text is noise; an unmatched must-follow rule still applies everywhere.
     remaining = [s for s in rest if s.id not in taken and (scores[s.id] > 0 or s.authority == "must_follow")]
     remaining.sort(key=lambda s: (-scores[s.id], s.authority != "must_follow", *_newest_first(s)))
-    return pinned, matching_must + remaining
+    return pinned, chapters + matching_must + remaining
 
 
 def _entry(section: Section) -> str:

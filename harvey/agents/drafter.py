@@ -486,6 +486,7 @@ class Drafter:
             need=getattr(triage, "unmet_need", "") or "",
             community_id=communities.community_id(mention.url or ""),
             platform=mention.platform.value,
+            guide_chapters=tuple(getattr(guidance, "guide_chapters", ()) or ()),
         )
 
     async def _harness_block(self, mention: Mention, triage: Triage, guidance) -> tuple[str, harness.Selection]:

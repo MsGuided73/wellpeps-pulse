@@ -1,6 +1,35 @@
-# Pulse handoff: 2026-10-21
+# Pulse handoff: 2026-10-22
 
 Where WellPeps Pulse stands after the review-desk merge, and what's left to finalize the agent. Read this first, then `CLAUDE.md`, `docs/RULES-OF-ENGAGEMENT.md` and `docs/REVISIONS-LOG.md` (R-16 to R-28 are the latest rounds).
+
+## Update 2026-10-22 (read this first)
+
+**Done today** (revisions log R-31 to R-38): passing-mention and no-useful-role skips; the on-topic check reads titles;
+product list matches wellpeps.com (18 offerings, one monthly price, no membership fee, shipping included, labs
+extra); Hair Restoration available (Derek); R8/R18 pre-certification phrase bans dropped; guide pages live;
+Communities page (every community, link, clearance checklist, what is blocked); out of scope = no escalation and
+no reply (Derek); narrower "personal medical question" tag; answer-first-then-boundary built but OFF; regression
+set (`scripts/regression_check.py`, 16 posts, all pass); every Word/PDF upload converted to Markdown; harness
+pins the chosen guide chapter, skips admin/other-platform sections, 12,000 characters.
+
+**Waiting on the owner**
+1. Approve the eleven Markdown library versions: Knowledge -> Library -> In review (#33-43).
+2. Clear communities on the Communities page (all are "rules not checked"): this unlocks guides and links.
+3. Start the worker (Operator HQ -> Start) for daily collection and drafting.
+
+**Waiting on Derek**
+1. Pricing statement CLM-PRICE-ALLIN and the comparison checklist CLM-CHECKLIST-COST-COMPARE (most price replies
+   are held or rejected until one is approved).
+2. Answer-first-then-boundary (`switching_protocol.answer_first_boundary`).
+3. Advisory community rules (R-30).
+
+**Next build steps** (memo "How Pulse's context harness works", Claude Docs): a situation playbook for the harness;
+respect the document priority order and cap sections per document; learn from the review desk (Proposal E); extend
+the harness to triage and the safety screen; label out-of-scope posts "out of scope" (they show "clinical route");
+decide about the partner names in config/keywords.yaml; catalog sync (Proposal C); deploy (Coolify, Postgres).
+
+**Working rules:** run the full suite before every commit and read pytest's own summary line (a piped exit code
+hides failures); run `scripts/regression_check.py` before and after any prompt or model change (subscription only).
 
 ## Where things are
 

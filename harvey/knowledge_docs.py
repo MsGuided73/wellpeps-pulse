@@ -32,6 +32,7 @@ import re
 import zipfile
 from datetime import date, datetime, timezone
 
+from harvey import doc_markdown
 from harvey.agents import prompting
 from harvey.db.dialect import sql_utc
 
@@ -92,14 +93,28 @@ def _clean(text: str) -> str:
 
 
 def _docx_text(raw: bytes) -> str:
+    """The document as Markdown (harvey/doc_markdown.py); plain paragraphs when no structure is readable."""
+    xml = _docx_xml(raw)
+    try:
+        markdown = doc_markdown.docx_markdown(xml)
+    except Exception as exc:  # never lose an upload to the structure pass
+        logger.warning("could not structure a Word document (%s)", type(exc).__name__)
+        markdown = ""
+    return markdown or _docx_plain(xml)
+
+
+def _docx_xml(raw: bytes) -> str:
     try:
         with zipfile.ZipFile(io.BytesIO(raw)) as archive:
             info = archive.getinfo("word/document.xml")
             if info.file_size > MAX_DOCX_XML_BYTES:
                 raise DocError(413, "that Word document is too large to read")
-            xml = archive.read(info).decode("utf-8", errors="replace")
+            return archive.read(info).decode("utf-8", errors="replace")
     except (zipfile.BadZipFile, KeyError):
         raise DocError(400, "that file is not a readable .docx document")
+
+
+def _docx_plain(xml: str) -> str:
     xml = _DOCX_TAB.sub("<w:t>\t</w:t>", xml)
     paragraphs = []
     for chunk in _DOCX_PARAGRAPH.split(xml):
@@ -117,7 +132,12 @@ def _pdf_text(raw: bytes) -> str | None:
     try:
         reader = PdfReader(io.BytesIO(raw))
         pages = reader.pages[:MAX_PDF_PAGES]
-        return "\n\n".join((page.extract_text() or "") for page in pages)
+        try:
+            markdown = doc_markdown.pdf_markdown(reader, MAX_PDF_PAGES)
+        except Exception as exc:  # the structure pass is best effort; plain text always works
+            logger.info("PDF kept as plain text (%s)", type(exc).__name__)
+            markdown = ""
+        return markdown or "\n\n".join((page.extract_text() or "") for page in pages)
     except Exception as exc:  # pypdf raises many types on damaged files
         logger.warning("could not read a PDF (%s)", type(exc).__name__)
         raise DocError(400, "that file is not a readable PDF")

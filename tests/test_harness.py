@@ -441,3 +441,107 @@ def test_quiz_and_answer_key_sections_are_never_picked():
     picked = chosen(harness.select(sections, hair_ctx(), 8000))
 
     assert all("Correct answer" not in s.title for s in picked)
+
+
+# --- The guide chapter Pulse chose, and no training examples (owner, 2026-10-22) -----------------------
+
+GLP_GUIDE = f"""*The Smart Patient's Guide to GLP-1 Weight Loss: What you should know*
+
+## What Are GLP-1 Medications?
+
+GLP-1 stands for glucagon-like peptide-1. {PARA}
+
+## What’s Actually Included in the Price?
+
+Make sure you choose a provider that offers comprehensive care. {PARA}
+
+## Side Effects Are Part of the Conversation
+
+Every prescription medication has potential risks. {PARA}
+"""
+
+PROTOCOL_EXAMPLES = f"""# 12 Training examples
+
+## 6 Cost alternatives
+
+Raw post: who is cheaper? {PARA}
+
+# 4 Decision sequence and precedence
+
+## Step 3 Apply the clinical boundary
+
+Individual clinical concern: approved boundary only. {PARA}
+"""
+
+
+def weight_ctx(**overrides):
+    values = dict(agent="drafter", programs=("Weight Loss",), medications=("tirzepatide",), situation_id="question",
+                  category="question", need="price_clarity", community_id="", platform="reddit")
+    values.update(overrides)
+    return harness.TaskContext(**values)
+
+
+def test_the_guide_chapter_pulse_chose_is_always_included():
+    guide = doc(30, "glp-1-weight-loss_ebook-v20.pdf", GLP_GUIDE, authority="reference", kind="guide",
+                programs=("Weight Loss",))
+    sections = harness.sections_for([guide])
+
+    picked = chosen(harness.select(sections, weight_ctx(guide_chapters=("What's actually included in the price",)),
+                                   12000))
+
+    assert picked and picked[0].heading.startswith("What’s Actually Included in the Price")
+    # Without a chosen chapter the guide's sections compete like any other reference text.
+    plain = chosen(harness.select(sections, weight_ctx(), 12000))
+    assert all(not s.heading.startswith("What’s Actually Included") for s in plain[:1]) or len(plain) <= 1
+
+
+def test_another_programs_guide_chapter_is_not_pulled_in():
+    guide = doc(30, "glp-1-weight-loss_ebook-v20.pdf", GLP_GUIDE, authority="reference", kind="guide",
+                programs=("Weight Loss",))
+    sections = harness.sections_for([guide])
+    picked = chosen(harness.select(sections, hair_ctx(guide_chapters=("What's actually included in the price",)),
+                                   12000))
+    assert all(s.doc_id != 30 for s in picked)
+
+
+def test_training_examples_are_never_picked():
+    protocol = doc(22, "Competitor Protocol.md", PROTOCOL_EXAMPLES, kind="compliance_rule")
+    sections = harness.sections_for([protocol])
+    picked = chosen(harness.select(sections, weight_ctx(), 12000))
+    assert picked and all("Training examples" not in s.title for s in picked)
+
+
+def test_the_drafter_and_reviewer_get_twelve_thousand_characters():
+    from harvey.config import load_config
+
+    budgets = load_config().harness.budgets
+    assert budgets.drafter == 12000 and budgets.reviewer == 12000
+
+
+ADMIN_TEXT = f"""# 6 Evaluation cases and compact agent instructions
+
+Raw post: anything. {PARA}
+
+# 5 Review record and developer integration
+
+Store these fields. {PARA}
+
+# Module 9 Platform and Community Compliance
+
+## LinkedIn
+
+On LinkedIn, disclose in the first line of a reply about prices. {PARA}
+
+## Reddit
+
+On Reddit, follow each subreddit's rules on prices and promotion. {PARA}
+"""
+
+
+def test_admin_sections_and_other_platforms_are_left_out():
+    training = doc(5, "Compliance Training.md", ADMIN_TEXT, kind="compliance_rule")
+    sections = harness.sections_for([training])
+    picked = chosen(harness.select(sections, weight_ctx(platform="reddit"), 12000))
+    titles = " ".join(s.title for s in picked)
+    assert "Reddit" in titles
+    assert "LinkedIn" not in titles and "Evaluation cases" not in titles and "developer integration" not in titles

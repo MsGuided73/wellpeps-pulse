@@ -56,7 +56,9 @@ categories:
 # Sections whose heading contains any of these words are never picked: training
 # quizzes and answer keys help people learn the rules, not the agent write a reply
 # (owner feedback 2026-10-21).
-exclude_headings: [correct answer, answer key, quiz, knowledge check, scenario assessment, training objective, test your knowledge, self-check]
+# Also (owner, 2026-10-22): the Protocol's training examples and the Selection Module's evaluation
+# table are test cases, not guidance; deployment, acceptance and document-control pages don't help a reply.
+exclude_headings: [correct answer, answer key, quiz, knowledge check, scenario assessment, training objective, test your knowledge, self-check, training examples, raw post or context, expected decision, acceptance checks, configuration and deployment checklist, source basis and document control, evaluation cases, developer integration, how to use this training]
 
 # Topics an agent always gets from must_follow documents (pinned before anything else).
 # "voice" pins every section of a must-follow "Voice and style" document, and only those.

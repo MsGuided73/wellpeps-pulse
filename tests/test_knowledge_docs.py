@@ -66,7 +66,8 @@ def test_docx_text_comes_from_word_document_xml():
 
     text, extraction = knowledge_docs.extract_text("guide.docx", raw)
 
-    assert text == "First & foremost\nSecond paragraph" and extraction == "done"
+    # Paragraphs are Markdown paragraphs now (harvey/doc_markdown.py, 2026-10-22).
+    assert text == "First & foremost\n\nSecond paragraph" and extraction == "done"
 
 
 def test_docx_with_unclosed_text_runs_is_read_quickly():

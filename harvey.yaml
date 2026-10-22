@@ -104,8 +104,8 @@ rewrite:
 harness:
   enabled: true            # owner, 2026-10-21, after the off/on comparison (R-28)
   budgets:
-    drafter: 8000
-    reviewer: 8000
+    drafter: 12000         # owner, 2026-10-22 (was 8000), with the Markdown library and chapter pinning
+    reviewer: 12000        # the reviewer sees exactly what the drafter saw
     triage: 4000
     safety: 4000
     rewriter: 6000

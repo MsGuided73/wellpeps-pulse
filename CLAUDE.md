@@ -197,6 +197,18 @@ deterministic compliance filter (`harvey/compliance.py`) exist.
   `safety_watch` now; a serious health report not about WellPeps gets no escalation and no reply (it stays
   `triaged`, blocked by the safety markers / review gates). Posts about WellPeps still page the clinical owner.
 
+- Memo fixes (R-37, 2026-10-22): narrower `individual_clinical_concern` in prompts/triage.md; answer-first-then-
+  boundary for mixed posts (`switching_protocol.answer_first_boundary`, OFF until Derek approves;
+  `protocol.mixed_post` / `answer_first_applies`, guidance note + `boundary_claim`); pending claim
+  CLM-CHECKLIST-COST-COMPARE; regression set `tests/fixtures/regression_posts.yaml` + `harvey/regression.py` +
+  `scripts/regression_check.py` (real triage, subscription only): run it before and after prompt/model changes.
+
+- Markdown library + harness picks (R-38, 2026-10-22): `harvey/doc_markdown.py` converts every .docx / .pdf
+  upload to Markdown in `knowledge_docs.extract_text` (regex-only Word reader; PDF type scale, running headers
+  dropped, pypdf spacing for joins; plain text fallback). Harness: `TaskContext.guide_chapters` (the drafter passes
+  `guidance.guide_chapters`) pins the chosen guide chapter after the voice guide; `PLATFORM_HEADINGS` drops other
+  platforms' sections; more `exclude_headings`; budgets drafter/reviewer 12000.
+
 Later phases add everything else. Don't build ahead of the phase you've
 been asked to do.
 

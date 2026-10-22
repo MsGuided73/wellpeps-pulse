@@ -12,6 +12,60 @@ summary for discussion.
 
 ---
 
+## 2026-10-22: Every library document as Markdown; harness picks sharpened
+
+### R-38. Markdown by default and a sharper context harness (Live; the Markdown versions need approval)
+- **Markdown by default (owner):** every Word or PDF upload to the Knowledge library
+  is stored as Markdown (`harvey/doc_markdown.py`): Word headings, lists, tables and
+  callout boxes; for PDFs the type scale decides headings, repeated page headers and
+  footers are dropped, bullets become list items, and pypdf's own spacing decides how
+  pieces of a line join. Wording is unchanged; plain text is the fallback.
+- **The eleven existing documents** (Gameplan, Compliance Training, Live Reference,
+  Approved Messaging Guide, Community Agent Voice, Community Groups, Offering Links,
+  Why and When to Engage, Selection Module, Operations Manual, Competitor Protocol)
+  were converted and checked word for word against their library versions; they wait
+  for approval as library #33-43. The five guides were converted earlier (#28-32).
+- **Harness:** the guide chapter Pulse chose for the post now comes first after the
+  voice guide; training examples, evaluation tables, deployment / acceptance /
+  document-control pages, "How to use this training" and sections about another
+  platform (for example LinkedIn rules for a Reddit post) are never picked; the
+  drafter and reviewer get 12,000 characters each (was 8,000).
+- **Measured** on today's posts (database copy, Markdown versions approved there):
+  the picks are now on topic (Protocol §3 and §8, the Training's general-vs-individual
+  boundary), but most price replies are still rejected or held, because the drafter
+  now tries to answer the fee and pharmacy questions in its own words and no approved
+  wording covers them yet (CLM-CHECKLIST-COST-COMPARE and CLM-PRICE-ALLIN wait for
+  Derek). Memo: "How Pulse's context harness works" (Claude Docs).
+
+## 2026-10-22: Price and pharmacy questions get answers, not the clinical boundary
+
+### R-37. Fixes from the memo to Derek (items 1 and 4 Live; item 2 built, OFF; item 3 pending Derek)
+- **Why:** in the 2026-10-22 fresh run, three ordinary questions (what to check when
+  picking an online provider, which pharmacies compound, whether your own doctor's
+  prescription gets compounded pricing) got only the clinical boundary reply
+  (Template B), because triage tagged any mention of the person's insurance or
+  prescription as an "individual clinical concern". Operations Manual §18.1:
+  "Answer the general question first... State the boundary if individualized
+  medical judgment is involved."
+- **1. Narrower clinical tag (Live):** `individual_clinical_concern` now means the
+  person asks for a clinical judgment about themselves (a symptom, a dose,
+  starting/stopping/switching, which medication suits them, their labs, medical
+  eligibility). Mentioning their insurance, prescription or doctor while asking
+  about price, pharmacies, process or providers does not count (prompts/triage.md).
+- **2. Answer first, then the boundary (built, OFF until Derek approves):**
+  `switching_protocol.answer_first_boundary` in config/engagement_guide.yaml. When
+  on, a mixed post (a general question, no symptoms or harm, not a dose / labs /
+  eligibility / medication question) is answered, plus one approved boundary
+  sentence (CLM-AMG-APPX-WHICH-MEDICATION). Mainly clinical posts keep the
+  boundary-only reply.
+- **3. Cost-comparison checklist (pending Derek):** CLM-CHECKLIST-COST-COMPARE,
+  brand-neutral; not used until approved. The pricing statement (CLM-PRICE-ALLIN)
+  was updated earlier the same day (c78017b).
+- **4. Regression set (Live):** tests/fixtures/regression_posts.yaml (16 post
+  shapes with their expected handling) and `scripts/regression_check.py`, which
+  re-runs them through the real triage on a temporary database. Run it before and
+  after any change to Pulse's instructions, models or selection rules.
+
 ## 2026-10-22: Out of scope means Pulse does not weigh in
 
 ### R-36. No escalation or reply for health reports that are not about WellPeps (Live; Derek's decision)
