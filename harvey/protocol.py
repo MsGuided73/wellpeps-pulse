@@ -318,12 +318,39 @@ def _safety_route(inp: ProtocolInput) -> tuple[str, str] | None:
     return None
 
 
+# A real general question in the post (answer first, then the boundary).
+GENERAL_QUESTION_INTENTS = frozenset({"general_information", "comparison_request", "wellpeps_question",
+                                      "alternatives_requested"})
+
+
+def mixed_post(intents, subtype: str = "", category: str = "") -> bool:
+    """A general question with only a minor personal element: the clinical tag is present, but there
+    is a general question, no harm, and the post is not a clinical question type (dose, labs,
+    eligibility, medication change, symptoms, results, safety) or an adverse event."""
+    intents = set(intents or ())
+    return ("individual_clinical_concern" in intents and bool(intents & GENERAL_QUESTION_INTENTS)
+            and "possible_serious_harm" not in intents
+            and (subtype or "") not in set(config().clinical_subtypes)
+            and (category or "") != "adverse_event")
+
+
+def answer_first_applies(triage) -> bool:
+    """Answer first, then one approved boundary line (switching_protocol.answer_first_boundary, off
+    until Derek approves): the switch is on, the post is a mixed post and the protocol did not route it."""
+    if triage is None or not config().answer_first_boundary:
+        return False
+    category = getattr(triage.category, "value", triage.category) or ""
+    return (mixed_post(triage.intents, triage.subtype or "", category)
+            and (triage.protocol_decision or "") not in (CLINICAL_CAUTION, ESCALATE))
+
+
 def _clinical(inp: ProtocolInput) -> str:
     """Why step 3 applies ("" when it doesn't)."""
     if inp.prior_clinical_in_thread:
         return ("a follow-up does not resolve the earlier clinical concern in this thread "
                 "([CP] §4 step 3, Example 25)")
-    if "individual_clinical_concern" in inp.intents:
+    if "individual_clinical_concern" in inp.intents and not (
+            config().answer_first_boundary and mixed_post(inp.intents, inp.subtype, inp.category)):
         return "individual clinical concern: approved boundary and provider direction only ([CP] §4 step 3)"
     if inp.subtype in set(config().clinical_subtypes):
         return (f"individual clinical question ({inp.subtype}): approved boundary and provider direction only "

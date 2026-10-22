@@ -199,6 +199,16 @@ claims:
     finalize_key: "pricing"
     finalize_missing: "Live Reference §6-7: standard shipping inclusion is CONFIRM and 'One Simple Price. Everything Included.' needs operational verification (Protocol §6: never assume 'everything included')"
 
+  - id: CLM-CHECKLIST-COST-COMPARE
+    text: "When comparing, ask each provider whether the price changes as the dose goes up, whether there's a separate program or membership fee, whether follow-up and shipping are included, and whether labs cost extra."
+    products: ["*"]
+    tier: yellow
+    approved_by: PENDING
+    approved_at: null
+    expires: null
+    source: "Owner's memo to Derek Goldberg, 2026-10-22 (item 3: brand-neutral checklist for comparing total cost)"
+    note: "PENDING Derek. Brand-neutral: it names and judges no other company; it answers what price-comparison posts ask without a pricing claim."
+
   - id: CLM-EDU-GUIDES
     text: "WellPeps offers free Smart Patient's Guides, including questions to ask before choosing a provider."
     products: ["*"]

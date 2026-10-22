@@ -387,7 +387,7 @@ def test_claims_seeded_pending_except_verbatim_guide_wording():
     # ... or a Live Reference item still marked CONFIRM (never approved wording).
     assert all(c.source.startswith("reply-compliance-rules.md R") or "wellpeps-site/src/" in c.source
                or (c.source.startswith("Approved Messaging Live Reference v1.0 §") and "CONFIRM" in c.source)
-               or c.source.startswith("wellpeps.com/")
+               or c.source.startswith("wellpeps.com/") or c.source.startswith("Owner's memo to Derek")
                for c in others)
     # Guide wording is WellPeps' approved messaging, cited by section.
     amg = [c for c in guide if c.id.startswith("CLM-AMG-")]

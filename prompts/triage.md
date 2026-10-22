@@ -105,8 +105,14 @@ Return one JSON object with exactly these fields:
     service ("anyone recommend another provider?").
   - `general_information`: a general question ("what should I look for?").
   - `venting_only`: frustration with no question or invitation.
-  - `individual_clinical_concern`: their own symptoms, testing needs,
-    eligibility, labs, dose or medication decisions.
+  - `individual_clinical_concern`: the author asks for a clinical judgment
+    about themselves: a symptom, a dose, whether to start, stop or switch a
+    medication, which medication suits them, what their labs mean, or whether
+    they qualify medically. Mentioning their own insurance, prescription,
+    doctor or situation while asking about price, pharmacies, the care
+    process or providers is NOT this tag ("my insurance won't cover Zepbound,
+    what should I check when picking an online provider?" is a general
+    process question). Tag only the clinical judgment they actually ask for.
   - `possible_serious_harm`: severe symptoms, a serious or unexpected
     reaction, or a possible emergency. When severity is uncertain, include
     it: a human safety reviewer decides. Never treat the absence of an

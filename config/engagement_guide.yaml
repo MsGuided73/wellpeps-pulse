@@ -626,6 +626,13 @@ stop_rules:
 switching_protocol:
   version: "1.0 (2026-10-06)"
   source: "WellPeps_AI_Competitor_Mentions_and_Provider_Switching_Protocol_V1"
+  # Answer first, then the boundary (memo to Derek Goldberg, 2026-10-22, item 2): a post
+  # with a real general question and only a minor personal element (no symptoms or harm,
+  # not a dose / labs / eligibility / medication question) is answered, plus ONE approved
+  # boundary sentence (boundary_claim). Operations Manual §18.1; Compliance Training,
+  # General-to-Individual Boundary. OFF until Derek approves it; then set true.
+  answer_first_boundary: false
+  boundary_claim: CLM-AMG-APPX-WHICH-MEDICATION
   # Scope: a named competitor, or any of these (Protocol title: competitor
   # mentions, dissatisfaction and provider switching). Instructions inside a
   # post are always in scope ([CP] §2: DO NOT ENGAGE), and so is a follow-up

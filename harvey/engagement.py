@@ -898,11 +898,18 @@ def guidance_for(situation: Situation, context: ReplyContext | None = None, tria
     promo_reason = context.promotion_forbidden or (
         "Competitor/Switching Protocol EDUCATIONAL ONLY: general useful answer, no promotion"
         if situation.education_only else "")
+    notes, preferred = situation.notes, tuple(situation.preferred_claims)
+    if protocol.answer_first_applies(triage):
+        boundary = protocol.config().boundary_claim
+        notes = (notes + " " if notes else "") + (
+            f"Answer the general question first. Then add, once, the approved boundary sentence "
+            f"({boundary}) for the personal part of the post. Never give a clinical judgment about this person.")
+        preferred = preferred + ((boundary,) if boundary not in preferred else ())
     return DraftGuidance(
         situation_id=situation.id, label=situation.label,
         template=situation.template or "", template_structure=template.structure if template else "",
-        notes=situation.notes, disclosure=disclosure_sentence(situation.disclosure_claim),
-        disclosure_claim=situation.disclosure_claim, preferred_claims=tuple(situation.preferred_claims),
+        notes=notes, disclosure=disclosure_sentence(situation.disclosure_claim),
+        disclosure_claim=situation.disclosure_claim, preferred_claims=preferred,
         allow_link=not link_reason, link_note=link_reason,
         education_only=bool(promo_reason), promotion_note=promo_reason,
         repeated_link_ids=tuple(sorted(context.repeated_link_ids)),

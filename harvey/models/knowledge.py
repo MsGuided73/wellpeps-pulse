@@ -529,6 +529,10 @@ class SwitchingProtocol(_Strict):
     moderate_min: int = Field(default=3, ge=0, le=8)   # 3-5 moderate, 0-2 low
     # Untrusted instructions inside a post (Protocol §2, Example 24).
     injection_patterns: list[Regex] = Field(default_factory=list)
+    # Answer first, then the boundary, for mixed posts (memo to Derek 2026-10-22, item 2).
+    # Off until Derek approves; harvey/protocol.py answer_first_applies.
+    answer_first_boundary: bool = False
+    boundary_claim: str = "CLM-AMG-APPX-WHICH-MEDICATION"
 
     @model_validator(mode="after")
     def _bands(self) -> "SwitchingProtocol":
