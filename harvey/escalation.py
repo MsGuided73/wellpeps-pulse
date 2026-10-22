@@ -58,9 +58,11 @@ _KIND_BY_SUBTYPE = {
 }
 _WELLPEPS_ONLY_SUBTYPES = {"media_inquiry": "legal"}
 VIRAL_NEGATIVE = "viral_negative"
-# Serious health report that does not involve WellPeps (user decision
-# 2026-10-09, pending WellPeps clinical confirmation): listed for a person to
-# scan daily, never paged, no SLA re-page.
+# Serious health report that does not involve WellPeps: until 2026-10-22 it was
+# listed for a person to scan daily. Retired by R-36 (Derek Goldberg via the owner,
+# 2026-10-22: "we do not want to weigh in on anything that is outside of our scope
+# of services, even if it is an urgent medical issue"): escalation_kind never
+# returns it now. The kind stays so older rows still display.
 SAFETY_WATCH = "safety_watch"
 SAFETY_WATCH_REVIEW_MINUTES = 24 * 60
 _SERIOUS_SUBTYPES = frozenset({"emergency", "self_harm"})
@@ -109,8 +111,10 @@ def escalation_kind(triage: Triage) -> str | None:
     """
     if not triage.relevant:
         return None
+    # Out of scope (R-36): a serious health report not about WellPeps is never
+    # escalated; the review gates and safety markers keep it from any reply.
     if about_other_person(triage):
-        return "adverse_event" if triage.subject_type == "wellpeps" else SAFETY_WATCH
+        return "adverse_event" if triage.subject_type == "wellpeps" else None
     # The competitor / switching protocol's safety and incident route
     # (harvey/protocol.py; [CP] §4 step 2, §5), also when the public decision
     # is HOLD / DO NOT ENGAGE ("safety observations may still be routed
@@ -119,14 +123,9 @@ def escalation_kind(triage: Triage) -> str | None:
     kind = (_KIND_BY_CATEGORY.get(triage.category) or _KIND_BY_SUBTYPE.get(triage.subtype or "")
             or (route if route in SEVERE_KINDS else None))
     if kind:
-        # Only WellPeps' own incidents page anyone (user decision 2026-10-09).
-        # A serious health report that may involve an unnamed provider goes on
-        # the safety watch; everything else about other companies is trends.
-        if triage.subject_type == "wellpeps":
-            return kind
-        if kind == "adverse_event" and is_serious(triage):
-            return SAFETY_WATCH
-        return None
+        # Only WellPeps' own incidents go to anyone (user decision 2026-10-09;
+        # R-36, 2026-10-22: nothing outside WellPeps' scope, even if urgent).
+        return kind if triage.subject_type == "wellpeps" else None
     if triage.subject_type == "wellpeps" and (triage.subtype or "") in _WELLPEPS_ONLY_SUBTYPES:
         return _WELLPEPS_ONLY_SUBTYPES[triage.subtype]
     if (

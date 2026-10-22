@@ -105,7 +105,13 @@ def test_brand_mode_disclosure_and_route(example):
         assert record.disclosure in ("I work with WellPeps.", "I'm part of the WellPeps team.")
     # [CP] §8: no resource in safety or clinical handling, and no verified link -> none.
     assert record.resource == "none"
-    assert protocol.resource_for(record, links_allowed=True) == "none"   # no registry link is live yet
+    # The guide pages are live (R-34): an answering record may point to its guide; safety,
+    # clinical and escalation handling never carries one.
+    resource = protocol.resource_for(record, links_allowed=True)
+    if expected["decision"] in ("escalate", "clinical_caution", "hold", "do_not_engage", "monitor_only"):
+        assert resource == "none"
+    else:
+        assert resource == "none" or resource in {link.id for link in knowledge.links() if link.live}
 
 
 @pytest.mark.parametrize("example", EXAMPLES, ids=IDS)
@@ -140,17 +146,14 @@ def test_escalate_reaches_the_designated_owner(example):
     expected = example["expected"]
     route = expected["route"]
     if route in SEVERE_KINDS:
-        # Only WellPeps' own incidents page the owner; about another provider a
-        # serious report goes on the safety watch, the rest is trends only.
-        # User decision 2026-10-09 (docs/REVISIONS-LOG.md R-13), pending
-        # WellPeps clinical confirmation.
+        # Only WellPeps' own incidents go to the owner; about anyone else there is
+        # no escalation at all (R-36 (Derek via the owner, 2026-10-22): out of scope, no escalation).
         kind = expected["pulse_escalation"] if "pulse_escalation" in expected else route
         assert escalation_kind(triage) == kind
         if triage.subject_type == "wellpeps":
             assert kind == route
         else:
-            assert kind in (SAFETY_WATCH, None)
-            assert (kind == SAFETY_WATCH) == (route == "adverse_event" and is_serious(triage))
+            assert kind is None
     if expected["decision"] != "escalate":
         assert triage.protocol_route == ""
 

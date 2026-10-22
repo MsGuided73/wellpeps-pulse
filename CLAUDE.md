@@ -193,6 +193,10 @@ deterministic compliance filter (`harvey/compliance.py`) exist.
   `no_useful_role`) in `engagement.skip_reason`; never for a post about or asking WellPeps. The triager's topic
   gate reads title + body (`_post_text`).
 
+- Out of scope (R-36, 2026-10-22; Derek Goldberg via the owner): `escalation.escalation_kind` never returns
+  `safety_watch` now; a serious health report not about WellPeps gets no escalation and no reply (it stays
+  `triaged`, blocked by the safety markers / review gates). Posts about WellPeps still page the clinical owner.
+
 Later phases add everything else. Don't build ahead of the phase you've
 been asked to do.
 

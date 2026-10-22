@@ -141,10 +141,9 @@ async def test_serious_harm_is_escalated_even_under_a_non_severe_category(state,
 
 
 @pytest.mark.asyncio
-async def test_serious_harm_about_another_provider_goes_on_the_safety_watch(state, allowed_community):
-    # Only WellPeps' own incidents page; a serious report about another provider
-    # is listed on the never-paged safety watch and gets no reply (user decision
-    # 2026-10-09, docs/REVISIONS-LOG.md R-13, pending WellPeps clinical confirmation).
+async def test_serious_harm_about_another_provider_is_out_of_scope(state, allowed_community):
+    # Only WellPeps' own incidents go to anyone; a serious report about another
+    # provider gets no escalation and no reply (R-36 (Derek via the owner, 2026-10-22): out of scope, no escalation).
     mid = await _new(state, "harm2", "Severe stomach pain on my meds from Ro, who should I switch to?", ALLOWED)
     brain = FakeBrain({"Severe stomach": _answer(competitor="Ro", category="question",
                                                  intents=["possible_serious_harm", "alternatives_requested"],
@@ -158,10 +157,11 @@ async def test_serious_harm_about_another_provider_goes_on_the_safety_watch(stat
 
     triage = await state.get_triage(mid)
     assert triage.protocol_decision == "escalate" and triage.protocol_route == "adverse_event"
-    assert escalated == ["safety_watch"]
+    assert escalated == []
     assert triage.opportunity_score is None
-    assert (await state.get_mention(mid)).status is MentionStatus.ESCALATED
+    assert (await state.get_mention(mid)).status is MentionStatus.TRIAGED
     assert "gate:not_ours" in triage.urgency_reason
+    assert await state.list_draftable_mentions() == []
     await draft_batch(state, _Drafter(), _Reviewer())
     assert await state.get_latest_draft(mid) is None
 

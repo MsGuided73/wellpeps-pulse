@@ -111,7 +111,7 @@ async def _escalated(state, spy, config=None, **triage_kw):
     # Not WellPeps: only WellPeps' own incidents page (user decision 2026-10-09,
     # docs/REVISIONS-LOG.md R-13, pending WellPeps clinical confirmation). The
     # default urgency_reason is a keyword override, so this one is serious.
-    (Category.ADVERSE_EVENT, Urgency.URGENT, "product", "safety_watch"),
+    (Category.ADVERSE_EVENT, Urgency.URGENT, "product", None),          # R-36 (Derek via the owner, 2026-10-22): out of scope, no escalation
     (Category.LEGAL_REGULATORY, Urgency.URGENT, "competitor", None),
     (Category.LEGAL_REGULATORY, Urgency.URGENT, "wellpeps", "legal"),
     (Category.PRIVACY, Urgency.HIGH, "wellpeps", "privacy"),

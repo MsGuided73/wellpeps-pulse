@@ -32,9 +32,9 @@ CASES = [
     # Emergency: emergency line + escalate, whatever the category.
     (_t(Category.QUESTION, "emergency", WP), "emergency", "boundary_only", "adverse_event",
      MentionStatus.TRIAGED),
-    # A serious report not about WellPeps: the safety watch (never paged, off the reply queue).
-    (_t(Category.ADVERSE_EVENT, "emergency"), "emergency", "boundary_only", "safety_watch",
-     MentionStatus.ESCALATED),
+    # A serious report not about WellPeps: R-36 (Derek via the owner, 2026-10-22): out of scope, no escalation; the review gate keeps it from any reply.
+    (_t(Category.ADVERSE_EVENT, "emergency"), "emergency", "boundary_only", None,
+     MentionStatus.TRIAGED),
     # Media: routing line only + escalate (legal owner until a media contact exists).
     (_t(Category.QUESTION, "media_inquiry", WP), "media_inquiry", "boundary_only", "legal",
      MentionStatus.TRIAGED),
@@ -94,15 +94,15 @@ CASES = [
     # pending WellPeps clinical confirmation): a serious harm report goes on the
     # safety watch; anything else is trends only (no escalation).
     (_t(Category.QUESTION, competitor="Ro", protocol_decision="hold", protocol_route="adverse_event",
-        intents=["possible_serious_harm"]), "protocol_hold", "no_reply", "safety_watch", MentionStatus.ESCALATED),
+        intents=["possible_serious_harm"]), "protocol_hold", "no_reply", None, MentionStatus.TRIAGED),
     (_t(Category.QUESTION, competitor="Ro", protocol_decision="hold", protocol_route="adverse_event"),
      "protocol_hold", "no_reply", None, MentionStatus.TRIAGED),
     (_t(Category.QUESTION, "dose_question", competitor="Ro", protocol_decision="escalate",
         protocol_route="adverse_event"), "protocol_escalate_harm_dose", "boundary_only", None,
      MentionStatus.TRIAGED),
     (_t(Category.QUESTION, competitor="Ro", protocol_decision="escalate", protocol_route="adverse_event",
-        intents=["possible_serious_harm"]), "protocol_escalate_harm", "boundary_only", "safety_watch",
-     MentionStatus.ESCALATED),
+        intents=["possible_serious_harm"]), "protocol_escalate_harm", "boundary_only", None,
+     MentionStatus.TRIAGED),
     (_t(Category.QUESTION, competitor="Ro", protocol_decision="escalate", protocol_route="adverse_event"),
      "protocol_escalate_harm", "boundary_only", None, MentionStatus.TRIAGED),
     (_t(Category.QUESTION, competitor="Ro", protocol_decision="escalate", protocol_route="legal"),
@@ -167,9 +167,7 @@ def test_every_situation_escalation_agrees_with_escalation_kind():
             if subject == WP:
                 expected = sit.escalate
             else:
-                expected = (SAFETY_WATCH if sit.escalate in SEVERE_KINDS and escalation_kind(
-                    triage.model_copy(update={"subject_type": WP})) == "adverse_event" and is_serious(triage)
-                    else None)
+                expected = None    # R-36 (Derek via the owner, 2026-10-22): out of scope, no escalation
             assert escalation_kind(triage) == expected, (sit.id, subject)
             checked[subject] += 1
     assert checked[WP] and checked["category"]

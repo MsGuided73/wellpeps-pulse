@@ -156,7 +156,7 @@ def test_a_topic_community_is_not_a_competitor_community():
 FATHER = "My father is on Ozempic and drinks heavily every night. Is that dangerous?"
 
 
-def test_triage_tag_blocks_any_reply_and_goes_on_the_safety_watch():
+def test_triage_tag_blocks_any_reply_and_is_out_of_scope():
     triage = Triage(mention_id=1, relevant=True, category=Category.QUESTION, subtype="safety_question",
                     subject_type="category", intents=["other_person_medical"], reply_appropriate=True,
                     urgency=Urgency.NORMAL, urgency_reason="model text")
@@ -164,7 +164,7 @@ def test_triage_tag_blocks_any_reply_and_goes_on_the_safety_watch():
     assert out.reply_appropriate is False and out.urgency is Urgency.HIGH
     assert out.urgency_reason == "model text; safety:other_person"
     assert engagement.safety_blocked(out) and engagement.reply_mode(out) == "no_reply"
-    assert escalation_kind(out) == SAFETY_WATCH
+    assert escalation_kind(out) is None                                 # R-36 (Derek via the owner, 2026-10-22): out of scope, no escalation
     # About a WellPeps patient: the clinical owner, still no public reply.
     wellpeps = out.model_copy(update={"subject_type": "wellpeps"})
     assert escalation_kind(wellpeps) == "adverse_event"
@@ -178,7 +178,7 @@ def test_safety_screen_flag_blocks_any_reply():
     out = apply_screen(triage, ScreenResult(other_person=True, evidence="My father is on Ozempic"))
     assert out.urgency_reason.startswith("safety_screen:other_person")
     assert out.reply_appropriate is False and out.urgency is Urgency.HIGH
-    assert engagement.safety_blocked(out) and escalation_kind(out) == SAFETY_WATCH
+    assert engagement.safety_blocked(out) and escalation_kind(out) is None
     # An older screen answer without the field still validates (defaults to False).
     assert ScreenAnswer.model_validate({"adverse_event": False, "self_harm": False, "minor": False}).other_person \
         is False
@@ -193,8 +193,9 @@ async def test_other_person_question_is_never_drafted_end_to_end(state):
     report = await triage_batch(state, Triager(brain))
     assert report.errors == 0
     triage = await state.get_triage(mid)
-    assert escalation_kind(triage) == SAFETY_WATCH
-    assert (await state.get_mention(mid)).status is MentionStatus.ESCALATED
+    assert escalation_kind(triage) is None
+    assert (await state.get_mention(mid)).status is MentionStatus.TRIAGED
+    assert await state.list_open_escalations() == []
     assert await state.list_draftable_mentions() == []
 
 

@@ -12,6 +12,27 @@ summary for discussion.
 
 ---
 
+## 2026-10-22: Out of scope means Pulse does not weigh in
+
+### R-36. No escalation or reply for health reports that are not about WellPeps (Live; Derek's decision)
+- **Source:** Derek Goldberg, relayed by the owner (2026-10-22): "we do not want
+  to weigh in on anything that is outside of our scope of services, even if it is
+  an urgent medical issue." The owner: an urgent item a clinician must view and
+  acknowledge only when the post relates to WellPeps.
+- **Before:** a serious health report not about WellPeps (an urgent keyword such
+  as "seizure" or "ER", self-harm, an emergency, a medical crisis about someone
+  else) went on the Urgent list as a "safety watch" item with a 24-hour review and
+  an Ack button. Example: "Is there a paper white phone that can do Telehealth?"
+  ("...my vision and seizure disorders").
+- **After:** those posts get no escalation, no Urgent item, no deadline and no
+  reply of any kind. They stay triaged, blocked from drafting by the safety
+  markers and review gates, and still count for insights. Posts about WellPeps
+  are unchanged: the clinical owner is paged and acknowledges.
+- **Note:** Pulse can't tell whether someone is a WellPeps patient, and never
+  tries; "about WellPeps" means the post names WellPeps or is about its service.
+  This supersedes the Competitor Protocol's internal safety review for posts
+  outside WellPeps' scope.
+
 ## 2026-10-22: Guide pages live; the Communities page
 
 ### R-35. A Communities page: every community, its clearance checklist and what is blocked (Live)

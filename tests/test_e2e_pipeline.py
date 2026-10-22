@@ -36,16 +36,15 @@ SWITCH_Q = "Switching from Henry Meds"    # competitor switching in r/Mounjaro (
 REJECT_Q = "daily tadalafil through an online service"  # reviewer rejects
 # WellPeps' own incidents: paged to a named owner.
 SEVERE = {LEGAL: "legal", PRIVACY: "privacy", FRAUD: "billing_fraud"}
-# The ER post never names WellPeps (semaglutide, provider unknown): only
-# WellPeps' own incidents page, so this serious report goes on the safety
-# watch (never paged, no reply). User decision 2026-10-09,
-# docs/REVISIONS-LOG.md R-13, pending WellPeps clinical confirmation.
-SAFETY_WATCHED = {ADVERSE}
+# The ER post never names WellPeps (semaglutide, provider unknown): out of
+# scope, so it gets no escalation and no reply (R-36 (Derek via the owner, 2026-10-22): out of scope, no escalation).
+OUT_OF_SCOPE = {ADVERSE}
+SAFETY_WATCHED: set = set()
 # Rules of engagement: a WellPeps billing complaint keeps the guide's approved
 # boundary reply (drafted for a human, no model call) next to its escalation;
 # legal and privacy get no public reply.
 BOUNDARY = {FRAUD: "CLM-AMG-09-BILLING", VIRAL: "CLM-AMG-APPX-COMPLAINT"}
-ESCALATED_ONLY = {LEGAL, PRIVACY, *SAFETY_WATCHED}
+ESCALATED_ONLY = {LEGAL, PRIVACY}
 DRAFTED = {CLEAN_Q, HYPE_Q, REJECT_Q, *BOUNDARY}
 
 CLEAN_REPLY = (
@@ -184,6 +183,8 @@ async def test_full_pipeline_on_the_sample_fixture(state):
     for marker in SAFETY_WATCHED:
         watch = by_mention[_find(mentions, marker).id]
         assert watch.kind == "safety_watch" and watch.notified_at is None
+    for marker in OUT_OF_SCOPE:                                   # R-36: no escalation, no reply
+        assert _find(mentions, marker).id not in by_mention
     assert len(open_escalations) == len(SEVERE) + len(SAFETY_WATCHED) + 1
     assert len(slack.payloads) == len(SEVERE) + 1                # the safety watch is never paged
     assert (await state.get_state_summary())["open_escalations"] == len(SEVERE) + 1

@@ -199,9 +199,9 @@ thread"):
 | The post | Pulse |
 |---|---|
 | About WellPeps (names it, or the person appears to be a WellPeps patient) | Pages the owner as before; approved boundary reply where the guide has one |
-| Serious health report (emergency, self-harm, an urgent keyword such as ER / hospitalized / gallbladder, a possible minor, possible serious harm) not about WellPeps | **Safety watch**: an escalation row that is never paged, reviewed daily (24 h window), status `escalated`, no reply, not counted as an open escalation |
+| Serious health report (emergency, self-harm, an urgent keyword such as ER / hospitalized / gallbladder, a possible minor, possible serious harm) not about WellPeps | **Out of scope: Pulse does not weigh in.** No escalation, no Urgent item, no review deadline and no reply of any kind; the post stays `triaged`, blocked from drafting, and still counts for insights (R-36: Derek Goldberg via the owner, 2026-10-22: "we do not want to weigh in on anything that is outside of our scope of services, even if it is an urgent medical issue"). Replaces the 2026-10-09 safety watch. |
 | Other companies' legal, privacy or billing issues; expected or cosmetic side effects not about WellPeps | No escalation, no reply; trends only |
-| A medical question or health crisis about someone else ("my father on Ozempic drinks heavily") | **No reply of any kind** (not even a boundary reply). Safety watch; the clinical owner when WellPeps is named. Triage tag `other_person_medical` or the safety screen's `other_person` flag (session safeguard 2026-10-20; [OM] §5.3 individual questions; [GP] §6.1-6.2 "Clinical triage ... Route to humans. Full stop.") |
+| A medical question or health crisis about someone else ("my father on Ozempic drinks heavily") | **No reply of any kind** (not even a boundary reply). The clinical owner when WellPeps is named; otherwise out of scope, no escalation (R-36: Derek Goldberg via the owner, 2026-10-22). Triage tag `other_person_medical` or the safety screen's `other_person` flag (session safeguard 2026-10-20; [OM] §5.3 individual questions; [GP] §6.1-6.2 "Clinical triage ... Route to humans. Full stop.") |
 
 Basis: Pre-LegitScript plan ("Respond only where WellPeps can add value";
 "Don't respond merely because a keyword appeared"); user decision 2026-10-09;
@@ -263,7 +263,7 @@ cites its source; [SM] §6 evaluation cases are tests
 | General medication / treatment education | RESPOND | code (`worth_it`) | [SM] §3, §6 |
 | A complaint about another company that also asks for alternatives | Answered under the protocol; triage's `reply_appropriate` guess never discards it | code (`answers_alternatives_request` in the draftable query) + triage prompt | [DG]; [SM] §5 "Do not let 'complaint about another company' suppress an otherwise eligible alternatives request"; R-2 |
 | Duplicate participation | Rechecked at approval: a thread with the maximum approved WellPeps replies refuses another | code (`thread_blocker`) | [SM] §2 step 6, §5; [AMG] §22 |
-| A medical question or crisis about someone else | ROUTE: safety watch, no reply | code (triage tag + safety screen + `escalation_kind`) | session safeguard 2026-10-20; [GP] §6.2 |
+| A medical question or crisis about someone else | No reply; ROUTE to the clinical owner only when it is about WellPeps, otherwise out of scope (no escalation) | code (triage tag + safety screen + `escalation_kind`) | session safeguard 2026-10-20; [GP] §6.2; R-36: Derek Goldberg via the owner, 2026-10-22 |
 | Priority among RESPOND cases | high: direct WellPeps questions, clear treatment-education needs, alternatives with an approved fit; standard: broader education and provider selection; never desperation, severity or follower count; scores rank RESPOND only | code (`selection().priority`; protocol score) | [SM] §4; [CP] §9 |
 
 The review desk shows the record ([SM] §5): `engagement.selection` gives
@@ -609,7 +609,7 @@ proposes the number; it never blocks.
 | Billing / account complaint about WellPeps | Template C | billing_fraud |
 | Other complaint about WellPeps | Template C | viral_negative when urgent; otherwise support by hand (no queue yet) |
 | Threat / serious safety concern, self-harm | none | adverse_event |
-| Any of the above **not about WellPeps** (2026-10-09, pending clinical confirmation) | none | serious health reports: safety watch (never paged); everything else: none |
+| Any of the above **not about WellPeps** | none | none: out of scope, Pulse does not weigh in (R-36: Derek Goldberg via the owner, 2026-10-22; replaces the 2026-10-09 safety watch) |
 
 Escalations ignore quiet hours, page with a link and a category only, are
 re-paged by the sweep when unsent or past SLA, and show "NOT handed off" on
@@ -688,7 +688,7 @@ information here."
 | One acknowledgement sentence before a verbatim approved response | `harvey/agents/acknowledger.py`, `prompts/acknowledge.md`, `drafting._acknowledged`, `engagement.acknowledged_reply` | `tests/test_acknowledgements.py` |
 | No autonomous posting | no publish / message path in Pulse | `tests/test_protocol_eval.py` |
 | Conversation selection ([SM]): SKIP reasons, central-fact HOLD, competitor communities, general education, selection record, posting hold at approval, duplicate participation, activity warnings | `harvey/engagement.py`, `harvey/review.py` (`_selection_blockers`), `harvey/agents/triager.py`, `prompts/triage.md` | `tests/test_selection_safeguards.py`, `tests/test_review_gates.py`, `tests/test_engagement_state.py` |
-| Someone else's medical question: no reply, safety watch | `prompts/triage.md`, `prompts/safety_screen.md`, `harvey/agents/safety_screen.py`, `harvey/agents/triager.py`, `harvey/escalation.py` | `tests/test_selection_safeguards.py` |
+| Someone else's medical question: no reply (clinical owner only when about WellPeps) | `prompts/triage.md`, `prompts/safety_screen.md`, `harvey/agents/safety_screen.py`, `harvey/agents/triager.py`, `harvey/escalation.py` | `tests/test_selection_safeguards.py` |
 | Private channels, public details, R31 narrowed, invented clinical authority, ungated guide access, length as a target | `config/compliance_rules.yaml`, `prompts/draft.md`, `prompts/reply_rules.md`, `prompts/review.md` | `tests/test_safeguard_rules.py`, `tests/test_compliance.py` |
 
 ## Superseded earlier rules
@@ -732,7 +732,7 @@ until WellPeps confirms or drops them.
 | R8: no assessment, intake or checkout links before LegitScript (the "Start your assessment" phrase ban was dropped by the owner 2026-10-22) | platform / LegitScript circumvention | R8 | [PL] lists such links as "Review first" (Pulse is stricter: red); [AMG] §15, §19 give assessment-link patterns with a FINALIZE slot |
 | R31 (narrowed 2026-10-20): never claim access to the person's records or account ("we'll look into your account", "your order has shipped") and never confirm or imply they are a WellPeps customer ("as our patient", "your WellPeps order") | HIPAA / patient-status disclosure | R31 (`patient_confirmation`) | [OM] §8, [CT] Module 5, [GP] §3.2, §12 forbid confirming patient status. The bare phrases "your order / prescription / provider" were Pulse's over-broad inference and are no longer red (agreed with Derek Goldberg's reviewer; "contact your prescribing provider" is approved wording) |
 | R33 + safety screen: possible minors never get a reply (boundary or not) | weight-loss marketing to minors | R33, `safety_screen` | not addressed |
-| Self-harm: no reply, clinical owner paged | crisis handling | `self_harm` situation | [OM] §15 (credible safety threats) only in general terms |
+| Self-harm: no reply; the clinical owner is paged only when the post is about WellPeps (R-36: Derek Goldberg via the owner, 2026-10-22) | crisis handling | `self_harm` situation | [OM] §15 (credible safety threats) only in general terms |
 | R13 / R14 / R17 / R27: no outcome numbers, safety absolutes, universality, unsourced statistics | FTC substantiation | prohibited / yellow patterns | consistent with [AMG] §7, §26; [CT] Module 4 |
 | R39: no urgency / scarcity language | LegitScript / FTC | R39 | not addressed explicitly |
 | R37 / R6: hashtag limits, at most one link | platform spam rules | `limits` | consistent with [OM] §11.3; [PL] |

@@ -147,27 +147,26 @@ async def test_wellpeps_adverse_event_pages_the_clinical_owner(state):
 
 
 @pytest.mark.asyncio
-async def test_serious_adverse_event_about_another_provider_goes_on_the_safety_watch(state):
+async def test_serious_adverse_event_about_another_provider_is_out_of_scope(state):
     (mid,), spy, hook, report = await _run(state, OTHER_ER)
 
     triage = await state.get_triage(mid)
     assert triage.subject_type == "category" and triage.urgency_reason.startswith("override:")
-    assert hook.calls == [SAFETY_WATCH]
-    assert (await state.get_mention(mid)).status is MentionStatus.ESCALATED
-    esc = await state.get_open_escalation(mid)
-    assert esc.kind == SAFETY_WATCH and esc.notified_at is None
-    assert esc.sla_due_at == NOW + timedelta(hours=24)       # a daily review window, not the paging SLA
-    assert spy.payloads == []                                # never paged
-    assert report.escalated == 1 and report.paged == 0
+    assert hook.calls == []                                  # R-36 (Derek via the owner, 2026-10-22): out of scope, no escalation
+    assert (await state.get_mention(mid)).status is MentionStatus.TRIAGED
+    assert await state.get_open_escalation(mid) is None
+    assert await state.list_draftable_mentions() == []      # still no reply of any kind
+    assert spy.payloads == []
+    assert report.escalated == 0 and report.paged == 0
     assert (await state.get_state_summary())["open_escalations"] == 0
     assert engagement.gated(triage) == engagement.GATE_NOT_OURS
     assert await state.list_draftable_mentions() == []
 
-    # The sweep never pages or re-pages it, even long after the review window.
+    # The sweep has nothing to page, even days later.
     swept = await sweep(state, spy.notifier, _config(), now=NOW + timedelta(days=3))
     assert (swept.paged, swept.breached, swept.failed, swept.errors) == (0, 0, 0, 0)
     assert spy.payloads == []
-    assert (await state.get_open_escalation(mid)).breached is False
+    assert await state.get_open_escalation(mid) is None
 
 
 @pytest.mark.asyncio
@@ -218,10 +217,11 @@ def test_severe_kinds_page_only_for_wellpeps(category, subtype):
     {"urgency_reason": "safety_screen:self_harm: x"}, {"urgency_reason": "safety_screen:minor: 15"},
     {"intents": ["possible_serious_harm"]},
 ])
-def test_every_serious_signal_puts_a_non_wellpeps_report_on_the_watch(update):
+def test_no_serious_signal_escalates_a_non_wellpeps_report(update):
     base = Triage(mention_id=1, category=Category.ADVERSE_EVENT, subject_type="competitor")
     assert escalation_kind(base) is None
-    assert escalation_kind(base.model_copy(update=update)) == SAFETY_WATCH
+    assert escalation_kind(base.model_copy(update=update)) is None      # R-36 (Derek via the owner, 2026-10-22): out of scope, no escalation
+    assert escalation_kind(base.model_copy(update={**update, "subject_type": "wellpeps"})) == "adverse_event"
 
 
 # --- Review gates -------------------------------------------------------------------------
