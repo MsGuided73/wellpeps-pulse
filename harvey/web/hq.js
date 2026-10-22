@@ -2,7 +2,7 @@
 
 // WellPeps Pulse — Operator HQ: the agents (status from the heartbeat,
 // start/stop for admins), spend, "What people are struggling with", the
-// communities table with a "Record permission" form (admins), the guardrails
+// communities table with a "Record rules" form (admins), the guardrails
 // and links to the older tools. Loaded after home.js; uses app.js helpers
 // (api, request, send, showToast, escHtml, extLink, can, label, applyWidths,
 // emptyState, toneBadge, TAB_LOAD) and Home.loadSpendInto.
@@ -189,7 +189,7 @@ const Hq = (() => {
       '<td data-label="Links allowed?">' + (c.links === null ? 'Unknown' : c.links ? 'Yes' : 'No') + '</td>' +
       '<td class="num" data-label="Mentions, 7 days">' + num(c.mentions) + '</td>' +
       '<td data-label="Status">' + statusPill(c) + '</td>' +
-      '<td data-label="Action">' + (can('admin') ? '<button type="button" class="link-btn" data-hq="perm" data-id="' + escHtml(c.id) + '">Record permission</button>' : '') + '</td></tr>';
+      '<td data-label="Action">' + (can('admin') ? '<button type="button" class="link-btn" data-hq="perm" data-id="' + escHtml(c.id) + '">Record rules</button>' : '') + '</td></tr>';
   }
 
   function renderCommunities() {
@@ -220,15 +220,15 @@ const Hq = (() => {
     return communities;
   }
 
-  // ── Record permission ──
+  // ── Record rules ──
 
   function openPermission(id, trigger) {
     const c = communities.find(x => x.id === id);
     if (!c) return;
     permFor = c;
     permTrigger = trigger;
-    $('perm-lede').textContent = 'What did the moderators of ' + c.name +
-      ' tell you? Pulse uses this to decide what a draft there may say.';
+    $('perm-lede').textContent = 'Read the posted rules of ' + c.name +
+      ' (or ask a moderator) and record what they say. Replies there can be approved only once brand replies are allowed.';
     $('perm-participation').value = ['allowed', 'not_allowed', 'unknown'].includes(c.participation) ? c.participation : 'unknown';
     $('perm-links').value = c.links === true ? 'true' : c.links === false ? 'false' : 'unknown';
     $('perm-contact').value = c.contact;
@@ -251,14 +251,15 @@ const Hq = (() => {
     }});
     $('perm-submit').disabled = false;
     if (!r.ok || (r.data && r.data.ok === false)) {
-      const why = r.status === 404 ? 'Recording permission turns on with the next update.'
+      const why = r.status === 0 ? "Pulse isn't responding. Check that it's still running, then try again. Your answers are still here."
+        : r.status === 404 ? 'Recording rules turns on with the next update.'
         : (r.data && (r.data.error || r.data.detail)) || "That didn't save. Try again.";
       err.textContent = typeof why === 'string' ? why : 'That did not save. Check the fields and try again.';
       err.classList.remove('hidden');
       return;
     }
     closePermission();
-    showToast('Permission recorded for ' + permFor.name + '.', 'success');
+    showToast('Rules recorded for ' + permFor.name + '.', 'success');
     await loadCommunities();
     renderSummary();
   }

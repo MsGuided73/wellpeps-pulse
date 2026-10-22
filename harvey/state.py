@@ -83,17 +83,20 @@ ALLOWED_TRANSITIONS: dict[MentionStatus, frozenset[MentionStatus]] = {
     MentionStatus.NEW: frozenset({
         MentionStatus.TRIAGED, MentionStatus.DROPPED, MentionStatus.ESCALATED,
     }),
+    # -> posted from triaged / in_review / rejected: a rep posted their own reply
+    # by hand and recorded it (harvey/posted.py, R-30). Pulse itself never posts.
     MentionStatus.TRIAGED: frozenset({
-        MentionStatus.DRAFTED, MentionStatus.DROPPED, MentionStatus.ESCALATED,
+        MentionStatus.DRAFTED, MentionStatus.DROPPED, MentionStatus.ESCALATED, MentionStatus.POSTED,
     }),
     MentionStatus.DRAFTED: frozenset({MentionStatus.IN_REVIEW, MentionStatus.ESCALATED}),
     MentionStatus.IN_REVIEW: frozenset({
         MentionStatus.APPROVED, MentionStatus.REJECTED, MentionStatus.DRAFTED,
-        MentionStatus.ESCALATED,
+        MentionStatus.ESCALATED, MentionStatus.POSTED,
     }),
     # approved -> in_review: a human edits an approved, not-yet-posted reply;
     # the edit voids the approval and it must be approved again.
     MentionStatus.APPROVED: frozenset({MentionStatus.POSTED, MentionStatus.IN_REVIEW}),
+    MentionStatus.REJECTED: frozenset({MentionStatus.POSTED}),
     MentionStatus.ESCALATED: frozenset({MentionStatus.TRIAGED, MentionStatus.DROPPED}),
 }
 

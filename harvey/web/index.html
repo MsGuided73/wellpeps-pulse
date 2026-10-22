@@ -155,7 +155,7 @@
       <h2 id="cm-h">Communities</h2>
       <span class="label" id="cm-count"></span>
     </div>
-    <p class="note">Pulse listens everywhere but only drafts where the community's rules allow it. Recording a moderator's answer updates what the agent may say there.</p>
+    <p class="note">Pulse listens everywhere, but a reply can be approved only where the community allows brand replies. Read each community's posted rules and record them here.</p>
     <div id="cm-body" aria-live="polite"></div>
   </section>
 
@@ -463,10 +463,40 @@
 <div class="rw-menu" id="rw-menu" role="dialog" aria-label="Rewrite selection" hidden></div>
 <div class="toasts" id="toasts" role="status" aria-live="polite"></div>
 
-<!-- Operator HQ: record a moderator's answer for one community (admins). -->
+<!-- Pulse queue: record a reply a rep posted by hand (harvey/web/posted.js, R-30). -->
+<dialog class="modal" id="post-dialog" aria-labelledby="post-title" aria-describedby="post-lede">
+  <form class="modal-body" id="post-form" novalidate>
+    <h2 id="post-title">Record what was posted</h2>
+    <p class="lede" id="post-lede">Paste the reply exactly as it went out, even if you changed it or wrote your own. Pulse keeps this record and runs the compliance check on it.</p>
+    <div class="field">
+      <label for="post-text">What was posted</label>
+      <textarea id="post-text" maxlength="10000" required></textarea>
+    </div>
+    <div class="field">
+      <label for="post-who">Who posted it</label>
+      <input type="text" id="post-who" maxlength="100" autocomplete="off" required>
+    </div>
+    <div class="field">
+      <label for="post-when">When it was posted</label>
+      <input type="datetime-local" id="post-when" required>
+      <span class="hint">Your local time.</span>
+    </div>
+    <div class="field">
+      <label for="post-url">Link to the reply (optional)</label>
+      <input type="url" id="post-url" maxlength="2000" autocomplete="off" placeholder="https://">
+    </div>
+    <p class="form-error hidden" id="post-error" role="alert"></p>
+    <div class="modal-actions">
+      <button type="button" class="btn btn-ghost" id="post-cancel">Cancel</button>
+      <button type="submit" class="btn btn-primary" id="post-submit">Save record</button>
+    </div>
+  </form>
+</dialog>
+
+<!-- Operator HQ: record one community's posted rules or a moderator's answer (admins). -->
 <dialog class="modal" id="perm-dialog" aria-labelledby="perm-title" aria-describedby="perm-lede">
   <form class="modal-body" id="perm-form" novalidate>
-    <h2 id="perm-title">Record permission</h2>
+    <h2 id="perm-title">Record community rules</h2>
     <p class="lede" id="perm-lede"></p>
     <div class="field">
       <label for="perm-participation">Can WellPeps post here?</label>
@@ -475,6 +505,7 @@
         <option value="not_allowed">No, brand replies are not allowed</option>
         <option value="unknown">Not sure yet</option>
       </select>
+      <span class="hint">If the rules ban promotion, or say to ask the moderators first, choose No until a moderator says yes.</span>
     </div>
     <div class="field">
       <label for="perm-links">Are links allowed?</label>
@@ -491,12 +522,12 @@
     <div class="field">
       <label for="perm-note">Note (optional)</label>
       <textarea id="perm-note" maxlength="1000"></textarea>
-      <span class="hint">What the moderator said, and when.</span>
+      <span class="hint">Which rule you relied on (for example "Rule 3: no self-promotion"), or what a moderator said and when.</span>
     </div>
     <p class="form-error hidden" id="perm-error" role="alert"></p>
     <div class="modal-actions">
       <button type="button" class="btn btn-ghost" data-action="perm-cancel">Cancel</button>
-      <button type="submit" class="btn btn-primary" id="perm-submit">Save permission</button>
+      <button type="submit" class="btn btn-primary" id="perm-submit">Save rules</button>
     </div>
   </form>
 </dialog>
@@ -561,6 +592,7 @@
 <script src="/static/analytics.js"></script>
 <script src="/static/replies.js"></script>
 <script src="/static/rewrite.js"></script>
+<script src="/static/posted.js"></script>
 <script src="/static/home.js"></script>
 <script src="/static/hq.js"></script>
 <script src="/static/knowledge.js"></script>

@@ -12,6 +12,64 @@ summary for discussion.
 
 ---
 
+## 2026-10-21: Community rules become advisory; record what was posted
+
+### R-30. Pulse drafts in every community; the rep decides and records what they posted (Needs sign-off)
+- **Before:** where a community's rules were unknown, prohibited brand replies
+  or still needed a moderator's permission, approval was refused (a firm
+  block); prohibited and competitor-owned communities got no draft at all, and
+  competitor / switching posts there were held without a draft. "Mark as
+  posted" recorded only that the approved text went out.
+- **After** (`posting_holds: advisory` in config/communities.yaml; set it to
+  `enforced` to go back):
+  - Listening and drafting go ahead in every community. Where the rules aren't
+    cleared, drafts stay educational: no link and no promotion (prohibited
+    communities are drafted like unverified ones).
+  - The queue card shows a "Community rules" warning in plain words (unverified
+    rules, a prohibition, missing permission, or a competitor's own community).
+    Approve and copy stays off until the rep ticks "I've read this. Posting
+    here is my decision." The approval's audit record keeps the warning.
+  - Every card has "Record what was posted" ("I posted my own reply" while in
+    review): the text actually sent, who posted it, when, and an optional link.
+    It goes in the audit log (a second record is a correction, never an
+    overwrite), marks the post posted, and runs the compliance filter on what
+    went out (the "no claim ID" rule is not counted for a rep's own words); a
+    red result is shown on the card for compliance.
+  - Unchanged: safety, clinical and privacy routing; clinical approval for
+    adverse-event and emergency replies; the compliance filter and approved
+    claims for Pulse's own drafts; one reply per thread; no posting by Pulse.
+  - Posts held earlier only for community rules are re-checked when the worker
+    starts (`pulse reapply-holds` does it by hand). A post skipped earlier in a
+    prohibited community is not re-drafted (none in the live data).
+- **Why:** owner, 2026-10-21: "I would like the listening and collection of
+  relevant posts to proceed no matter the community rules", with the rep
+  choosing to post Pulse's reply or their own, and a record of what was sent,
+  by whom and when.
+- **Overrides:** Derek Goldberg's 2026-10-10 decision that explicit community
+  restrictions are firm posting blocks; Compliance Training Module 9 ("WellPeps
+  approval does not override a ... community rule"); the Selection Module's
+  HOLD for unknown rules; the Competitor Protocol's HOLD / DO NOT ENGAGE for
+  community access, and the listen-only rule for competitors' own communities.
+- **Needs sign-off:** Derek Goldberg.
+
+## 2026-10-21: Community rules instead of moderator permission
+
+### R-29. A rep's reading of a community's posted rules clears it for posting (Needs sign-off)
+- **Before:** the Operator HQ form was called "Record permission" and asked
+  what the moderators said, so clearing a community looked like it needed a
+  moderator's OK.
+- **After:** the form is "Record community rules". A WellPeps rep reads each
+  community's posted rules and records them; "Yes, brand replies are allowed"
+  clears the community for approval with no moderator contact. Where the
+  rules ban promotion or say to ask the moderators first, the rep chooses
+  "No" until a moderator says yes. The note records which rule they relied
+  on. No change to Pulse's logic: recorded rules already lifted the posting
+  hold (Selection Module §2 step 2: "until the rules or the moderator's
+  permission are recorded"); explicit restrictions stay firm blocks ([DG]).
+- **Why:** owner decision 2026-10-21, to launch Reddit without waiting on
+  moderator replies for all 34 communities.
+- **Needs sign-off:** Derek Goldberg (owner confirming with him).
+
 ## 2026-10-21: Friendlier drafts, harness on
 
 ### R-28. Warmer drafting voice; the context harness is on (Live)

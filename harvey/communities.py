@@ -16,6 +16,7 @@ and every caller of them, see recorded values without doing I/O.
 """
 
 import logging
+import os
 import re
 import time
 from collections import Counter
@@ -97,6 +98,45 @@ class CommunityStatus:
         return {"id": self.id, "name": self.name, "participation": self.participation,
                 "links_allowed": self.links_allowed, "permission_obtained": self.permission_obtained,
                 "registered": self.registered}
+
+
+# --- Rules mode: enforced or advisory (R-30) ----------------------------------------------------------
+#
+# Owner decision 2026-10-21: in advisory mode Pulse listens and drafts in every
+# community, and a rep may post where the rules are unknown or prohibit brand
+# replies after acknowledging the warning. The registry still says what the
+# rules are (status_for_url); only drafting and the approval gate read them
+# through drafting_status / rules_advisory.
+
+RULES_MODES = ("enforced", "advisory")
+RULES_ENV = "PULSE_COMMUNITY_RULES"
+_HELD = ("prohibited", "with_permission")
+
+
+def rules_advisory() -> bool:
+    """True when community rules are advisory (``posting_holds: advisory`` in
+    config/communities.yaml, or PULSE_COMMUNITY_RULES=advisory)."""
+    raw = os.environ.get(RULES_ENV, "")
+    mode = raw.strip().lower()
+    if not mode:
+        mode = knowledge.community_posting_holds()
+    elif mode not in RULES_MODES:
+        # A typo must never loosen the rules: fail closed.
+        logger.warning("%s=%r is not one of %s; using enforced", RULES_ENV, raw, ", ".join(RULES_MODES))
+        mode = "enforced"
+    return mode == "advisory"
+
+
+def drafting_status(status: "CommunityStatus") -> "CommunityStatus":
+    """The status drafting and the compliance filter work from. In advisory
+    mode a prohibition (or a permission still missing) reads as unverified
+    rules: a cautious, educational draft with no link and no promotion."""
+    if not rules_advisory() or status.participation not in _HELD:
+        return status
+    if status.participation == "with_permission" and status.permission_obtained:
+        return status
+    return CommunityStatus(id=status.id, participation="unknown", links_allowed=None,
+                           permission_obtained=False, registered=status.registered, name=status.name)
 
 
 # --- Recorded permissions (overlay) -------------------------------------------------------------------

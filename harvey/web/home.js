@@ -8,10 +8,12 @@
 // offlineState, ackEscalation, queueRank, TAB_LOAD).
 //
 // Pulse never posts. Approve records the human decision and copies the reply;
-// a WellPeps rep posts it on the platform and marks it posted here. Routes:
+// a WellPeps rep posts it on the platform (Pulse's reply, an edited one or their
+// own words) and records what was actually posted (posted.js). Where community
+// rules are advisory (R-30) the card warns and approval needs a ticked box. Routes:
 //   GET  /api/mentions?status=in_review|approved   the queue
 //   GET  /api/mentions/{id}                        draft, checks, guide, community
-//   POST /api/mentions/{id}/edit | approve | reject | copied | mark-posted
+//   POST /api/mentions/{id}/edit | approve | reject | copied | record-post
 //   GET  /api/urgent, POST /api/escalations/{id}/ack   the safety watch
 //   GET  /api/trends, /api/analytics/replies, /api/spend, /api/harvey/status
 // Same CSP rules as app.js: no inline style or handlers; server values go
@@ -112,7 +114,7 @@ const Home = (() => {
       }
     }
     const held = HELD_PERMISSIONS[sel.public_permission];
-    if (held && sel.posting_hold) {
+    if (held && sel.posting_hold && !(card.d && card.d.community_warning)) {
       const already = ['RULES_UNKNOWN', 'PERMISSION_MISSING', 'PARTICIPATION_PROHIBITED'].includes(sel.reason_code);
       text += ' ' + (already ? '' : escHtml(held) + ' ') + (sel.public_permission === 'prohibited' ? '' :
         'Record the rules or permission in <a href="#communities">Operator HQ › Communities</a> before posting.');
@@ -185,6 +187,38 @@ const Home = (() => {
     return html + '</div>';
   }
 
+  // Advisory community rules (R-30): what the rules say, and the box a rep ticks
+  // before approving. Pulse still drafts here; the decision to post is the rep's.
+  function communityWarnHtml(card) {
+    const warning = card.d && card.d.community_warning;
+    if (!warning || card.phase !== 'review') return '';
+    const id = escHtml(String(card.id));
+    const canApprove = reviewer() || clinicalOnly(card);
+    return '<div class="community-warn" id="cw-' + id + '"><p><b>Community rules:</b> ' + escHtml(warning) + '</p>' +
+      '<p>You can copy Pulse\'s reply or write your own, post it yourself, then record what you posted.</p>' +
+      (canApprove ? '<label class="ack" for="ack-' + id + '"><input type="checkbox" id="ack-' + id + '" data-qinput="ack"' +
+        (card.ack ? ' checked' : '') + '> I\'ve read this. Posting here is my decision.</label>' : '') + '</div>';
+  }
+
+  // The reply as it was actually posted (latest record first).
+  function postedHtml(card) {
+    const m = card.item;
+    const recs = card.records || (card.d && card.d.posted_records) || [];
+    const r = recs[0];
+    const view = extLink((r && r.posted_url) || m.url, 'View on ' + platformName(card) + ' ↗', 'btn btn-ghost') || '';
+    if (!r) return '<div class="act"><span class="status">Posted. Pulse logged it.</span>' + view + '</div>';
+    return '<div class="posted-rec"><p class="label">Posted by ' + escHtml(r.responder) + ' · ' + timeHtml(r.posted_at) + '</p>' +
+      '<p class="txt">' + linkify(r.text) + '</p>' +
+      (r.tier === 'red' ? '<p class="note">The compliance check flagged this reply. It is marked in the audit record; let compliance know.</p>' : '') +
+      '</div><div class="act">' + view + recordButton(card, 'Correct the record', 'btn btn-ghost') + '</div>';
+  }
+
+  function recordButton(card, text, cls) {
+    if (!reviewer() && !clinicalOnly(card)) return '';
+    return '<button type="button" class="' + cls + '" data-qact="record" data-id="' + escHtml(String(card.id)) + '">' +
+      escHtml(text) + '</button>';
+  }
+
   // ── Card rendering ──
 
   // Posting as (Derek Goldberg, Community Agent Voice): the rep posts as themselves
@@ -239,19 +273,14 @@ const Home = (() => {
   function actionsHtml(card) {
     const id = escHtml(String(card.id));
     const m = card.item;
-    if (card.phase === 'posted') {
-      return '<div class="act"><span class="status">Posted by you. Pulse logged it.</span>' +
-        (extLink(m.url, 'View on ' + platformName(card) + ' ↗', 'btn btn-ghost') || '') + '</div>';
-    }
+    if (card.phase === 'posted') return postedHtml(card);
     if (card.phase === 'discarded') return '<div class="act"><span class="status rej">Not posted. Pulse learns from this.</span></div>';
     if (card.phase === 'approved') {
       return '<div class="act"><span class="status">Approved. Paste the reply on ' + escHtml(platformName(card)) +
-        ' as yourself, then mark it posted.</span></div>' +
+        ' yourself, then record what you posted.</span></div>' +
         '<div class="act">' + (extLink(m.url, 'Open the post ↗', 'btn btn-secondary') || '') +
-        '<button type="button" class="btn btn-secondary" data-qact="copy" data-id="' + id + '">Copy reply</button></div>' +
-        (reviewer() ? '<div class="field"><label for="pu-' + id + '">Link to your reply (optional)</label>' +
-          '<input type="url" id="pu-' + id + '" maxlength="2000" autocomplete="off" placeholder="Paste the link once it is live"></div>' +
-          '<div class="act"><button type="button" class="btn btn-primary" data-qact="posted" data-id="' + id + '">Mark as posted</button></div>' : '');
+        '<button type="button" class="btn btn-secondary" data-qact="copy" data-id="' + id + '">Copy reply</button>' +
+        recordButton(card, 'Record what was posted', 'btn btn-primary') + '</div>';
     }
     if (card.mode === 'reject') {
       return '<div class="reject-form"><div class="field"><label for="rr-' + id + '">Why not post this one?</label><select id="rr-' + id + '">' +
@@ -265,11 +294,13 @@ const Home = (() => {
       return '<div class="act"><span class="note">Your role can read the queue but not approve replies.</span></div>';
     }
     const blockers = (card.d.approval && card.d.approval.blockers) || [];
-    const stuck = blockers.length > 0 && !isDirty(card);
+    const needsAck = !!card.d.community_warning && !card.ack;
+    const stuck = (blockers.length > 0 && !isDirty(card)) || needsAck;
     const approveLabel = card.mode === 'edit' || isDirty(card) ? 'Save, approve and copy reply' : 'Approve and copy reply';
     const busy = card.busy ? ' disabled' : '';
     let html = '<div class="act"><button type="button" class="btn btn-primary" data-qact="approve" data-id="' + id + '"' +
-      (stuck || card.busy ? ' disabled' : '') + (stuck ? ' aria-describedby="needs-' + id + '"' : '') + '>' +
+      (stuck || card.busy ? ' disabled' : '') +
+      (stuck ? ' aria-describedby="' + (needsAck ? 'cw-' : 'needs-') + id + '"' : '') + '>' +
       (card.busy ? 'Working…' : approveLabel) + '</button>';
     if (card.mode === 'edit') {
       html += '<button type="button" class="btn btn-secondary" data-qact="save" data-id="' + id + '"' + busy + '>Save draft</button>' +
@@ -284,6 +315,7 @@ const Home = (() => {
     if (reviewer() && card.mode !== 'edit') {
       html += '<button type="button" class="btn btn-ghost" data-qact="reject" data-id="' + id + '"' + busy + '>Don\'t post</button>';
     }
+    if (card.mode !== 'edit') html += recordButton(card, 'I posted my own reply', 'btn btn-ghost');
     return html + '</div>';
   }
 
@@ -305,7 +337,7 @@ const Home = (() => {
       '<p class="quote">“' + escHtml(snippet(body)) + '”</p>' + (card.phase === 'review' ? pickHtml(card) + reliedHtml(card) : '') +
       (done ? '' : note) +
       (card.d ? draftBox(card) : '<div class="draft"><p class="note">Loading the draft…</p></div>') +
-      (card.phase === 'review' ? guideChip(card) : '') + checksHtml(card) + (card.phase === 'review' ? needsHtml(card) : '') +
+      (card.phase === 'review' ? guideChip(card) : '') + checksHtml(card) + (card.phase === 'review' ? communityWarnHtml(card) + needsHtml(card) : '') +
       actionsHtml(card) + '</article>';
   }
 
@@ -559,7 +591,8 @@ const Home = (() => {
     if (isDirty(card)) ok = !!(await saveDraft(card));
     if (ok) {
       const draft = card.d.latest_draft;
-      const r = await send('/api/mentions/' + card.id + '/approve', {draft_id: draft ? draft.id : null});
+      const r = await send('/api/mentions/' + card.id + '/approve',
+        {draft_id: draft ? draft.id : null, acknowledge_community: !!card.ack});
       ok = r.ok;
     }
     card.busy = false;
@@ -578,13 +611,14 @@ const Home = (() => {
       : 'Approved. Copy the reply from the card, then open the post.', 'success');
   }
 
-  async function markPosted(card) {
-    const input = $('pu-' + card.id);
-    const r = await send('/api/mentions/' + card.id + '/mark-posted', {posted_url: input ? input.value.trim() : ''});
-    if (!r.ok) return;
-    card.phase = 'posted';
-    renderCard(card);
-    showToast('Marked as posted.', 'success');
+  function openRecord(card, from) {
+    // Prefilled with the reply as it stands (the approved text, or the draft in review).
+    PostRecord.open({id: card.id, text: card.text}, record => {
+      if (record) card.records = [record, ...(card.records || (card.d && card.d.posted_records) || [])];
+      card.phase = 'posted';
+      card.mode = 'view';
+      renderCard(card, 'a.btn, button.btn');
+    }, from);
   }
 
   async function reject(card) {
@@ -621,7 +655,7 @@ const Home = (() => {
     'reject-go': c => reject(c),
     'as-me': c => { if (setPostingAs(c, 'me')) renderCard(c, '[data-qact="as-me"]'); },
     'as-brand': c => { if (setPostingAs(c, 'brand')) renderCard(c, '[data-qact="as-brand"]'); },
-    posted: c => markPosted(c),
+    record: (c, btn) => openRecord(c, btn),
     copy: c => copyAgain(c),
   };
 
@@ -630,7 +664,7 @@ const Home = (() => {
     if (!btn || btn.disabled) return;
     if (btn.dataset.qact === 'more') { loadMore(); return; }
     const card = cardOf(btn);
-    if (card && QACTIONS[btn.dataset.qact]) QACTIONS[btn.dataset.qact](card);
+    if (card && QACTIONS[btn.dataset.qact]) QACTIONS[btn.dataset.qact](card, btn);
   }
 
   // ── Rewrite host ──
@@ -669,6 +703,13 @@ const Home = (() => {
       const ta = event.target.closest('textarea[data-qinput]');
       const card = ta && cards.get(Number(ta.closest('.item').dataset.id));
       if (card) card.text = ta.value;
+    });
+    q.addEventListener('change', event => {
+      const box = event.target.closest('input[data-qinput="ack"]');
+      const card = box && cards.get(Number(box.closest('.item').dataset.id));
+      if (!card) return;
+      card.ack = box.checked;
+      renderCard(card, '#ack-' + card.id);
     });
     $('watch').addEventListener('click', event => {
       const b = event.target.closest('[data-qact="ack"]');

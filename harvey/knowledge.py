@@ -369,6 +369,11 @@ def _communities(directory: Path) -> tuple[CommunityEntry, ...]:
 
 
 @lru_cache(maxsize=None)
+def _community_posting_holds(directory: Path) -> str:
+    return _load(directory, "communities.yaml", CommunitiesFile).posting_holds
+
+
+@lru_cache(maxsize=None)
 def _insights(directory: Path) -> InsightsFile:
     # A custom config dir (tests, demo copies) may predate insights.yaml:
     # fall back to the bundled file rather than failing every brief.
@@ -409,7 +414,7 @@ def _harness(directory: Path) -> HarnessFile:
 
 _CACHED = (
     _harness, _insights, _competitors, _products, _keywords, _compliance_rules, _claims_file, _claims, _links, _reply_examples,
-    _engagement_guide, _communities, _guides,
+    _engagement_guide, _communities, _community_posting_holds, _guides,
     _competitor_lookup, _product_lookup, _urgent_patterns, _drug_lookup,
     _wellpeps_rx,
 )
@@ -470,6 +475,11 @@ def harness() -> HarnessFile:
 def communities() -> tuple[CommunityEntry, ...]:
     """The community rules registry (config/communities.yaml)."""
     return _communities(config_dir())
+
+
+def community_posting_holds() -> str:
+    """"enforced" or "advisory" (``posting_holds:`` in config/communities.yaml)."""
+    return _community_posting_holds(config_dir())
 
 
 def finalized_keys() -> frozenset[str]:

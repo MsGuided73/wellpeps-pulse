@@ -612,6 +612,10 @@ class CommunityEntry(_Strict):
 
 
 class CommunitiesFile(_Strict):
+    # enforced: unknown / prohibited / competitor communities block approval (firm block).
+    # advisory: Pulse drafts there anyway and a rep may post after acknowledging the
+    # warning (owner decision 2026-10-21, R-30). PULSE_COMMUNITY_RULES overrides it.
+    posting_holds: Literal["enforced", "advisory"] = "enforced"
     communities: list[CommunityEntry] = Field(default_factory=list)
 
 

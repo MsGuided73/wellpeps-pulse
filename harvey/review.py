@@ -34,7 +34,7 @@ import re
 from dataclasses import dataclass
 from datetime import datetime, timezone
 
-from harvey import auth, communities, engagement, explain, knowledge, links, protocol
+from harvey import auth, communities, community_override, engagement, explain, knowledge, links, protocol
 from harvey.compliance import ReplyContext, compliance_filter
 from harvey.config import ESCALATION_KINDS
 from harvey.escalation import SAFETY_WATCH, SEVERE_KINDS, escalate
@@ -310,9 +310,11 @@ async def detail(state, mention_id: int, config, role: str | None = None) -> dic
         esc["breached"] = bool(esc["breached"])
     audit = await state.list_audit(mention_id)
     claim_ids = list(dict.fromkeys(cid for d in drafts for cid in d.claim_ids))
+    # The community warning (advisory rules, R-30) is shown on its own with a
+    # checkbox, so the blockers listed here are everything else.
     blockers = approval_blockers(mention.status, drafts[0] if drafts else None,
                                  mention.platform.value, config, mention=mention, triage=triage, role=role,
-                                 records=await engagement.recent_replies(state))
+                                 records=await engagement.recent_replies(state), acknowledged=True)
     info = await engagement.engagement_info(state, mention, triage, drafts[0] if drafts else None)
     info["handoff"] = _handoff(escalations, triage)
     return {
@@ -328,8 +330,16 @@ async def detail(state, mention_id: int, config, role: str | None = None) -> dic
         "community": community_view(mention.url),
         "approval": {"allowed": not blockers, "blockers": blockers,
                      "clinical_required": engagement.requires_clinical_approval(triage)},
+        "community_warning": community_override.warning(mention),
+        "posted_records": _posted_records(audit),
         "engagement": info,
     }
+
+
+def _posted_records(audit) -> list[dict]:
+    from harvey import posted  # late: posted imports this module
+
+    return posted.records_from(audit)
 
 
 def _handoff(escalations: list[dict], triage: Triage | None) -> dict | None:
@@ -378,7 +388,7 @@ def tracked_link(draft: Draft | None) -> dict | None:
 def _community_context(mention) -> ReplyContext | None:
     if mention is None:
         return None
-    status = communities.status_for_url(mention.url)
+    status = communities.drafting_status(communities.status_for_url(mention.url))
     return ReplyContext(community_id=status.id, participation=status.participation,
                         permission_obtained=status.permission_obtained, links_allowed=status.links_allowed)
 
@@ -397,7 +407,7 @@ def _protocol_blocker(mention, triage: Triage | None) -> str:
     return ""
 
 
-def _selection_blockers(mention, triage: Triage | None, records) -> list[str]:
+def _selection_blockers(mention, triage: Triage | None, records, acknowledged: bool = False) -> list[str]:
     """Selection and permission, recomputed before approval (Selection Module
     V1 §5): the firm posting block (unknown rules, missing moderator
     permission, prohibited participation, a competitor's own community), a
@@ -408,8 +418,13 @@ def _selection_blockers(mention, triage: Triage | None, records) -> list[str]:
         return []
     blockers = []
     hold = engagement.posting_hold(mention)
-    if hold:
+    if hold and not communities.rules_advisory():
         blockers.append(f"posting held: {hold}")
+    elif hold and not acknowledged:
+        # Advisory community rules (owner decision 2026-10-21, R-30): the rep may
+        # post after acknowledging the warning; the approval records it.
+        warning = community_override.warning(mention) or hold
+        blockers.append(f"community rules: {warning} Tick the box to acknowledge this warning before approving.")
     if engagement.about_other_person(triage):
         blockers.append("a medical question or crisis about someone else: no public reply; it is on the safety "
                         "watch (or with the clinical owner when WellPeps is named)")
@@ -422,7 +437,7 @@ def _selection_blockers(mention, triage: Triage | None, records) -> list[str]:
 
 def approval_blockers(status: MentionStatus, draft: Draft | None, platform: str, config, *,
                       mention=None, triage: Triage | None = None, role: str | None = None,
-                      records=None) -> list[str]:
+                      records=None, acknowledged: bool = False) -> list[str]:
     """Human-readable reasons approval is refused; empty when it may proceed.
     ``role``: the approver's role (None = not known yet: the clinical gate is
     reported separately as ``clinical_required``). ``records``: WellPeps' reply
@@ -439,7 +454,7 @@ def approval_blockers(status: MentionStatus, draft: Draft | None, platform: str,
     protocol_block = _protocol_blocker(mention, triage)
     if protocol_block:
         blockers.append(protocol_block)
-    blockers += _selection_blockers(mention, triage, records)
+    blockers += _selection_blockers(mention, triage, records, acknowledged)
     gate = compliance_filter(draft.text, platform, draft.claim_ids, require_publishable=False,
                              context=_community_context(mention))
     if gate.tier == "red":
@@ -536,9 +551,11 @@ async def edit(state, mention_id: int, text: str, claim_ids: list[str], actor: s
 
 
 async def approve(state, mention_id: int, actor: str, config, draft_id: int | None = None,
-                  role: str | None = None) -> None:
+                  role: str | None = None, acknowledge_community: bool = False) -> None:
     """``role``: the approver's role. None counts as a reviewer (may approve
-    routine replies, never a clinical-approval one)."""
+    routine replies, never a clinical-approval one). ``acknowledge_community``:
+    the rep ticked the community-rules warning (advisory mode only; it never
+    lifts the firm block when the rules are enforced)."""
     mention = await _mention_or_404(state, mention_id)
     draft = await state.get_latest_draft(mention_id)
     if draft_id is not None and (draft is None or draft.id != draft_id):
@@ -552,9 +569,11 @@ async def approve(state, mention_id: int, actor: str, config, draft_id: int | No
     if not clinical and not auth.can(role, "review"):
         raise ReviewError(403, "your role does not allow this")
     blockers = approval_blockers(mention.status, draft, mention.platform.value, config, mention=mention,
-                                 triage=triage, role=role, records=await engagement.recent_replies(state))
+                                 triage=triage, role=role, records=await engagement.recent_replies(state),
+                                 acknowledged=bool(acknowledge_community))
     if blockers:
         raise ReviewError(409, "approval refused: " + "; ".join(blockers))
+    community_warning = community_override.warning(mention)
     await _move(state, mention_id, MentionStatus.APPROVED)
     gate = compliance_filter(draft.text, mention.platform.value, draft.claim_ids,
                              require_publishable=config.review.require_publishable_claims)
@@ -563,7 +582,9 @@ async def approve(state, mention_id: int, actor: str, config, draft_id: int | No
         claim_ids=draft.claim_ids, final_text=draft.text, permalink=mention.url,
         filter_result={"ok": gate.ok, "tier": gate.tier, "hits": [h._asdict() for h in gate.hits]},
         verdict={"version": draft.version, "review_verdict": getattr(draft.review_verdict, "value", None),
-                 "role": role, "clinical_approval": clinical},
+                 "role": role, "clinical_approval": clinical,
+                 **({"community_override": {"participation": engagement.public_permission(mention),
+                                            "warning": community_warning}} if community_warning else {})},
     ))
 
 

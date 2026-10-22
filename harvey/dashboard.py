@@ -45,6 +45,7 @@ from harvey import (
     insights,
     knowledge,
     knowledge_docs,
+    posted,
     pulse_store,
     reply_analytics,
     review,
@@ -451,6 +452,8 @@ class EditBody(BaseModel):
 
 class ApproveBody(BaseModel):
     draft_id: int | None = None
+    # The rep ticked the community-rules warning (advisory mode, R-30).
+    acknowledge_community: bool = False
 
 
 class RejectBody(BaseModel):
@@ -458,6 +461,14 @@ class RejectBody(BaseModel):
 
 
 class PostedBody(BaseModel):
+    posted_url: str = Field(default="", max_length=2000)
+
+
+class RecordPostBody(BaseModel):
+    # Limits are checked (with plain messages) in harvey/posted.py; these only cap the body.
+    text: str = Field(max_length=20000)
+    responder: str = Field(max_length=500)
+    posted_at: str = Field(max_length=64)
     posted_url: str = Field(default="", max_length=2000)
 
 
@@ -515,7 +526,8 @@ async def approve_mention(mention_id: int, body: ApproveBody | None = None, user
     if not (auth.can(user["role"], "review") or auth.can(user["role"], "approve_clinical")):
         raise HTTPException(status_code=403, detail="your role does not allow this")
     await review.approve(await get_state(), mention_id, user["email"], config,
-                         draft_id=body.draft_id if body else None, role=user["role"])
+                         draft_id=body.draft_id if body else None, role=user["role"],
+                         acknowledge_community=bool(body and body.acknowledge_community))
     return {"success": True}
 
 
@@ -537,6 +549,17 @@ async def mark_posted(mention_id: int, request: Request, body: PostedBody | None
                              body.posted_url if body else "",
                              allow_sandbox=sandbox.request_allowed(request))
     return {"success": True}
+
+
+@app.post("/api/mentions/{mention_id}/record-post")
+async def record_post(mention_id: int, request: Request, body: RecordPostBody, user: dict = VIEW):
+    """Record a reply a rep posted by hand: the text sent, who, when (harvey/posted.py)."""
+    if not (auth.can(user["role"], "review") or auth.can(user["role"], "approve_clinical")):
+        raise HTTPException(status_code=403, detail="your role does not allow this")
+    record = await posted.record_post(await get_state(), mention_id, text=body.text, responder=body.responder,
+                                      posted_at=body.posted_at, actor=user["email"], posted_url=body.posted_url,
+                                      allow_sandbox=sandbox.request_allowed(request))
+    return {"success": True, "record": record}
 
 
 # ── Review desk APIs: AI rewrite, knowledge documents, community permissions, spend ──

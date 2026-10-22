@@ -27,6 +27,17 @@
 # id: "<platform>:<name>" in lowercase; Reddit names are "r/<subreddit>",
 # Facebook groups "groups/<group id or slug>". Demo (sandbox) communities are
 # added only to the DEMO config copy by scripts/seed_demo.py --sandbox.
+#
+# posting_holds (owner decision 2026-10-21, R-30; needs Derek Goldberg's sign-off):
+#   enforced -> the rules above are a firm block: no approval until they allow it.
+#   advisory -> Pulse listens and drafts everywhere; where the rules are unknown,
+#               prohibit brand replies or need missing permission (or the community is
+#               a competitor's), the review desk warns and approval needs the rep to
+#               tick an acknowledgement. Safety routing, clinical approval, the
+#               compliance filter and approved claims still apply. Drafts there stay
+#               educational: no link, no promotion.
+# The PULSE_COMMUNITY_RULES env var (enforced | advisory) overrides this line.
+posting_holds: advisory
 
 communities:
   - {id: "reddit:r/semaglutide", platform: reddit, name: "r/Semaglutide", brand_participation: unknown, links_allowed: unknown, permission_obtained: false, moderator_contact: "", rules_checked_at: null, notes: "topic weight; from keywords.yaml (role listen)"}

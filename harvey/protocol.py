@@ -148,6 +148,9 @@ class ProtocolInput:
     # Program-status claims (claims.yaml ``program:``) for the programs the post
     # is about: a publishable one partly answers a medication-availability need.
     program_status: tuple[str, ...] = ()
+    # Community rules are advisory (harvey.communities.rules_advisory, R-30): unknown or
+    # prohibited rules no longer stop the sequence; the review desk warns instead.
+    rules_advisory: bool = False
 
 
 def in_scope(triage) -> bool:
@@ -182,7 +185,14 @@ def input_for(triage, community=None, *, prior_clinical_in_thread: bool = False,
         community_id=getattr(community, "id", "") or "",
         prior_clinical_in_thread=prior_clinical_in_thread, injection=injection_attempt(text),
         program_status=_program_status(triage, text),
+        rules_advisory=_rules_advisory(),
     )
+
+
+def _rules_advisory() -> bool:
+    from harvey import communities  # late: communities imports knowledge only
+
+    return communities.rules_advisory()
 
 
 def _program_status(triage, text: str) -> tuple[str, ...]:
@@ -370,20 +380,25 @@ def decide(inp: ProtocolInput, publishable: set[str] | frozenset[str] | None = N
     flags = dict(clinical_flag=bool(clinical) or (safety is not None and safety[0] == ROUTE_HARM),
                  privacy_flag=safety is not None and safety[0] == ROUTE_PRIVACY)
 
+    advisory_note = ()
+    if inp.rules_advisory and inp.participation in ("unknown", "prohibited"):
+        advisory_note = (f"community rules are {inp.participation}: advisory mode, so the sequence continues and "
+                         "the review desk warns; a rep decides whether to post (owner decision 2026-10-21, R-30)",)
+
     def record(decision, reasons, **kw) -> ProtocolRecord:
         silent = decision in NO_DRAFT_DECISIONS or kw.get("route") == ROUTE_LEGAL
         brand = kw.pop("brand_mode", BRAND_NONE if silent else BRAND_AFFILIATION)
-        return ProtocolRecord(decision=decision, rationale=tuple(reasons), brand_mode=brand,
+        return ProtocolRecord(decision=decision, rationale=tuple(reasons) + advisory_note, brand_mode=brand,
                               disclosure="" if silent else _disclosure(inp, decision),
                               **{**common, **flags, **kw})
 
     # Step 1: access and participation. Safety may still be routed internally.
     routed = {"route": safety[0], "safety_routed": True} if safety else {}
-    if inp.participation == "prohibited":
+    if inp.participation == "prohibited" and not inp.rules_advisory:
         return record(DO_NOT_ENGAGE, ["the community prohibits business participation: no public reply, no "
                                       "private contact, no channel workaround ([CP] §4 step 1, Example 15)"],
                       blockers=("community prohibits brand participation",), **routed)
-    if inp.participation == "unknown":
+    if inp.participation == "unknown" and not inp.rules_advisory:
         return record(HOLD, ["community rules or permissions are unknown: hold for human verification; an "
                              "invitation to recommend providers does not override community rules "
                              "([CP] §2, §4 step 1, Example 14)"],
@@ -528,7 +543,7 @@ def applied(triage, mention, *, prior_clinical: bool = False, publishable=None):
     if not applies(triage, mention, prior_clinical):
         return triage.model_copy(update={"protocol_decision": "", "protocol_route": "",
                                          "opportunity_score": None, "protocol": {}})
-    status = communities.status_for_url(mention.url)
+    status = communities.drafting_status(communities.status_for_url(mention.url))
     inp = input_for(triage, status, prior_clinical_in_thread=prior_clinical,
                     text=f"{mention.title}\n{mention.text}")
     record = decide(inp, publishable)

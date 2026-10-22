@@ -127,7 +127,7 @@ def output_problem(passage: str, text: str) -> str:
 
 
 def _context(mention) -> ReplyContext:
-    status = communities.status_for_url(mention.url)
+    status = communities.drafting_status(communities.status_for_url(mention.url))
     return ReplyContext(community_id=status.id, participation=status.participation,
                         permission_obtained=status.permission_obtained, links_allowed=status.links_allowed)
 

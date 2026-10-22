@@ -81,6 +81,13 @@
 .needs { border: 1px solid var(--s-warn-line); background: var(--warn-soft); color: var(--ink); border-radius: var(--r-control); padding: 12px 16px; display: grid; gap: 4px; }
 .needs b { color: var(--warn); }
 .needs ul { margin-left: 20px; }
+/* Advisory community rules (R-30): the rep must read and tick before approving. */
+.community-warn { border: 1px solid var(--s-warn-line); background: var(--warn-soft); color: var(--ink); border-radius: var(--r-control); padding: 12px 16px; display: grid; gap: 8px; max-width: 72ch; }
+.community-warn b { color: var(--warn); font-weight: 600; }
+.community-warn .ack { display: flex; align-items: center; gap: 10px; min-height: 44px; font-weight: 600; cursor: pointer; }
+.community-warn .ack input { width: 20px; height: 20px; flex: none; accent-color: var(--action); }
+.posted-rec { display: grid; gap: 4px; max-width: 72ch; }
+.posted-rec .txt { white-space: pre-wrap; }
 .act { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 .status { font-weight: 600; color: var(--ok); }
 .status::before { content: "\2713\00a0"; }

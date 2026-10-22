@@ -82,7 +82,8 @@ async def replies(state, days: int = DEFAULT_DAYS, now: datetime | None = None) 
     by_link: dict[str, dict] = {}
     rows = []
     for row in await _rows(state):
-        approved_at = _iso(row["approved_at"])
+        # A reply a rep posted in their own words has no approval; count it by when it went out.
+        approved_at = _iso(row["approved_at"]) or _iso(row["posted_at"])
         if not approved_at or approved_at < cutoff:
             continue
         status = row["status"]

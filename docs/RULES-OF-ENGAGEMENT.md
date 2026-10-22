@@ -502,6 +502,19 @@ reclassified; nothing auto-replies.
 `config/communities.yaml` is the registry ([PL] Channel 3: "maintain a
 database of each community's rules"). Every community starts `unknown`.
 
+**Advisory mode (owner decision 2026-10-21, R-30; needs Derek Goldberg's
+sign-off).** The table above is the `enforced` mode. With `posting_holds:
+advisory` (the shipped setting) the rules no longer stop drafting or
+approval: Pulse drafts in every community above, treating `prohibited` and
+missing permission like `unknown` (educational, no link, no promotion, no
+guide); the protocol's community HOLD / DO NOT ENGAGE and the competitor
+community gate are not applied. The queue card shows a "Community rules"
+warning and approval needs the rep's acknowledgement, kept in the approval's
+audit record. A rep may post Pulse's reply or their own and records what was
+posted (text, who, when, link) as a `posted` audit event, checked by the
+compliance filter. Safety, clinical and privacy routing, clinical approval,
+the filter, approved claims and one reply per thread are unchanged.
+
 | Rule status | Effect |
 |---|---|
 | `prohibited` | No reply at all (audit `skipped`, never retried); the protocol says DO NOT ENGAGE; a draft is red (R44). |

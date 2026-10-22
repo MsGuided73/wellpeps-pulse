@@ -33,7 +33,7 @@ import json
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 
-from harvey import communities, escalation, knowledge, promotion, protocol
+from harvey import communities, escalation, knowledge, links, promotion, protocol
 from harvey.compliance import ReplyContext, has_disclosure
 from harvey.models import Category, Mention, Triage
 from harvey.models.knowledge import Situation
@@ -255,7 +255,7 @@ def review_gate(triage: Triage, mention: Mention | None = None) -> str:
     central fact. Benefit is never a reason to engage; it only filters."""
     if not triage.relevant or safety_blocked(triage):
         return ""
-    if competitor_community(mention):
+    if competitor_community(mention) and not communities.rules_advisory():
         return GATE_COMPETITOR_COMMUNITY
     mode = situation_of(triage).reply
     if mode in ("boundary_only", "stop") and triage.subject_type != "wellpeps":
@@ -439,12 +439,18 @@ class ReplyRecord:
         return self.status in APPROVED_STATUSES
 
 
+# The latest draft, or, for a reply a rep recorded (harvey/posted.py, R-30), the
+# text that was actually posted: a reply in the rep's own words has no draft.
 _RECENT_SQL = (
     "SELECT m.id AS mention_id, m.platform, m.url, m.status, m.author_handle, d.text, d.claim_ids_json, "
-    "d.link_json, (SELECT MAX(a.at) FROM audit_log a WHERE a.mention_id = m.id AND a.event = 'approved') "
-    "AS approved_at FROM mentions m JOIN drafts d ON d.mention_id = m.id "
+    "d.link_json, p.final_text AS posted_text, p.claim_ids_json AS posted_claim_ids_json, p.at AS posted_at, "
+    "(SELECT MAX(a.at) FROM audit_log a WHERE a.mention_id = m.id AND a.event = 'approved') "
+    "AS approved_at FROM mentions m LEFT JOIN drafts d ON d.mention_id = m.id "
     "AND d.version = (SELECT MAX(d2.version) FROM drafts d2 WHERE d2.mention_id = m.id) "
-    "WHERE m.status IN ('approved', 'posted', 'drafted', 'in_review') ORDER BY m.id DESC LIMIT ?"
+    "LEFT JOIN audit_log p ON p.id = (SELECT MAX(a2.id) FROM audit_log a2 WHERE a2.mention_id = m.id "
+    "AND a2.event = 'posted') "
+    "WHERE m.status IN ('approved', 'posted', 'drafted', 'in_review') AND (d.id IS NOT NULL OR p.id IS NOT NULL) "
+    "ORDER BY m.id DESC LIMIT ?"
 )
 
 
@@ -476,12 +482,20 @@ async def recent_replies(state, limit: int = RECENT_REPLY_LIMIT) -> list[ReplyRe
             rows = [dict(r) for r in await cursor.fetchall()]
     records = []
     for row in rows:
-        link = _json(row["link_json"], {})
+        posted = row["posted_text"]
+        if posted:
+            # What went out wins over the draft (a rep may have changed it).
+            text, claim_raw = posted, row["posted_claim_ids_json"]
+            link = links.link_record(posted) or {}
+        else:
+            text, claim_raw = row["text"] or "", row["claim_ids_json"]
+            link = _json(row["link_json"], {})
         records.append(ReplyRecord(
             mention_id=int(row["mention_id"]), platform=row["platform"] or "", status=row["status"] or "",
-            author=(row["author_handle"] or "").strip().lower(), text=row["text"] or "",
-            claim_ids=tuple(str(c) for c in _json(row["claim_ids_json"], [])),
-            link_id=str(link.get("id") or ""), approved_at=_parse_ts(row["approved_at"]),
+            author=(row["author_handle"] or "").strip().lower(), text=text,
+            claim_ids=tuple(str(c) for c in _json(claim_raw, [])),
+            link_id=str(link.get("id") or ""),
+            approved_at=_parse_ts(row["approved_at"]) or _parse_ts(row["posted_at"]),
             community=communities.community_id(row["url"]), thread=communities.thread_key(row["url"]),
         ))
     return records
@@ -539,7 +553,9 @@ def repeated_links(records: list[ReplyRecord], community: str, exclude: int | No
 
 
 def context_from(mention: Mention, records: list[ReplyRecord], now: datetime | None = None) -> ReplyContext:
-    status = communities.status_for_url(mention.url)
+    # Drafting and the filter read the rules through drafting_status: in advisory
+    # mode (R-30) a prohibition reads as unverified rules (no link, no promotion).
+    status = communities.drafting_status(communities.status_for_url(mention.url))
     return ReplyContext(
         community_id=status.id, participation=status.participation,
         permission_obtained=status.permission_obtained, links_allowed=status.links_allowed,
@@ -756,9 +772,12 @@ def selection(triage: Triage | None, mention: Mention | None = None) -> Selectio
     if route or (triage.protocol_decision or "") in ("escalate", "clinical_caution") \
             or mode in ("boundary_only", "stop"):
         return Selection(ROUTE, route or "CLINICAL_ROUTE", permission, hold)
-    if competitor_community(mention):
+    # Advisory community rules (R-30): the hold stays on the record as a warning,
+    # but a community's rules no longer SKIP or HOLD the post.
+    advisory = communities.rules_advisory()
+    if competitor_community(mention) and not advisory:
         return Selection(SKIP, "COMPETITOR_COMMUNITY", permission, hold)
-    if permission == "prohibited":
+    if permission == "prohibited" and not advisory:
         return Selection(SKIP, "PARTICIPATION_PROHIBITED", permission, hold)
     decision = triage.protocol_decision or ""
     if decision == "do_not_engage":
@@ -778,7 +797,7 @@ def selection(triage: Triage | None, mention: Mention | None = None) -> Selectio
         return Selection(HOLD, "UNVERIFIED_FACT", permission, hold)
     if not (triage.reply_appropriate or answers_alternatives_request(triage)):
         return Selection(SKIP, "NO_OPENING", permission, hold)
-    if permission in ("unknown", "permission_missing"):
+    if permission in ("unknown", "permission_missing") and not advisory:
         return Selection(HOLD, "RULES_UNKNOWN" if permission == "unknown" else "PERMISSION_MISSING",
                          permission, hold)
     code, priority = _respond_code(triage)

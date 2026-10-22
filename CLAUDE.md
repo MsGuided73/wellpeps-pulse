@@ -178,6 +178,16 @@ deterministic compliance filter (`harvey/compliance.py`) exist.
   `db/postgres/0006_draft_context.sql`): ids and names, never text; the drafted audit event carries the
   ids; the Pulse card shows "Relied on: ...". `scripts/harness_compare.py`: off vs on, DB copy only.
 
+- Advisory community rules + record what was posted (R-30, 2026-10-21; owner decision, needs Derek's
+  sign-off): `posting_holds: advisory|enforced` in config/communities.yaml (env `PULSE_COMMUNITY_RULES`
+  overrides; tests/conftest.py pins `enforced`). `communities.rules_advisory` / `drafting_status`
+  (prohibited / missing permission read as `unknown` for drafting and the filter), `ProtocolInput.rules_advisory`
+  (no community HOLD / DO NOT ENGAGE), `harvey/community_override.py` (`warning`, `reapply` at worker start and
+  `pulse reapply-holds`), `review.approve(acknowledge_community=...)` (recorded as `community_override` on the
+  APPROVED event; never lifts the block when enforced), `harvey/posted.py` + `POST /api/mentions/{id}/record-post`
+  (text, responder, posted_at, link -> POSTED audit event; filter without the CLAIMS rule; status -> posted from
+  triaged / in_review / approved / rejected), UI in `harvey/web/posted.js` and the Pulse card (home.js).
+
 Later phases add everything else. Don't build ahead of the phase you've
 been asked to do.
 

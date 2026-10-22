@@ -118,6 +118,23 @@ def cmd_user_disable(args):
     print(f"\n  User {args.email.strip().lower()} disabled; their sessions are ended.\n")
 
 
+def cmd_reapply_holds(args):
+    """Release triaged posts held only by community rules (advisory mode, R-30)."""
+    from harvey import communities, community_override
+    from harvey.state import StateManager
+
+    async def _reapply():
+        state = StateManager()
+        await state.init_db()
+        if not communities.rules_advisory():
+            print("\n  Community rules are enforced (config/communities.yaml posting_holds): nothing to do.\n")
+            return
+        changed = await community_override.reapply(state)
+        print(f"\n  Re-checked community holds: {changed} triaged post(s) updated.\n")
+
+    run_async(_reapply())
+
+
 def cmd_status(args):
     """Show mention counts by status."""
     from harvey.state import StateManager
@@ -566,6 +583,10 @@ def build_parser() -> argparse.ArgumentParser:
 
     sub = subparsers.add_parser("status", help="Show mention counts by status")
     sub.set_defaults(func=cmd_status)
+
+    sub = subparsers.add_parser("reapply-holds",
+                                help="Release posts held only by community rules (advisory mode; no Claude call)")
+    sub.set_defaults(func=cmd_reapply_holds)
 
     sub = subparsers.add_parser("ingest", help="Run collectors once and store new mentions")
     sub.add_argument(

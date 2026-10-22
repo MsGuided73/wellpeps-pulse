@@ -22,6 +22,7 @@ from datetime import datetime, time, timedelta
 
 import pytz
 
+from harvey import community_override
 from harvey.agents.drafter import Drafter
 from harvey.agents.reviewer import Reviewer
 from harvey.agents.safety_screen import SafetyScreen
@@ -230,6 +231,12 @@ async def heartbeat(stop_event: asyncio.Event | None = None):
 
     await state.init_db()
     logger.info(f"Database ready at {state.location}.")
+    # Advisory community rules (R-30): release posts held only by community rules
+    # when the worker starts (a mode change needs a restart anyway). Never fatal.
+    try:
+        await community_override.reapply(state)
+    except Exception as exc:
+        logger.warning("could not re-check community holds (%s)", type(exc).__name__)
 
     max_calls = max(int(200 * (config.usage.max_daily_claude_percent / 100)), 1)
     consecutive_errors = 0

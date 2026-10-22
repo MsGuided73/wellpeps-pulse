@@ -42,6 +42,9 @@ _PINNED_BLANK = (
 def _sqlite_by_default(monkeypatch):
     for name in _PINNED_BLANK:
         monkeypatch.setenv(name, "")
+    # Community rules stay a firm block in tests unless a test opts into the
+    # advisory mode the shipped config uses (tests/test_community_override.py).
+    monkeypatch.setenv("PULSE_COMMUNITY_RULES", "enforced")
 
 
 @pytest.fixture(autouse=True)
