@@ -125,7 +125,8 @@ def test_conversion_claims_exist_pending_and_cite_site_sources():
     assert by_id["CLM-PRICE-FOLLOWUP"].text == (
         "Follow-up care with a licensed clinician is included in the one monthly price.")
     assert by_id["CLM-PRICE-FOLLOWUP"].products == ["*"]
-    assert "if prescribed" in by_id["CLM-PRICE-ALLIN"].text
+    # The medication stays conditional ("if prescribed" / the owner's "if it's prescribed", 2026-10-22).
+    assert re.search(r"if (?:it[’']s )?prescribed", by_id["CLM-PRICE-ALLIN"].text)
     # The kept claims are still there.
     assert {"CLM-R3-DISCLOSURE", "CLM-R22-PROVIDER-DETERMINES"} <= set(by_id)
 

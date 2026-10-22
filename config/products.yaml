@@ -20,7 +20,7 @@
 # price", never "all-inclusive" or "everything included" (labs are extra; filter rule R49).
 pricing:
   model: one_monthly_price
-  summary: "One monthly price per treatment. No membership fee."
+  summary: "One monthly price per treatment; it does not change as the dose goes up. No membership fee."
   includes: [the provider visit, ongoing support through the patient portal, the medication if prescribed, shipping]
   not_included: ["lab tests: optional for most treatments, required only for hormone therapy; offered at low cost"]
 

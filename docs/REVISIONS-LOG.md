@@ -93,11 +93,7 @@ summary for discussion.
 - **Still open:** Rule R49 keeps
   blocking "all inclusive" / "everything included", which the owner agrees with.
   Shipping is included (owner, 2026-10-22). The pending pricing claim
-  CLM-PRICE-ALLIN is redrafted from the owner's facts and waits for Derek: "One
-  monthly price covers the provider visit, ongoing support through the patient
-  portal, the medication if prescribed, and shipping. There's no membership fee. Lab
-  tests are extra: optional for most treatments, required only for hormone therapy,
-  and offered at low cost."
+  CLM-PRICE-ALLIN carries the owner's chosen wording and waits for Derek: "One monthly price covers the provider visit, ongoing support through the patient portal, the medication if it’s prescribed, and shipping. The price doesn’t change as your dose goes up, and there’s no membership fee. The one thing that isn’t included is lab testing. Most treatments don’t need labs to get started, but you can order them at a reduced rate if you want them. Hormone replacement therapy is the only one that requires labs first."
 - **Unchanged:** listening words and compliance patterns that mention "membership"
   (people still discuss other companies' memberships).
 

@@ -187,14 +187,14 @@ claims:
     note: "Superseded for drafting (2026-10-07) by the Live Reference's approved CLM-LR-02-ONGOING-SUPPORT; see docs/RULES-OF-ENGAGEMENT.md."
 
   - id: CLM-PRICE-ALLIN
-    text: "One monthly price covers the provider visit, ongoing support through the patient portal, the medication if prescribed, and shipping. There's no membership fee. Lab tests are extra: optional for most treatments, required only for hormone therapy, and offered at low cost."
+    text: "One monthly price covers the provider visit, ongoing support through the patient portal, the medication if it’s prescribed, and shipping. The price doesn’t change as your dose goes up, and there’s no membership fee. The one thing that isn’t included is lab testing. Most treatments don’t need labs to get started, but you can order them at a reduced rate if you want them. Hormone replacement therapy is the only one that requires labs first."
     products: ["*"]
     tier: yellow
     approved_by: PENDING
     approved_at: null
     expires: null
     promotional: true
-    source: "C:/dev/W/wellpeps-site/src/config.ts PRICE_NOTE (first sentence; 'your' -> 'the' because R31 blocks 'your care team'; the lab-billing and pay-nothing-unless-prescribed sentences are left out). CHECK: the owner confirmed on 2026-10-21 that the one monthly price covers the provider visit, ongoing support through the patient portal and the prescribed medication, with no membership fee; lab tests are extra (optional for most treatments, required only for hormone therapy) and low cost; shipping is included (owner, 2026-10-22). Owner prefers 'one monthly price' over 'all-inclusive'. Text redrafted 2026-10-22 from the owner's facts; still PENDING Derek"
+    source: "C:/dev/W/wellpeps-site/src/config.ts PRICE_NOTE (first sentence; 'your' -> 'the' because R31 blocks 'your care team'; the lab-billing and pay-nothing-unless-prescribed sentences are left out). CHECK: the owner confirmed on 2026-10-21 that the one monthly price covers the provider visit, ongoing support through the patient portal and the prescribed medication, with no membership fee; lab tests are extra (optional for most treatments, required only for hormone therapy) and low cost; shipping is included (owner, 2026-10-22). Owner prefers 'one monthly price' over 'all-inclusive'. Text is the owner's chosen wording (2026-10-22); still PENDING Derek. The hormone replacement therapy sentence applies once that program is live (it shows 'Notify Me' today)"
     finalize: true
     finalize_key: "pricing"
     finalize_missing: "Live Reference §6-7: standard shipping inclusion is CONFIRM and 'One Simple Price. Everything Included.' needs operational verification (Protocol §6: never assume 'everything included')"
