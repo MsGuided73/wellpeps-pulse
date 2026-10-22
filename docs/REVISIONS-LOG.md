@@ -12,6 +12,22 @@ summary for discussion.
 
 ---
 
+## 2026-10-22: Pricing wording approved
+
+### R-39. The pricing statement and the cost-comparison checklist are approved (Live; Derek's decision)
+- Derek Goldberg approved both (relayed by the owner, 2026-10-22):
+  - CLM-PRICE-ALLIN: "One monthly price covers the provider visit, ongoing support
+    through the patient portal, the medication if it's prescribed, and shipping. The
+    price doesn't change as your dose goes up, and there's no membership fee. The one
+    thing that isn't included is lab testing. ..." Its FINALIZE hold is lifted: the
+    owner confirmed shipping is included. "All-inclusive" / "everything included"
+    stay blocked (R49).
+  - CLM-CHECKLIST-COST-COMPARE: "When comparing, ask each provider whether the price
+    changes as the dose goes up, whether there's a separate program or membership fee,
+    whether follow-up and shipping are included, and whether labs cost extra."
+- Effect: price and cost-comparison posts can now be answered with approved wording
+  instead of stopping at "needs a human".
+
 ## 2026-10-22: Every library document as Markdown; harness picks sharpened
 
 ### R-38. Markdown by default and a sharper context harness (Live; the Markdown versions need approval)

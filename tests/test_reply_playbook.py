@@ -118,6 +118,8 @@ def test_conversion_claims_exist_pending_and_cite_site_sources():
         claim = by_id[cid]
         if cid in guide_ids:   # approved by WellPeps through the user's instruction (2026-10-07)
             assert claim.approved_by.startswith("WellPeps via user instruction") and claim.approved_at
+        elif cid == "CLM-PRICE-ALLIN":   # approved by Derek (relayed by the owner, 2026-10-22)
+            assert claim.approved_by.startswith("Derek Goldberg") and str(claim.approved_at) == "2026-10-22"
         else:
             assert claim.approved_by == "PENDING" and claim.approved_at is None
         assert "wellpeps-site/src/" in claim.source

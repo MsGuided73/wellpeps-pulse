@@ -18,10 +18,8 @@ pins the chosen guide chapter, skips admin/other-platform sections, 12,000 chara
 3. Start the worker (Operator HQ -> Start) for daily collection and drafting.
 
 **Waiting on Derek**
-1. Pricing statement CLM-PRICE-ALLIN and the comparison checklist CLM-CHECKLIST-COST-COMPARE (most price replies
-   are held or rejected until one is approved).
-2. Answer-first-then-boundary (`switching_protocol.answer_first_boundary`).
-3. Advisory community rules (R-30).
+1. Advisory community rules (R-30). (Approved 2026-10-22: answer-first-then-boundary, the pricing statement and the
+   cost-comparison checklist, R-37 / R-39.)
 
 **Next build steps** (memo "How Pulse's context harness works", Claude Docs): a situation playbook for the harness;
 respect the document priority order and cap sections per document; learn from the review desk (Proposal E); extend

@@ -22,7 +22,8 @@ USER_APPROVED_GUIDE_CLAIMS = {"CLM-EDU-GUIDES", "CLM-EDU-GUIDE-GLP-1-WEIGHT-LOSS
 # Signed off by Derek Goldberg (Community Agent Voice) and confirmed by the owner (2026-10-20).
 OWNER_APPROVED_CLAIMS = {"CLM-CAV-01-PATIENT-DASHBOARD"}
 # Derek's sign-offs relayed by the owner after 2026-10-20.
-RELAYED_APPROVALS = {"CLM-STATUS-HAIR": "2026-10-22"}
+RELAYED_APPROVALS = {"CLM-STATUS-HAIR": "2026-10-22", "CLM-PRICE-ALLIN": "2026-10-22",
+                     "CLM-CHECKLIST-COST-COMPARE": "2026-10-22"}
 
 # --- Leak guard ------------------------------------------------------------
 # products.md in the registry holds internal cost data from the pricing

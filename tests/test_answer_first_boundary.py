@@ -98,11 +98,14 @@ def test_on_a_post_without_the_clinical_tag_is_unchanged(monkeypatch, switched_o
 # --- The cost-comparison checklist (memo item 3): added, pending Derek ----------------------------------
 
 
-def test_the_cost_comparison_checklist_waits_for_derek():
-    claim = knowledge.claims_by_id()["CLM-CHECKLIST-COST-COMPARE"]
-    assert claim.approved_by == "PENDING" and claim.approved_at is None
+def test_the_cost_comparison_checklist_and_pricing_statement_are_approved():
+    by_id = knowledge.claims_by_id()
+    claim = by_id["CLM-CHECKLIST-COST-COMPARE"]
+    assert claim.approved_by.startswith("Derek Goldberg") and str(claim.approved_at) == "2026-10-22"
     assert "price changes as the dose goes up" in claim.text and "labs cost extra" in claim.text
-    assert "CLM-CHECKLIST-COST-COMPARE" not in knowledge.publishable_claim_ids()
+    publishable = knowledge.publishable_claim_ids()
+    assert {"CLM-CHECKLIST-COST-COMPARE", "CLM-PRICE-ALLIN"} <= publishable
+    assert not by_id["CLM-PRICE-ALLIN"].finalize
 
 
 @pytest.mark.parametrize("intents", [
