@@ -530,7 +530,7 @@ class SwitchingProtocol(_Strict):
     # Untrusted instructions inside a post (Protocol §2, Example 24).
     injection_patterns: list[Regex] = Field(default_factory=list)
     # Answer first, then the boundary, for mixed posts (memo to Derek 2026-10-22, item 2).
-    # Off until Derek approves; harvey/protocol.py answer_first_applies.
+    # Derek approved it 2026-10-22 (on in config/engagement_guide.yaml); harvey/protocol.py answer_first_applies.
     answer_first_boundary: bool = False
     boundary_claim: str = "CLM-AMG-APPX-WHICH-MEDICATION"
 

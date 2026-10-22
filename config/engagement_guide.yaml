@@ -630,8 +630,8 @@ switching_protocol:
   # with a real general question and only a minor personal element (no symptoms or harm,
   # not a dose / labs / eligibility / medication question) is answered, plus ONE approved
   # boundary sentence (boundary_claim). Operations Manual §18.1; Compliance Training,
-  # General-to-Individual Boundary. OFF until Derek approves it; then set true.
-  answer_first_boundary: false
+  # General-to-Individual Boundary. Approved by Derek Goldberg (relayed by the owner, 2026-10-22): ON.
+  answer_first_boundary: true
   boundary_claim: CLM-AMG-APPX-WHICH-MEDICATION
   # Scope: a named competitor, or any of these (Protocol title: competitor
   # mentions, dissatisfaction and provider switching). Instructions inside a

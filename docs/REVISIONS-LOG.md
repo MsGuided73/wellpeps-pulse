@@ -39,7 +39,7 @@ summary for discussion.
 
 ## 2026-10-22: Price and pharmacy questions get answers, not the clinical boundary
 
-### R-37. Fixes from the memo to Derek (items 1 and 4 Live; item 2 built, OFF; item 3 pending Derek)
+### R-37. Fixes from the memo to Derek (items 1, 2 and 4 Live; item 3 pending Derek)
 - **Why:** in the 2026-10-22 fresh run, three ordinary questions (what to check when
   picking an online provider, which pharmacies compound, whether your own doctor's
   prescription gets compounded pricing) got only the clinical boundary reply
@@ -52,7 +52,7 @@ summary for discussion.
   starting/stopping/switching, which medication suits them, their labs, medical
   eligibility). Mentioning their insurance, prescription or doctor while asking
   about price, pharmacies, process or providers does not count (prompts/triage.md).
-- **2. Answer first, then the boundary (built, OFF until Derek approves):**
+- **2. Answer first, then the boundary (Live: Derek approved, relayed by the owner 2026-10-22):**
   `switching_protocol.answer_first_boundary` in config/engagement_guide.yaml. When
   on, a mixed post (a general question, no symptoms or harm, not a dose / labs /
   eligibility / medication question) is answered, plus one approved boundary

@@ -318,9 +318,9 @@ def _safety_route(inp: ProtocolInput) -> tuple[str, str] | None:
     return None
 
 
-# A real general question in the post (answer first, then the boundary).
-GENERAL_QUESTION_INTENTS = frozenset({"general_information", "comparison_request", "wellpeps_question",
-                                      "alternatives_requested"})
+# A real general question in the post (answer first, then the boundary). An alternatives request is
+# never one: a clinical concern plus "who should I switch to?" stays CLINICAL CAUTION ([CP] §14).
+GENERAL_QUESTION_INTENTS = frozenset({"general_information", "comparison_request", "wellpeps_question"})
 
 
 def mixed_post(intents, subtype: str = "", category: str = "") -> bool:
@@ -329,7 +329,7 @@ def mixed_post(intents, subtype: str = "", category: str = "") -> bool:
     eligibility, medication change, symptoms, results, safety) or an adverse event."""
     intents = set(intents or ())
     return ("individual_clinical_concern" in intents and bool(intents & GENERAL_QUESTION_INTENTS)
-            and "possible_serious_harm" not in intents
+            and "possible_serious_harm" not in intents and "alternatives_requested" not in intents
             and (subtype or "") not in set(config().clinical_subtypes)
             and (category or "") != "adverse_event")
 

@@ -198,7 +198,7 @@ deterministic compliance filter (`harvey/compliance.py`) exist.
   `triaged`, blocked by the safety markers / review gates). Posts about WellPeps still page the clinical owner.
 
 - Memo fixes (R-37, 2026-10-22): narrower `individual_clinical_concern` in prompts/triage.md; answer-first-then-
-  boundary for mixed posts (`switching_protocol.answer_first_boundary`, OFF until Derek approves;
+  boundary for mixed posts (`switching_protocol.answer_first_boundary`, ON: Derek approved 2026-10-22;
   `protocol.mixed_post` / `answer_first_applies`, guidance note + `boundary_claim`); pending claim
   CLM-CHECKLIST-COST-COMPARE; regression set `tests/fixtures/regression_posts.yaml` + `harvey/regression.py` +
   `scripts/regression_check.py` (real triage, subscription only): run it before and after prompt/model changes.

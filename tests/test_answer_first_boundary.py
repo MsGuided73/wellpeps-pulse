@@ -1,7 +1,7 @@
 """Answer first, then the boundary, for mixed posts (memo to Derek, 2026-10-22, item 2).
 
-Built but switched OFF (``switching_protocol.answer_first_boundary: false`` in
-config/engagement_guide.yaml) until Derek approves it. When on: a post with a
+Switched ON (``switching_protocol.answer_first_boundary: true`` in
+config/engagement_guide.yaml): Derek approved it, relayed by the owner 2026-10-22. A post with a
 real general question and only a minor personal element (no symptoms, no
 harm, not a dose / labs / eligibility / medication question) is answered, and
 the draft adds ONE approved boundary sentence for the personal part. Posts
@@ -42,11 +42,17 @@ def switched_on(monkeypatch):
     monkeypatch.setattr(protocol, "config", lambda: original().model_copy(update={"answer_first_boundary": True}))
 
 
-def test_it_ships_switched_off():
-    assert knowledge.engagement_guide().switching_protocol.answer_first_boundary is False
+@pytest.fixture
+def switched_off(monkeypatch):
+    original = protocol.config
+    monkeypatch.setattr(protocol, "config", lambda: original().model_copy(update={"answer_first_boundary": False}))
 
 
-def test_off_a_mixed_post_still_gets_the_boundary_only_reply(monkeypatch):
+def test_it_is_switched_on():
+    assert knowledge.engagement_guide().switching_protocol.answer_first_boundary is True
+
+
+def test_off_a_mixed_post_still_gets_the_boundary_only_reply(monkeypatch, switched_off):
     allow_community(monkeypatch)
     triage = protocol.applied(_t(), _m())
     assert triage.protocol_decision == protocol.CLINICAL_CAUTION
@@ -97,3 +103,17 @@ def test_the_cost_comparison_checklist_waits_for_derek():
     assert claim.approved_by == "PENDING" and claim.approved_at is None
     assert "price changes as the dose goes up" in claim.text and "labs cost extra" in claim.text
     assert "CLM-CHECKLIST-COST-COMPARE" not in knowledge.publishable_claim_ids()
+
+
+@pytest.mark.parametrize("intents", [
+    ["alternatives_requested", "individual_clinical_concern"],
+    ["alternatives_requested", "general_information", "individual_clinical_concern"],
+])
+def test_a_clinical_concern_with_an_alternatives_request_keeps_the_boundary(intents):
+    """[CP] §14 Expected override: symptoms or a clinical concern plus "who should I switch to?" never gets a
+    switching draft, with the switch on."""
+    inp = protocol.ProtocolInput(category="question", competitor="Ro", participation="allowed",
+                                 intents=frozenset(intents), unmet_need="continuity", need_clarity=2,
+                                 useful_contribution=2)
+    assert protocol.config().answer_first_boundary is True
+    assert protocol.decide(inp).decision == protocol.CLINICAL_CAUTION
