@@ -309,8 +309,9 @@ def _merged(cid: str, entry: CommunityEntry | None, rec: Recorded | None) -> Com
         update["moderator_contact"] = rec.moderator_contact
     if entry is not None:
         return entry.model_copy(update=update)
-    return CommunityEntry.model_construct(id=cid, platform=cid.split(":", 1)[0], name=_name_of(cid),
-                                          moderator_contact="", notes="", demo=False, **update)
+    fields = {"id": cid, "platform": cid.split(":", 1)[0], "name": _name_of(cid), "moderator_contact": "",
+              "notes": "", "demo": False, **update}     # a recorded moderator contact wins over the default
+    return CommunityEntry.model_construct(**fields)
 
 
 def lookup(cid: str) -> CommunityEntry | None:
@@ -353,16 +354,107 @@ def _outward_links(value) -> str:
     return "true" if value is True else "false" if value is False else "unknown"
 
 
-async def mentions_by_community(state, days: int = 7) -> Counter:
-    """Mentions collected in the last ``days`` days, per community id."""
-    cutoff = sql_utc(datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=days))
+async def mentions_by_community(state, days: int | None = 7) -> Counter:
+    """Mentions collected in the last ``days`` days (None = all time), per community id."""
+    sql, params = "SELECT url FROM mentions", ()
+    if days is not None:
+        cutoff = sql_utc(datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=days))
+        sql, params = sql + " WHERE collected_at >= ?", (cutoff,)
     async with state.connect() as db:
-        async with db.execute("SELECT url FROM mentions WHERE collected_at >= ?", (cutoff,)) as cursor:
+        async with db.execute(sql, params) as cursor:
             urls = [r[0] for r in await cursor.fetchall()]
     return Counter(cid for cid in (community_id(u) for u in urls) if cid)
 
 
-def view(cid: str, mentions_7d: int = 0) -> dict | None:
+# --- The Communities page: group links, clearance checklist, what is blocked ----------------------------
+
+
+def community_url(cid: str) -> str:
+    """The group's own page ("" when Pulse can't build one)."""
+    platform, _, name = (cid or "").partition(":")
+    if platform == "reddit" and name.startswith("r/") and len(name) > 2:
+        return f"https://www.reddit.com/{name}/"
+    if platform == "facebook" and name.startswith("groups/") and len(name) > 7:
+        return f"https://www.facebook.com/{name}/"
+    return ""
+
+
+def competitor_of(cid: str) -> str:
+    """The competitor whose own community this is ("" = none), from the insights community index."""
+    from harvey import insights  # late: insights imports this module
+
+    name = (cid or "").partition(":")[2]
+    key = insights.normalize_name(name.split("/", 1)[-1])
+    return insights.community_index().get(key, "") if key else ""
+
+
+GUIDE_BLOCK = "No Smart Patient's Guide in replies, not even by name"
+
+
+def _blocks(participation: str, links: str, competitor: str, advisory: bool) -> list[str]:
+    blocks: list[str] = []
+    if participation != "allowed":
+        if participation == "not_allowed":
+            blocks.append("The rules don't allow brand replies here")
+        blocks += [GUIDE_BLOCK, "No links in replies", "Drafts stay educational: no promotion"]
+        blocks.append("A rep must acknowledge the community warning before approving a reply" if advisory
+                      else "Replies here can't be approved")
+    elif links == "false":
+        blocks.append("No links: the guide is named without a link")
+    elif links != "true":
+        blocks.append("No links until you record whether links are allowed: the guide is named without a link")
+    if competitor:
+        blocks.append(f"This is {competitor}'s own community: "
+                      + ("a rep must acknowledge it before approving a reply" if advisory
+                         else "listen only, no replies"))
+    return blocks
+
+
+def clearance(row: dict) -> dict:
+    """The clearance checklist and, in plain words, what stays blocked until the community is cleared.
+
+    ``row`` carries the listing's outward values: brand_participation (allowed | not_allowed | unknown),
+    links_allowed ("true" | "false" | "unknown"), rules_checked_at, moderator_contact and competitor.
+    Item states: done | todo | blocked | optional. Status: cleared | partial | not_checked | not_allowed."""
+    participation = row.get("brand_participation") or "unknown"
+    links = row.get("links_allowed") or "unknown"
+    checked = bool(row.get("rules_checked_at"))
+    items = [
+        {"key": "rules_read", "label": "Read the community's posted rules",
+         "state": "done" if checked else "todo"},
+        {"key": "brand_replies", "label": "Brand replies allowed (or a moderator said yes)",
+         "state": {"allowed": "done", "not_allowed": "blocked"}.get(participation, "todo")},
+        {"key": "links", "label": "Know whether links are allowed",
+         "state": "done" if links in ("true", "false") else "todo"},
+        {"key": "moderator", "label": "Moderator contact on file (optional)",
+         "state": "done" if (row.get("moderator_contact") or "").strip() else "optional"},
+    ]
+    if participation == "not_allowed":
+        status = "not_allowed"
+    elif participation == "allowed" and links in ("true", "false"):
+        status = "cleared"
+    elif participation == "unknown" and not checked:
+        status = "not_checked"
+    else:
+        status = "partial"
+    return {"status": status, "items": items,
+            "blocks": _blocks(participation, links, row.get("competitor") or "", rules_advisory())}
+
+
+def _seen_view(cid: str, mentions_7d: int, mentions_total: int) -> dict:
+    """A community Pulse collected from that neither the registry nor a record knows yet."""
+    row = {
+        "id": cid, "platform": cid.split(":", 1)[0], "name": _name_of(cid), "topic": "",
+        "brand_participation": "unknown", "links_allowed": "unknown", "permission_obtained": False,
+        "rules_checked_at": None, "source": "seen", "mentions_7d": int(mentions_7d),
+        "mentions_total": int(mentions_total), "moderator_contact": "", "note": "", "recorded_by": "",
+        "recorded_at": None, "participation": "unknown", "url": community_url(cid), "competitor": competitor_of(cid),
+    }
+    row["clearance"] = clearance(row)
+    return row
+
+
+def view(cid: str, mentions_7d: int = 0, mentions_total: int | None = None) -> dict | None:
     """One community as the dashboard shows it (None when neither config nor a record knows it)."""
     cid = cid.lower()
     rec = _overlay.get(cid)
@@ -371,7 +463,7 @@ def view(cid: str, mentions_7d: int = 0) -> dict | None:
         return None
     configured = next((c for c in knowledge.communities() if c.id == cid), None)
     topic = _TOPIC.search(configured.notes or "") if configured is not None else None   # the YAML's, never the record's
-    return {
+    row = {
         "id": cid, "platform": entry.platform, "name": entry.name, "topic": topic.group(1) if topic else "",
         "brand_participation": _outward_participation(entry, rec),
         "links_allowed": _outward_links(entry.links_allowed),
@@ -385,13 +477,22 @@ def view(cid: str, mentions_7d: int = 0) -> dict | None:
         "recorded_by": rec.recorded_by if rec is not None else "",
         "recorded_at": rec.recorded_at if rec is not None else None,
         "participation": entry.brand_participation,
+        "mentions_total": int(mentions_total if mentions_total is not None else mentions_7d),
+        "url": community_url(cid),
+        "competitor": competitor_of(cid),
     }
+    row["clearance"] = clearance(row)
+    return row
 
 
 async def listing(state) -> list[dict]:
-    """Every configured or recorded community, busiest first."""
+    """Every community Pulse knows of (configured, recorded, or seen in collected posts), busiest first."""
     await refresh_overlay(state)
-    counts = await mentions_by_community(state)
-    ids = list(dict.fromkeys([c.id for c in knowledge.communities()] + sorted(_overlay)))
-    rows = [v for v in (view(cid, counts.get(cid, 0)) for cid in ids) if v is not None]
-    return sorted(rows, key=lambda r: (-r["mentions_7d"], r["id"]))
+    recent = await mentions_by_community(state)
+    total = await mentions_by_community(state, days=None)
+    ids = list(dict.fromkeys([c.id for c in knowledge.communities()] + sorted(_overlay) + sorted(total)))
+    rows = []
+    for cid in ids:
+        row = view(cid, recent.get(cid, 0), total.get(cid, 0))
+        rows.append(row if row is not None else _seen_view(cid, recent.get(cid, 0), total.get(cid, 0)))
+    return sorted(rows, key=lambda r: (-r["mentions_total"], -r["mentions_7d"], r["id"]))

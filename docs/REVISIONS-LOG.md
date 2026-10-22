@@ -12,6 +12,33 @@ summary for discussion.
 
 ---
 
+## 2026-10-22: Guide pages live; the Communities page
+
+### R-35. A Communities page: every community, its clearance checklist and what is blocked (Live)
+- **Why:** none of the 34 starting communities had verified rules, so no reply
+  anywhere could name a Smart Patient's Guide (Competitor Protocol §2: unknown
+  rules mean no company resource). The owner asked for one place to see every
+  community Pulse collects from and clear them.
+- **After:** a fourth main tab, Communities (`harvey/web/communities.js`,
+  `GET /api/communities`). Every community Pulse knows of, including ones seen
+  only in collected posts, with a link to the group, posts collected, a clearance
+  checklist (rules read, brand replies allowed, links allowed, moderator contact)
+  and, in plain words, what stays blocked until it is cleared (no guide, no links,
+  rep acknowledgement, a competitor's own community). Admins record a community's
+  rules from its card ("Update rules"); the record wins over the starting list, as
+  before. Operator HQ keeps a one-line summary with a link.
+- **Bug fixed:** recording rules with a moderator contact for a community that was
+  not on the starting list crashed.
+
+### R-34. The Smart Patient's Guide pages are live (Live)
+- All six guide URLs return their own guide page on wellpeps.com (checked
+  2026-10-22 with `pulse links check`), so `config/links.yaml` marks them
+  `live: true`: a reply that carries a guide link is no longer held at approval
+  for "link not live yet". Where a community's rules are unverified, the guide is
+  still left out (R-35 is how to clear them).
+- Shipping is included in the one monthly price (owner, 2026-10-22); the pending
+  pricing claim CLM-PRICE-ALLIN is redrafted from the owner's facts for Derek.
+
 ## 2026-10-22: Product list matches wellpeps.com; no membership fee
 
 ### R-33. Two pre-certification phrase rules dropped (Live; owner decision)
@@ -43,12 +70,13 @@ summary for discussion.
   available now." and is approved; filter rule R21 no longer blocks saying so (its
   regrowth-promise pattern stays); the hair reply example answers "Yes".
 - **Still open:** Rule R49 keeps
-  blocking "all inclusive" / "everything included", which the owner agrees with. The
-  pending pricing claim CLM-PRICE-ALLIN mentions standard shipping, which the owner
-  has not confirmed; suggested wording for Derek: "One monthly price covers the
-  provider visit, ongoing support through the patient portal, and the medication if
-  prescribed. No membership fee. Lab tests are extra: optional for most treatments,
-  required only for hormone therapy, and offered at low cost."
+  blocking "all inclusive" / "everything included", which the owner agrees with.
+  Shipping is included (owner, 2026-10-22). The pending pricing claim
+  CLM-PRICE-ALLIN is redrafted from the owner's facts and waits for Derek: "One
+  monthly price covers the provider visit, ongoing support through the patient
+  portal, the medication if prescribed, and shipping. There's no membership fee. Lab
+  tests are extra: optional for most treatments, required only for hormone therapy,
+  and offered at low cost."
 - **Unchanged:** listening words and compliance patterns that mention "membership"
   (people still discuss other companies' memberships).
 

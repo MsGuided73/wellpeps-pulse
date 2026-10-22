@@ -208,17 +208,17 @@ function can(permission) {
 // desk takes #review?id=N. Slack links use #escalation-<id> (Urgent) and
 // #pulse-brief-<id> (Briefs).
 
-const MAIN_VIEWS = ['pulse', 'hq', 'knowledge'];
+const MAIN_VIEWS = ['pulse', 'hq', 'knowledge', 'communities'];
 const TABS = MAIN_VIEWS.concat(['feed', 'urgent', 'review', 'analytics', 'briefs', 'usage', 'users', 'controls']);
 const VIEW_TITLES = {
-  pulse: 'Pulse', hq: 'Operator HQ', knowledge: 'Knowledge', feed: 'Feed', urgent: 'Urgent',
+  pulse: 'Pulse', hq: 'Operator HQ', knowledge: 'Knowledge', communities: 'Communities', feed: 'Feed', urgent: 'Urgent',
   review: 'Review desk', analytics: 'Analytics', briefs: 'Briefs and live trends', usage: 'Usage',
   users: 'Users', controls: 'Controls and logs',
 };
 const TAB_HASH = {};          // tab -> () => hash with its filters (feed.js, analytics.js)
 const TAB_ROUTE = {};         // tab -> (query) => void, called before the tab loads
 const TAB_LOAD = {};          // tab -> () => void, set by home.js / hq.js / knowledge.js
-const PAGE_ANCHORS = {approvals: 'pulse', 'watch-panel': 'pulse', insights: 'hq', communities: 'hq', guides: 'knowledge'};
+const PAGE_ANCHORS = {approvals: 'pulse', 'watch-panel': 'pulse', insights: 'hq', guides: 'knowledge'};
 let firstRoute = true;
 
 TAB_ROUTE.review = (query) => {

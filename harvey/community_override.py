@@ -38,7 +38,7 @@ def warning(mention) -> str:
                 "removed, or get the account banned.")
     if status.participation == "unknown":
         return ("This community's rules are unverified. Check them before you post, and record them in "
-                "Operator HQ > Communities.")
+                "the Communities page.")
     if status.participation == "with_permission" and not status.permission_obtained:
         return "This community needs a moderator's permission for brand replies, and none is recorded."
     return ""

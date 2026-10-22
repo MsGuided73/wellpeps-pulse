@@ -277,3 +277,24 @@ h1[tabindex="-1"]:focus, h1[tabindex="-1"]:focus-visible, main:focus-visible { o
 @media (max-width: 700px) {
   .panel.plain { padding: 0; }
 }
+
+/* ── Communities page (communities.js) ── */
+.cm-tools { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+.cm-search input { min-height: 40px; min-width: min(320px, 100%); padding: 0 12px; border: 1px solid var(--input-border); border-radius: var(--r-btn); font: inherit; }
+.cm-list { display: grid; gap: 16px; }
+.cm-card { display: grid; gap: 14px; }
+.cm-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; flex-wrap: wrap; }
+.cm-name { font-weight: 600; font-size: 1.125rem; }
+.cm-head .meta { margin-top: 2px; }
+.cm-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 20px; }
+.cm-grid h3 { font-size: 14px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; margin-bottom: 8px; }
+.cm-check, .cm-blocks { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.cm-check li { display: flex; gap: 10px; align-items: baseline; }
+.cm-icon { width: 18px; flex: none; text-align: center; font-weight: 700; color: var(--muted); }
+.cm-check li.cm-done .cm-icon { color: var(--ok); }
+.cm-check li.cm-done span:not(.cm-icon) { color: var(--muted); }
+.cm-check li.cm-optional { color: var(--muted); }
+.cm-blocks li { padding-left: 16px; position: relative; }
+.cm-blocks li::before { content: "\2013"; position: absolute; left: 0; color: var(--muted); }
+.cm-note { color: var(--muted); font-style: italic; margin: 0; }
+.cm-foot { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; border-top: 1px solid var(--divider); padding-top: 12px; }

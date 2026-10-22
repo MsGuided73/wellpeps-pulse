@@ -32,6 +32,7 @@
       <a href="#pulse" data-nav="pulse">Pulse<span class="nav-count" id="nav-review" aria-label="replies waiting for approval"></span></a>
       <a href="#hq" data-nav="hq">Operator HQ</a>
       <a href="#knowledge" data-nav="knowledge">Knowledge</a>
+      <a href="#communities" data-nav="communities">Communities</a>
     </nav>
     <div class="top-tools">
       <div class="harvey-status" id="header-status" role="status">
@@ -150,13 +151,14 @@
     <div id="pp-body" aria-live="polite"></div>
   </section>
 
-  <section class="panel" id="communities" aria-labelledby="cm-h">
+  <section class="panel" id="hq-communities" aria-labelledby="hq-cm-h">
     <div class="section-head-row">
-      <h2 id="cm-h">Communities</h2>
+      <h2 id="hq-cm-h">Communities</h2>
       <span class="label" id="cm-count"></span>
     </div>
-    <p class="note">Pulse listens everywhere, but a reply can be approved only where the community allows brand replies. Read each community's posted rules and record them here.</p>
+    <p class="note">Where Pulse listens, which communities are cleared for replies, and what stays blocked until they are.</p>
     <div id="cm-body" aria-live="polite"></div>
+    <div class="act"><a class="btn btn-secondary" href="#communities">Open Communities</a></div>
   </section>
 
   <section class="panel" aria-labelledby="tools-h">
@@ -172,6 +174,27 @@
       <a class="btn btn-secondary hidden" id="hq-users-link" href="#users">Users</a>
       <a class="btn btn-secondary" href="#controls">Controls and logs</a>
     </div>
+  </section>
+</div>
+
+<!-- Communities: where Pulse listens, what is cleared, what is blocked -->
+<div id="communities" class="section view">
+  <div class="hello">
+    <div>
+      <h1 tabindex="-1">Communities</h1>
+      <p class="lede">Every community Pulse collects posts from. Open a group, read its rules, and record what they say: each step you clear unlocks more of what replies there can do, like naming a Smart Patient's Guide or including its link.</p>
+    </div>
+    <div class="stats" id="cm-stats" role="group" aria-label="Communities summary"></div>
+  </div>
+
+  <section class="panel plain" aria-labelledby="cm-list-h">
+    <h2 id="cm-list-h" class="visually-hidden">Community list</h2>
+    <div class="cm-tools">
+      <div class="seg seg-sm" id="cm-filter" role="group" aria-label="Show"></div>
+      <label class="cm-search"><span class="visually-hidden">Search communities</span>
+        <input type="search" id="cm-search" placeholder="Search by name or topic" autocomplete="off"></label>
+    </div>
+    <div id="cm-list" class="cm-list" aria-live="polite"></div>
   </section>
 </div>
 
@@ -595,6 +618,7 @@
 <script src="/static/posted.js"></script>
 <script src="/static/home.js"></script>
 <script src="/static/hq.js"></script>
+<script src="/static/communities.js"></script>
 <script src="/static/knowledge.js"></script>
 </body>
 </html>

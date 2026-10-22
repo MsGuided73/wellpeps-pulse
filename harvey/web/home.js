@@ -117,7 +117,7 @@ const Home = (() => {
     if (held && sel.posting_hold && !(card.d && card.d.community_warning)) {
       const already = ['RULES_UNKNOWN', 'PERMISSION_MISSING', 'PARTICIPATION_PROHIBITED'].includes(sel.reason_code);
       text += ' ' + (already ? '' : escHtml(held) + ' ') + (sel.public_permission === 'prohibited' ? '' :
-        'Record the rules or permission in <a href="#communities">Operator HQ › Communities</a> before posting.');
+        'Record the rules or permission in <a href="#communities">Communities</a> before posting.');
     }
     const warns = (e.warnings || []).map(w => '<li>' + escHtml(String(w).replace(/^[a-z0-9 ]+:\s*/i, '')) + '</li>').join('');
     return '<div class="pick" title="' + escHtml(sel.engagement_decision + ' ' + sel.reason_code) + '">' +

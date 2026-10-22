@@ -1,32 +1,27 @@
 'use strict';
 
 // WellPeps Pulse — Operator HQ: the agents (status from the heartbeat,
-// start/stop for admins), spend, "What people are struggling with", the
-// communities table with a "Record rules" form (admins), the guardrails
+// start/stop for admins), spend, "What people are struggling with", a
+// communities summary (the full page is communities.js), the guardrails
 // and links to the older tools. Loaded after home.js; uses app.js helpers
 // (api, request, send, showToast, escHtml, extLink, can, label, applyWidths,
 // emptyState, toneBadge, TAB_LOAD) and Home.loadSpendInto.
 //
 // Routes: GET /api/harvey/status, POST /api/harvey/start|stop (admin),
 // GET /api/summary, /api/urgent, /api/briefs, /api/insights/pain-points,
-// GET /api/communities, POST /api/communities/{id}/permission (admin),
+// GET /api/communities (summary only),
 // GET /api/spend. A 404 on a route that is not deployed yet shows a calm
 // "Not available yet" note instead of an error.
 
 const Hq = (() => {
   const INSIGHT_DAYS = 7;
-  const COMMUNITY_ROWS = 12;
   const AGENT_KEYS = {
     community: ['triager', 'drafter', 'reviewer'],
     safety: ['safety'],
     briefs: ['brief', 'briefs'],
   };
-  const PARTICIPATION = {allowed: 'Yes', not_allowed: 'No', unknown: 'Unknown'};
 
   let communities = [];
-  let showAll = false;
-  let permFor = null;
-  let permTrigger = null;
 
   const $ = id => document.getElementById(id);
   const na = text => '<p class="na"><b>Not available yet.</b> ' + escHtml(text) + '</p>';
@@ -153,120 +148,23 @@ const Hq = (() => {
     applyWidths(body);
   }
 
-  // ── Communities ──
-
-  function normCommunity(c) {
-    const id = String(c.id || '');
-    return {
-      id, name: String(c.name || id.split(':').pop() || ''), platform: c.platform || id.split(':')[0] || '',
-      topic: c.topic || '',
-      participation: c.brand_participation || 'unknown',
-      links: c.links_allowed === 'true' ? true : c.links_allowed === 'false' ? false : null,
-      permission: !!c.permission_obtained, contact: c.moderator_contact || '',
-      note: c.source === 'recorded' ? (c.note || '') : '',
-      mentions: Number(c.mentions_7d || 0), source: c.source || '',
-    };
-  }
-
-  function communityUrl(c) {
-    const sub = c.platform === 'reddit' ? c.id.split(':r/')[1] : '';
-    return sub ? 'https://www.reddit.com/r/' + encodeURIComponent(sub) + '/' : '';
-  }
-
-  function statusPill(c) {
-    if (c.participation === 'allowed') return '<span class="pill ok">Cleared to draft</span>';
-    if (c.participation === 'not_allowed') return '<span class="pill">Not allowed</span>';
-    return '<span class="pill">Listen only</span>';
-  }
-
-  function communityRow(c) {
-    const url = communityUrl(c);
-    const display = c.name;
-    const name = url ? extLink(url, display + ' ↗', 'post-title') : '<b>' + escHtml(display) + '</b>';
-    return '<tr><td data-label="Community">' + (name || '<b>' + escHtml(display) + '</b>') + '</td>' +
-      '<td data-label="Topic">' + escHtml(c.topic || 'Not set') + '</td>' +
-      '<td data-label="Brands allowed?">' + escHtml(PARTICIPATION[c.participation] || 'Unknown') + '</td>' +
-      '<td data-label="Links allowed?">' + (c.links === null ? 'Unknown' : c.links ? 'Yes' : 'No') + '</td>' +
-      '<td class="num" data-label="Mentions, 7 days">' + num(c.mentions) + '</td>' +
-      '<td data-label="Status">' + statusPill(c) + '</td>' +
-      '<td data-label="Action">' + (can('admin') ? '<button type="button" class="link-btn" data-hq="perm" data-id="' + escHtml(c.id) + '">Record rules</button>' : '') + '</td></tr>';
-  }
-
-  function renderCommunities() {
-    const body = $('cm-body');
-    const list = communities.slice();
-    const rows = showAll ? list : list.slice(0, COMMUNITY_ROWS);
-    const cleared = communities.filter(c => c.participation === 'allowed').length;
-    $('cm-count').textContent = 'Showing ' + rows.length + ' of ' + list.length + ' · ' + cleared + ' cleared';
-    if (!list.length) { body.innerHTML = emptyState('&#9678;', 'No communities yet', 'Communities appear here once Pulse has collected posts from them.'); return; }
-    body.innerHTML = '<div class="tbl stack-sm"><table><caption class="visually-hidden">Communities and whether brands may reply</caption><thead><tr>' +
-      '<th scope="col">Community</th><th scope="col">Topic</th><th scope="col">Brands allowed?</th><th scope="col">Links allowed?</th>' +
-      '<th scope="col" class="num">Mentions, 7 days</th><th scope="col">Status</th><th scope="col"><span class="visually-hidden">Action</span></th></tr></thead><tbody>' +
-      rows.map(communityRow).join('') + '</tbody></table></div>' +
-      (list.length > COMMUNITY_ROWS ? '<div class="act"><button type="button" class="btn btn-secondary" data-hq="toggle-rows">' +
-        (showAll ? 'Show fewer' : 'Show all ' + list.length) + '</button></div>' : '');
-  }
+  // ── Communities (summary; the full page is #communities, communities.js) ──
 
   async function loadCommunities() {
     const r = await request('/api/communities');
-    if (r.status === 404 || (!r.ok && r.status !== 0 && r.status < 500 && r.status !== 403)) {
-      $('cm-body').innerHTML = na('The community list turns on with the next update.');
-      $('cm-count').textContent = '';
-      return null;
-    }
-    if (!r.ok) { $('cm-body').innerHTML = na("Couldn't load communities just now. Try Refresh."); return null; }
-    communities = ((r.data && r.data.communities) || []).map(normCommunity);
-    renderCommunities();
+    if (!r.ok) { $('cm-body').innerHTML = '<p class="note">Couldn&#39;t load communities just now. Try Refresh.</p>'; $('cm-count').textContent = ''; return null; }
+    communities = ((r.data && r.data.communities) || []).map(c => ({
+      id: String(c.id || ''), participation: c.brand_participation || 'unknown',
+      status: (c.clearance && c.clearance.status) || 'not_checked', posts: Number(c.mentions_total || 0),
+    }));
+    const cleared = communities.filter(c => c.status === 'cleared').length;
+    const waiting = communities.filter(c => c.posts > 0 && c.status !== 'cleared' && c.status !== 'not_allowed').length;
+    $('cm-count').textContent = num(cleared) + ' of ' + num(communities.length) + ' cleared';
+    $('cm-body').innerHTML = '<p>' + (waiting
+      ? num(waiting) + (waiting === 1 ? ' community Pulse collects from is' : ' communities Pulse collects from are') +
+        ' not cleared yet, so replies there can\'t name a guide or include a link.'
+      : 'Every community Pulse collects from is cleared or checked.') + '</p>';
     return communities;
-  }
-
-  // ── Record rules ──
-
-  function openPermission(id, trigger) {
-    const c = communities.find(x => x.id === id);
-    if (!c) return;
-    permFor = c;
-    permTrigger = trigger;
-    $('perm-lede').textContent = 'Read the posted rules of ' + c.name +
-      ' (or ask a moderator) and record what they say. Replies there can be approved only once brand replies are allowed.';
-    $('perm-participation').value = ['allowed', 'not_allowed', 'unknown'].includes(c.participation) ? c.participation : 'unknown';
-    $('perm-links').value = c.links === true ? 'true' : c.links === false ? 'false' : 'unknown';
-    $('perm-contact').value = c.contact;
-    $('perm-note').value = c.note;
-    $('perm-error').classList.add('hidden');
-    $('perm-dialog').showModal();
-    $('perm-participation').focus();
-  }
-
-  async function savePermission(event) {
-    event.preventDefault();
-    const err = $('perm-error');
-    err.classList.add('hidden');
-    $('perm-submit').disabled = true;
-    const r = await request('/api/communities/' + encodeURI(permFor.id) + '/permission', {method: 'POST', body: {
-      brand_participation: $('perm-participation').value,
-      links_allowed: $('perm-links').value,
-      moderator_contact: $('perm-contact').value.trim(),
-      note: $('perm-note').value.trim(),
-    }});
-    $('perm-submit').disabled = false;
-    if (!r.ok || (r.data && r.data.ok === false)) {
-      const why = r.status === 0 ? "Pulse isn't responding. Check that it's still running, then try again. Your answers are still here."
-        : r.status === 404 ? 'Recording rules turns on with the next update.'
-        : (r.data && (r.data.error || r.data.detail)) || "That didn't save. Try again.";
-      err.textContent = typeof why === 'string' ? why : 'That did not save. Check the fields and try again.';
-      err.classList.remove('hidden');
-      return;
-    }
-    closePermission();
-    showToast('Rules recorded for ' + permFor.name + '.', 'success');
-    await loadCommunities();
-    renderSummary();
-  }
-
-  function closePermission() {
-    $('perm-dialog').close();
-    if (permTrigger && document.body.contains(permTrigger)) permTrigger.focus();
   }
 
   // ── Summary tiles ──
@@ -275,7 +173,7 @@ const Hq = (() => {
 
   function renderSummary() {
     const c = ctxCache;
-    const cleared = communities.filter(x => x.participation === 'allowed').length;
+    const cleared = communities.filter(x => x.status === 'cleared').length;
     const care = ((c.urgent && c.urgent.items) || []).filter(i => i.kind !== 'safety_watch').length;
     const tiles = [
       ['Waiting on approval', num(c.waiting), '<a href="#pulse">Open Pulse</a>'],
@@ -322,12 +220,6 @@ const Hq = (() => {
       if (!b || b.disabled) return;
       const act = b.dataset.hq;
       if (act === 'start' || act === 'stop') heartbeat(act);
-      else if (act === 'perm') openPermission(b.dataset.id, b);
-      else if (act === 'toggle-rows') { showAll = !showAll; renderCommunities(); }
-    });
-    $('perm-form').addEventListener('submit', savePermission);
-    $('perm-dialog').addEventListener('click', event => {
-      if (event.target.closest('[data-action="perm-cancel"]')) closePermission();
     });
   }
 
