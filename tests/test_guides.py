@@ -357,7 +357,7 @@ def test_drafter_prompt_requires_the_how_it_helps_sentence():
     prompt = build_prompt(mention, t, claims, guidance=g)
     assert "Smart Patient's Guide (a chapter answers this question, so include it)" in prompt
     assert '"What\'s actually included in the price"' in prompt
-    assert "Here's a link to get a free copy if you'd like" in prompt
+    assert "Just click here to grab a free copy of the guide" in prompt  # R-41
     assert "Chapters in this guide (approved guide content" in prompt
     assert links.tracked_url_for(knowledge.links_by_id()["LNK-GUIDE-GLP-1-WEIGHT-LOSS"], mention) in prompt
     assert f"under {REDDIT_MAX_WORDS_WITH_GUIDE} words" in length_rule("reddit", g)

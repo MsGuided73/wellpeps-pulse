@@ -201,7 +201,7 @@ def test_the_real_tirzepatide_scenario_is_an_example():
     assert "it varies by provider" in example.reply
     assert "What's actually included in the price" in example.reply
     assert "one monthly price" not in example.reply and "CLM-PRICE-FOLLOWUP" not in example.claim_ids
-    assert "get a free copy if you'd like" in example.reply
+    assert "Just click here to grab a free copy of the guide" in example.reply  # R-41
     assert links.registry_link(GLP1).id == links.find_links(example.reply)[0].link.id
 
 

@@ -24,7 +24,8 @@
 # user's instruction "We must refer to a relevant guide and point to how the guide can help",
 # which also resolves FINALIZE gated_download_disclosure (engagement_guide.yaml finalize value;
 # docs/RULES-OF-ENGAGEMENT.md). Offer them as free in Derek Goldberg's wording (Community Agent
-# Voice; owner decision 2026-10-20): "Here's a link to get a free copy if you'd like." Naming the
+# Voice; owner decision 2026-10-20), reworded by the owner 2026-10-23: "Just click here to grab a
+# free copy of the guide." (on Reddit the link sits on the word "here"). Naming the
 # email is optional; never promise instant or ungated access (R49).
 # Their links stay live: false in links.yaml until the site pages deploy, so a reply carrying
 # one still cannot be approved. Chapters each guide covers: config/guides.yaml.

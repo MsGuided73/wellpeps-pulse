@@ -854,7 +854,7 @@ finalize:
     sources: ["[CP] §8, §13", "[PL] Channel 1, Channel 9"]
     pulse_effect: "Links not marked live in config/links.yaml still block approval; 'free' must match the access terms (the guides are free; never promise ungated access)."
     blocks_approval: true
-    value: "Approved 2026-10-07 by WellPeps through the user's instruction ('We must refer to a relevant guide and point to how the guide can help'): offer the Smart Patient's Guides as free, stating that the download asks for an email (\"free, it asks for your email\"). Updated 2026-10-20 by the owner, in Derek Goldberg's wording (Community Agent Voice): \"Here's a link to get a free copy if you'd like\"; naming the email is optional and ungated access is never promised (R49). Links stay live: false until the site pages deploy."
+    value: "Approved 2026-10-07 by WellPeps through the user's instruction ('We must refer to a relevant guide and point to how the guide can help'): offer the Smart Patient's Guides as free, stating that the download asks for an email (\"free, it asks for your email\"). Updated 2026-10-20 by the owner, in Derek Goldberg's wording (Community Agent Voice): \"Here's a link to get a free copy if you'd like\"; naming the email is optional and ungated access is never promised (R49). Reworded by the owner 2026-10-23: \"Just click here to grab a free copy of the guide\", the link on the word 'here' on Reddit (links.hyperlink_offers). Links stay live: false until the site pages deploy."
   - key: data_retention
     item: "Minimum-data storage, restricted incident access, retention, deletion and audit-log configuration; collected health data never sent to unapproved systems"
     sources: ["[CP] §2, §13", "[OM] §22.2"]

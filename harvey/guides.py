@@ -41,9 +41,9 @@ MISSING_RULE = "GUIDE"
 MISSING_REASON = "missing guide reference"
 FORBIDDEN_REASON = "guide referenced in an excluded situation"
 # Derek Goldberg, Community Agent Voice (owner decision 2026-10-20): the offer says the guide is
-# free ("Here's a link to get a free copy if you'd like"); naming the email gate is no longer
+# free ("Just click here to grab a free copy of the guide.", owner 2026-10-23); naming the email gate is no longer
 # required, and promising ungated access is still red (R49).
-GATE_REASON = "guide offered without saying it is free (\"Here's a link to get a free copy if you'd like\")"
+GATE_REASON = "guide offered without saying it is free (\"Just click here to grab a free copy of the guide.\")"
 CHAPTER_REASON = "names a guide chapter that is not a verbatim chapter title from config/guides.yaml"
 OMIT_REASON = "no guide chapter answers this question (considered and omitted)"
 # Situations / categories where a guide never appears (safety, legal, privacy,

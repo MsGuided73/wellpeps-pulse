@@ -43,7 +43,7 @@ def test_drafter_prompt_carries_the_voice_principles_and_avoid_list():
     draft = " ".join((PROMPTS / "draft.md").read_text(encoding="utf-8").split())
     for needle in ("Community Agent Voice", "Answer the actual question", "three to five sentences",
                    "Never write a person's name", "transform your journey", "Happy to help!",
-                   "Here's a link to get a free copy if you'd like"):
+                   "Just click here to grab a free copy of the guide"):  # R-41
         assert needle in draft, needle
     assert '("Happy to help.", "Thanks for asking.")' not in draft
 

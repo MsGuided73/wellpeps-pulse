@@ -12,6 +12,27 @@ summary for discussion.
 
 ---
 
+## 2026-10-23: Short guide links
+
+### R-41. "Just click here to grab a free copy of the guide" (Live; owner request)
+- The owner's request (2026-10-23): "Can we hide the really long Patient's Guide Links? Can we
+  change the response to 'Just click here to grab a free copy of the guide' and associate the
+  long URL with the word 'here'".
+- The guide offer now ends "Just click here to grab a free copy of the guide." On Reddit the
+  long tracked link sits on the word "here" (Reddit's link format, `[here](link)`), so readers
+  see only "here". Facebook and Instagram comments can't put a link on a word, so there the
+  link still follows the sentence.
+- The dashboard shows only the word "here" (hover for the full link). The Copy buttons copy
+  both a real hyperlink (for Reddit's normal comment box) and the Markdown text (for Reddit's
+  Markdown editor), so the link pastes correctly either way.
+- Replaces Derek's earlier wording "Here's a link to get a free copy if you'd like" (R-26) for
+  the offer sentence; the rest of the guide sentence is unchanged and the guide is still
+  always called free.
+- Code: `harvey/links.py` (`hyperlink_offers`, `GUIDE_OFFER`), the drafter applies it after
+  tracking; `harvey/web/labels.js` (`replyHtml`, `copyReply`), `home.js`, `app.js`, the demo
+  sandbox; prompts/draft.md, prompts/review.md, reply examples. Tests:
+  `tests/test_guide_link_format.py`.
+
 ## 2026-10-22: Guides allowed where community rules are unverified
 
 ### R-40. Unverified community rules no longer block a guide or its link (Live; owner decision)

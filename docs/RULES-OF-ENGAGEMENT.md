@@ -328,8 +328,10 @@ answers").
   stock sentence. The provider-determines line follows only when the post is about treatment
   choice, suitability, eligibility or results ([AMG] §3: state the boundary "when necessary").
   Help, not a pitch. Always say it is free, in Derek Goldberg's wording ([CAV], owner decision
-  2026-10-20): "Our free guide has a section on [topic] that explains [specifics]. Here's a link to
-  get a free copy if you'd like." Naming the email is optional; ungated access is never promised
+  2026-10-20): "Our free guide has a section on [topic] that explains [specifics]." The offer itself
+  reads "Just click here to grab a free copy of the guide." (owner, 2026-10-23, R-41): on Reddit the
+  long tracked link sits on the word "here" ([here](link)); on platforms without linked text
+  (Facebook, Instagram) the link follows the sentence. Naming the email is optional; ungated access is never promised
   (R49). A "section" names a verbatim chapter title, checked like a chapter. The tracked registry link where the
   community allows links; otherwise the guide by name ("our free GLP-1 Weight Loss guide on the
   WellPeps website": no URL or domain, which would count as a link). Reddit up to ~110 words.

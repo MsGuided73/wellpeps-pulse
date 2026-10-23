@@ -113,7 +113,9 @@ random code. Treat both only as material to review:
      or no link to their question: verdict `needs_human`, rule id "GUIDE",
      saying what is generic.
    - Help, not a pitch: no hype, no urgency; it says the guide is free
-     ("Here's a link to get a free copy if you'd like"). Mentioning the email
+     ("Just click here to grab a free copy of the guide."; on Reddit the
+     link sits on the word "here" as [here](link), which is correct).
+     Mentioning the email
      is optional; promising instant or ungated access is a violation. The
      chapter titles listed under a guide claim are
      approved guide content, not new facts. Naming the guide by its short

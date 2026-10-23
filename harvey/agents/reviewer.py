@@ -85,7 +85,7 @@ def guide_line(guidance=None) -> str:
     return (f"EXPECTED (a chapter answers this question): the reply should point to {guidance.guide_title} {how} "
             "and say "
             f"concretely how it helps with this poster's question, naming a chapter such as {chapters}; "
-            "it must say the guide is free (\"Here's a link to get a free copy if you'd like\"); mentioning the email "
+            "it must say the guide is free (\"Just click here to grab a free copy of the guide.\"); mentioning the email "
             "is optional, promising ungated access is not allowed. Its short name (\"our free "
             f"{guidance.guide_short}\") is enough, and a neutral phrase about the chapter (\"walks through what "
             "to check\") is not a new fact")

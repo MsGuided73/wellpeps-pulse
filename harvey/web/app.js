@@ -767,7 +767,7 @@ async function copyAndOpen() {
   const draft = reviewDetail.latest_draft;
   const url = reviewDetail.mention.url;
   if (!draft || !safeHref(url)) return;
-  const copying = navigator.clipboard ? navigator.clipboard.writeText(draft.text) : Promise.reject(new Error('no clipboard'));
+  const copying = copyReply(draft.text).then(ok => { if (!ok) throw new Error('no clipboard'); });
   window.open(postUrl(url), '_blank', 'noopener,noreferrer');
   try { await copying; } catch { showToast('Could not copy automatically; select the text and copy it.', 'error'); return; }
   const r = await send('/api/mentions/' + currentMentionId() + '/copied');

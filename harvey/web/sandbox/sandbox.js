@@ -40,8 +40,9 @@ function timeHtml(iso) {
 
 // ── Markdown-lite: paragraphs, line breaks, safe links ──
 
-function linkHtml(raw) {
+function linkHtml(raw, label) {
   const url = raw.replace(TRAILING, '');
+  const shown = label || url;
   const rest = raw.slice(url.length);
   let parsed;
   try { parsed = new URL(url); } catch { return escHtml(raw); }
@@ -51,18 +52,30 @@ function linkHtml(raw) {
     // Demo: a registry guide link opens the sandbox's demo guide page.
     const href = '/sandbox/guides' + (guide[1] ? '/' + encodeURIComponent(guide[1].toLowerCase()) : '');
     return '<a class="guide-link" href="' + escHtml(href) + '" title="Demo: opens the sandbox guide page, not the real site">' +
-      escHtml(url) + '</a>' + escHtml(rest);
+      escHtml(shown) + '</a>' + escHtml(rest);
   }
-  return '<a href="' + escHtml(parsed.href) + '" target="_blank" rel="noopener noreferrer nofollow">' + escHtml(url) + '</a>' + escHtml(rest);
+  return '<a href="' + escHtml(parsed.href) + '" target="_blank" rel="noopener noreferrer nofollow">' + escHtml(shown) + '</a>' + escHtml(rest);
 }
 
-function inlineHtml(text) {
+function urlsHtml(text) {
   let out = '', last = 0;
   for (const m of text.matchAll(URL_RE)) {
     out += escHtml(text.slice(last, m.index)) + linkHtml(m[0]);
     last = m.index + m[0].length;
   }
   return out + escHtml(text.slice(last));
+}
+
+// Markdown links ([here](https://...)) show only their label.
+const MD_LINK_RE = /\[([^\]\n]{1,80})\]\((https?:\/\/[^\s)]+)\)/g;
+
+function inlineHtml(text) {
+  let out = '', last = 0;
+  for (const m of text.matchAll(MD_LINK_RE)) {
+    out += urlsHtml(text.slice(last, m.index)) + linkHtml(m[2], m[1]);
+    last = m.index + m[0].length;
+  }
+  return out + urlsHtml(text.slice(last));
 }
 
 function mdHtml(text) {

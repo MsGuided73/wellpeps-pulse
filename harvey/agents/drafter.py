@@ -305,13 +305,14 @@ def guide_lines(guidance) -> list[str]:
              "guide'. Describe the chapter only by its title plus a neutral phrase such as 'walks through "
              "what to check' or 'explains the differences'; never claim it covers anything else. Write the "
              f"offer in Derek's pattern, e.g. 'Our free {guidance.guide_short} has a section, <chapter title>, that "
-             "explains <what it helps with>. Here's a link to get a free copy if you'd like'; it must say the guide "
+             "explains <what it helps with>.'; it must say the guide "
              "is free and must never promise instant or ungated access. Phrase it as "
              "help, not a sales pitch; keep answer-first: answer -> guide and how it helps. Vary the wording "
              "naturally; never a stock sentence."]
     if guidance.guide_mode == "link":
-        lines.append(f"- Put the link shown under {guidance.guide_claim_id}, copied exactly, at the end of the "
-                     "guide sentence. It is the only link in the reply.")
+        lines.append(f"- End with exactly 'Just click here to grab a free copy of the guide:' followed by the link "
+                     f"shown under {guidance.guide_claim_id}, copied exactly (Pulse puts the link on the word "
+                     "'here' where the platform allows it). It is the only link in the reply.")
     else:
         lines.append(f"- No link here ({guidance.guide_why}): name it as 'our free {guidance.guide_short} on the "
                      "WellPeps website' and never write a URL or a domain.")
@@ -560,7 +561,9 @@ class Drafter:
             answer, problem = await self._ask(prompt)
             if answer is not None:
                 proposal = self._proposal(answer, offered, model, calls=attempt)
-                return replace(proposal, reply=links.track_registry_links(proposal.reply, mention), **used)
+                reply = links.hyperlink_offers(links.track_registry_links(proposal.reply, mention),
+                                               mention.platform.value)
+                return replace(proposal, reply=reply, **used)
             logger.warning(f"draft attempt {attempt} for mention {mention.id} invalid: {problem}")
             prompt = (
                 f"{prompt}\n\nYour previous answer was invalid ({problem}). "

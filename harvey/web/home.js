@@ -46,10 +46,8 @@ const Home = (() => {
 
   // ── Text helpers ──
 
-  function linkify(text) {
-    return escHtml(text).replace(/https?:\/\/[^\s<]*[^\s<.,;:!?)]/g,
-      u => '<a href="' + u + '" target="_blank" rel="noopener noreferrer">' + u + '</a>');
-  }
+  // Markdown links show only their label ("here"); bare URLs stay links (labels.js).
+  function linkify(text) { return replyHtml(text); }
 
   function snippet(text) {
     const t = String(text || '').replace(/\s+/g, ' ').trim();
@@ -570,9 +568,8 @@ const Home = (() => {
 
   const cardOf = el => cards.get(Number(el.dataset.id));
 
-  async function copyText(text) {
-    try { await navigator.clipboard.writeText(text); return true; } catch { return false; }
-  }
+  // Plain Markdown plus a real "here" hyperlink (labels.js copyReply).
+  async function copyText(text) { return copyReply(text); }
 
   async function saveDraft(card) {
     const ids = (card.d.latest_draft && card.d.latest_draft.claim_ids) || [];

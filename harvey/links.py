@@ -156,6 +156,36 @@ def track_registry_links(text: str, mention) -> str:
     return LINK_RE.sub(swap, text or "")
 
 
+# --- Guide offers with the link on the word "here" (owner request 2026-10-23) -------------
+
+GUIDE_OFFER = "Just click here to grab a free copy of the guide."
+# Platforms whose comment boxes take Markdown links ([text](url)). Elsewhere (Facebook,
+# Instagram, ...) text can't carry a hidden link, so the URL stays visible.
+MARKDOWN_PLATFORMS = frozenset({"reddit"})
+_OFFER_RX = re.compile(
+    r"(?:Just click here to grab a free copy of the guide|Here's a link to get a free copy if you'd like)"
+    r"[ \t]*[:\-–—]?[ \t]*(?P<url>https?://\S+)",
+    re.IGNORECASE,
+)
+
+
+def hyperlink_offers(text: str, platform: str) -> str:
+    """On a Markdown platform, the guide offer with its URL becomes
+    "Just click [here](<url>) to grab a free copy of the guide." (the old wording
+    "Here's a link to get a free copy if you'd like: <url>" too). Only registry
+    links are rewritten; other platforms are returned unchanged."""
+    if (platform or "").lower() not in MARKDOWN_PLATFORMS:
+        return text or ""
+
+    def swap(match: re.Match) -> str:
+        url = _clean(match.group("url"))
+        if registry_link(url) is None:
+            return match.group(0)
+        return f"Just click [here]({url}) to grab a free copy of the guide."
+    out = _OFFER_RX.sub(swap, text or "")
+    return re.sub(r"(to grab a free copy of the guide\.)[.]+", r"\1", out)
+
+
 def _query_value(url: str, key: str) -> str:
     try:
         query = urlsplit(url if "://" in url else f"https://{url}").query

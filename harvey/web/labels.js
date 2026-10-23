@@ -12,6 +12,41 @@ function escHtml(s) {
   ));
 }
 
+// Reply text: a Markdown link [label](https://...) shows only its label (the long
+// tracked guide URL hides behind "here"); a bare URL shows as a link.
+const MD_LINK = /\[([^\]\n]{1,80})\]\((https?:\/\/[^\s)]+)\)|https?:\/\/[^\s<)\]]*[^\s<.,;:!?)\]]/g;
+
+function replyHtml(text) {
+  const s = String(text || '');
+  let out = '';
+  let last = 0;
+  for (const m of s.matchAll(MD_LINK)) {
+    const url = m[2] || m[0];
+    const label = m[1] || m[0];
+    out += escHtml(s.slice(last, m.index)) + '<a href="' + escHtml(url) +
+      '" target="_blank" rel="noopener noreferrer" title="' + escHtml(url) + '">' + escHtml(label) + '</a>';
+    last = m.index + m[0].length;
+  }
+  return out + escHtml(s.slice(last));
+}
+
+// Copy a reply as plain text (Markdown, for Reddit's Markdown editor) AND as HTML (a real
+// "here" hyperlink, for rich-text comment boxes). Falls back to plain text.
+async function copyReply(text) {
+  const plain = String(text || '');
+  try {
+    if (window.ClipboardItem && navigator.clipboard && navigator.clipboard.write) {
+      const html = replyHtml(plain).replace(/\n/g, '<br>');
+      await navigator.clipboard.write([new ClipboardItem({
+        'text/plain': new Blob([plain], {type: 'text/plain'}),
+        'text/html': new Blob([html], {type: 'text/html'}),
+      })]);
+      return true;
+    }
+  } catch { /* fall through to plain text */ }
+  try { await navigator.clipboard.writeText(plain); return true; } catch { return false; }
+}
+
 const LABELS = {
   category: {
     complaint: 'Complaint', question: 'Question', purchase_intent: 'Purchase intent', praise: 'Praise',

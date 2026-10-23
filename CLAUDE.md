@@ -214,6 +214,11 @@ deterministic compliance filter (`harvey/compliance.py`) exist.
   "community rules unverified" stays. A recorded `links_allowed: false` still means name only
   (`drafting_status` keeps it in advisory mode); enforced-mode prohibited still blocks.
 
+- Short guide links (R-41, 2026-10-23; owner request): the offer reads "Just click here to grab a free copy of
+  the guide." (`links.GUIDE_OFFER`); `links.hyperlink_offers` (drafter, after `track_registry_links`) puts a
+  registry link on "here" as Markdown on Reddit (`MARKDOWN_PLATFORMS`); the UI shows only the label
+  (`labels.js` `replyHtml`) and copies HTML + Markdown (`copyReply`).
+
 Later phases add everything else. Don't build ahead of the phase you've
 been asked to do.
 

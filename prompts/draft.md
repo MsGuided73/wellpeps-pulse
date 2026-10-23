@@ -128,13 +128,16 @@ protocol §7):
    poster's question, naming the chapter given above, in their terms. The
    preferred pattern (Derek Goldberg, Community Agent Voice): "Our free GLP-1
    Weight Loss guide has a section, 'What's actually included in the price',
-   that explains what to check. Here's a link to get a free copy if you'd
-   like: <guide link>". Introduce it by what it helps the person understand.
+   that explains what to check. Just click here to grab a free copy of the guide.
+   <guide link>" Write that last sentence exactly as "Just click here to grab
+   a free copy of the guide:" followed by the link; Pulse puts the link on
+   the word "here" where the platform allows it. Introduce it by what it
+   helps the person understand.
    Never a generic "check out our comprehensive guide", never a pitch, and
    never "no email required" or any promise of instant or ungated access.
    Always say it is free. Use the guide's link only where links are allowed;
    otherwise name it ("our free Hair Restoration guide on the WellPeps
-   website") with no URL or domain. When the rules say no guide, add none.
+   website") with no URL or domain and no "click here". When the rules say no guide, add none.
 5. Close with ONE appropriate next step without pressure, then stop: no
    stock closing sentence ("Hope this helps!", "Let us know if you have any
    questions"). Add the provider-determines line only when the post is about treatment choice, suitability, eligibility, results or safety ("A licensed healthcare
