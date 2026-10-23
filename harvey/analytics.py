@@ -61,7 +61,8 @@ WELLPEPS = trends.WELLPEPS
 OTHER = "Other"
 BUCKETS = ("auto", "day", "week")
 VOLUME_BY = ("category", "platform")
-CHARTS = ("summary", "volume", "share", "sentiment", "complaints", "emerging", "drugs", "escalations")
+CHARTS = ("summary", "volume", "share", "sentiment", "complaints", "emerging", "drugs", "escalations",
+          "competitors")
 TRACKED_DRUGS = ("semaglutide", "tirzepatide", "BPC-157", "NAD+", "minoxidil", "tadalafil")
 
 # Severe categories are rare; one "safety & legal" series keeps the volume
@@ -92,7 +93,7 @@ THEME_LABELS = {"shipping": "Shipping & delivery", "price": "Price & billing", "
 
 _ROW_COLUMNS = (f"m.id, m.platform, {pulse_store.MENTION_TIME} AS at, t.subject_type, t.competitor, "
                 "t.drug, t.category, t.sentiment_score")
-_TEXT_COLUMNS = ", m.title, m.text, t.phrases_json"
+_TEXT_COLUMNS = ", m.title, m.text, t.phrases_json, m.url"
 
 
 class AnalyticsError(ValueError):
@@ -767,6 +768,16 @@ async def chart(state, name: str, p: Params, *, baseline_days: int = 28, min_cou
         open_rows = await _rows(state, OPEN_ESCALATIONS_SQL)
         return {"params": p.to_dict(), **escalation_stats(p, rows, open_rows)}
     anchors = await anchor_competitors(state, p.now)
+    if name == "competitors":
+        # Every competitor each post names (R-44), not only triage's main subject, so the
+        # competitor filter applies to the names, not to the stored subject.
+        from dataclasses import replace
+
+        from harvey import competitor_mentions
+        rows = await fetch_mentions(state, replace(p, competitors=()), p.prev_start_utc, p.end_utc, with_text=True)
+        current, previous = split_periods(p, rows)
+        return {"params": p.to_dict(), "anchors": anchors,
+                **competitor_mentions.rollup(current, previous, only=p.competitors)}
     with_text = name in ("complaints", "emerging", "summary")
     start = min(p.prev_start_utc, p.start_utc - timedelta(days=baseline_days))
     rows = await fetch_mentions(state, p, start, p.end_utc, with_text=with_text)

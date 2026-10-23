@@ -228,6 +228,12 @@ deterministic compliance filter (`harvey/compliance.py`) exist.
   pricing_question, claim publishable) puts `COST_COMPARE_CLAIM` first in `DraftGuidance.preferred_claims` with a
   note; without it the 12-claim cap (`drafter.MAX_CLAIMS`) dropped the approved checklist.
 
+- Competitor mentions (R-44, 2026-10-23; owner request): `harvey/competitor_mentions.py` (`names_in`: every
+  registry name in title + text, `COMMON_WORDS` only capitalised and not sentence-initial; `named_in_row` adds
+  triage's main subject; `rollup` = aggregates only, communities >= 2, tone >= 3), `analytics.chart("competitors")`
+  (ignores the competitor filter for fetching, applies it to the names), `review.feed(competitor=...)` = posts that
+  name it (Python scan -> `m.id IN`), Analytics card `competitors` (analytics.js).
+
 Later phases add everything else. Don't build ahead of the phase you've
 been asked to do.
 

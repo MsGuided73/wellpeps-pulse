@@ -236,14 +236,14 @@ competitors:
   # and complaint themes not yet verified; complaints are tracked from
   # mentions (language bank / brief), not written here.
   - name: Gimme Care
-    aliases: [GimmeCare, Gimme Care Health]
+    aliases: [GimmeCare, Gimme Care Health, Gimme]   # "Gimme" only capitalised (harvey/competitor_mentions.py)
     categories: [weight]
     website: null
     handles: []
     complaint_themes: []
     tier: weight
   - name: PreventiveMD
-    aliases: [Preventive MD, PreventiveMD weight loss]
+    aliases: [Preventive MD, PreventiveMD weight loss, PreventativeMD, Preventative MD]
     categories: [weight]
     website: null
     handles: []

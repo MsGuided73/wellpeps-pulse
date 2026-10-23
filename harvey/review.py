@@ -200,13 +200,21 @@ async def feed(state, *, status=None, platform=None, competitor=None, product=No
         ("m.platform", _enum(platform, Platform, "platform")),
         ("t.category", _enum(category, Category, "category")),
         ("t.urgency", _enum(urgency, Urgency, "urgency")),
-        ("t.competitor", competitor or None),
         ("t.product", product or None),
         ("t.drug", drug or None),
     ):
         if value is not None:
             where.append(f"{column} = ?")
             params.append(value)
+    if competitor and competitor.strip():
+        # Every post that names the competitor, not only those where triage made it the main
+        # subject (R-44; harvey/competitor_mentions.py).
+        from harvey import competitor_mentions
+        candidates = await _rows(state, "SELECT m.id, m.title, m.text, t.competitor FROM mentions m "
+                                        "LEFT JOIN triage t ON t.mention_id = m.id")
+        ids = competitor_mentions.matching_ids(candidates, competitor.strip()[:100])
+        where.append(f"m.id IN ({', '.join('?' for _ in ids)})" if ids else "1 = 0")
+        params += ids
     if q and q.strip():
         where.append("(instr(lower(m.text), lower(?)) > 0 OR instr(lower(m.title), lower(?)) > 0)")
         params += [q.strip()[:200]] * 2

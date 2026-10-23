@@ -12,6 +12,29 @@ summary for discussion.
 
 ---
 
+## 2026-10-23: Every competitor mention is tracked
+
+### R-44. "Competitor mentions" on the Analytics tab (Live; owner request)
+- The owner's request (2026-10-23): "Can we add an analytic section for any and all competitor
+  mentions? ... Henry Meds, Mondae, Gimme Care or Gimme, PreventativeMD, etc. I want to track all
+  mentions."
+- Before: each post recorded one competitor, the main subject. On the live posts that missed 33
+  of the competitor names posts actually used (12 posts name two or more).
+- Now Pulse finds every competitor from the registry in a post's title and text. Brand names
+  match in any case ("henry meds"); names that are also everyday words ("Found", "Ro",
+  "Keeps", "Gimme") count only when capitalised and not as the first word of a sentence. Each
+  competitor counts once per post.
+- The Analytics tab has a "Competitor mentions" section: posts naming each competitor, the
+  previous period and change, share, how often it is the main subject, complaint posts, tone
+  of those posts (3+ posts), competitors named alongside it, and top communities (2+ posts).
+  Selecting a bar opens the Feed with every post that names that competitor; the Feed's
+  competitor filter now means "names this competitor", not only "is the main subject".
+- Registry additions: "Gimme" (Gimme Care) and "PreventativeMD" / "Preventative MD"
+  (PreventiveMD).
+- Code: `harvey/competitor_mentions.py`, `analytics.chart("competitors")`
+  (`GET /api/analytics/competitors`), `review.feed` (competitor filter),
+  `harvey/web/analytics.js`. Tests: `tests/test_competitor_mentions.py`.
+
 ## 2026-10-23: Price-comparison posts use the approved checklist
 
 ### R-43. The cost-comparison checklist reaches the drafter (Live; fixes R-39)

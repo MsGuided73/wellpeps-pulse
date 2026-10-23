@@ -34,6 +34,7 @@ const AN_CARDS = [
   {id: 'emerging', title: 'Emerging terms'},
   {id: 'escalations', title: 'Urgent escalations & SLA'},
   {id: 'drugs', title: 'Drug & topic momentum', wide: true},
+  {id: 'competitors', title: 'Competitor mentions', wide: true},
 ];
 
 let anState = Object.assign({}, AN_DEFAULTS);
@@ -349,8 +350,48 @@ function anRenderTiles(d) {
     tile('Emerging terms', escHtml(String(t.emerging.value)), '<span class="delta flat">' + escHtml(String(t.emerging.new)) + ' new</span>', 'this period');
 }
 
+// g. Competitor mentions: every competitor a post names, not only its main subject (R-44)
+const AN_COMPETITOR_BARS = 15;
+
+function anTone(value) {
+  if (value === null || value === undefined) return 'fewer than 3';
+  return (value > 0.15 ? 'positive ' : value < -0.15 ? 'negative ' : 'mixed ') + '(' + Charts.fmtSigned(value, 2) + ')';
+}
+
+function anRenderCompetitors(d) {
+  const rows = d.competitors || [];
+  const fmt = Charts.fmtInt;
+  if (!rows.length) {
+    anEmpty('competitors', 'No competitor was named in this period.');
+  } else {
+    const shown = rows.slice(0, AN_COMPETITOR_BARS);
+    Charts.hbars(document.getElementById('an-plot-competitors'), {color: AN_PALETTE[1],
+      // NEW only when the previous period had competitor mentions at all (else everything is new).
+      rows: shown.map(c => ({label: c.name, value: c.posts, badge: d.previous_mentions && c.previous === 0 ? 'NEW' : '',
+        detail: [['posts naming them', fmt(c.posts)], ['previous period', fmt(c.previous)],
+          ['change', c.change_pct === null ? 'n/a' : Charts.fmtSigned(c.change_pct, 0) + '%'],
+          ['main subject', fmt(c.main_subject)], ['complaint posts', fmt(c.complaints)],
+          ['Enter or click', 'open in Feed']]})),
+      onSelect: i => anOpenFeed({competitor: shown[i].name})});
+  }
+  document.getElementById('an-legend-competitors').innerHTML = '';
+  const list = xs => xs.map(x => x.name + ' (' + x.posts + ')').join(', ');
+  Charts.table(document.getElementById('an-table-competitors'),
+    [{label: 'Competitor'}, {label: 'Posts', num: true}, {label: 'Previous', num: true}, {label: 'Change', num: true},
+      {label: 'Share', num: true}, {label: 'Main subject', num: true}, {label: 'Complaints', num: true},
+      {label: 'Tone of the posts'}, {label: 'Named alongside'}, {label: 'Top communities'}],
+    rows.map(c => [c.name, fmt(c.posts), fmt(c.previous), c.change_pct === null ? 'n/a' : Charts.fmtSigned(c.change_pct, 0) + '%',
+      Math.round(c.share * 100) + '%', fmt(c.main_subject), fmt(c.complaints), anTone(c.tone),
+      list(c.named_with) || '-', list(c.communities) || '-']),
+    'Competitor mentions');
+  document.getElementById('an-note-competitors').textContent = 'Counts every competitor a post names in its title or ' +
+    'text (each once per post), not only the main subject. ' + fmt(d.posts_naming_any) + ' posts named ' +
+    fmt(d.total_mentions) + ' competitors in this period. Tone averages need 3 posts; communities need 2. ' +
+    'Select a bar to see every post that names them in the Feed.';
+}
+
 const AN_RENDER = {volume: anRenderVolume, share: anRenderShare, sentiment: anRenderSentiment, complaints: anRenderComplaints,
-  emerging: anRenderEmerging, drugs: anRenderDrugs, escalations: anRenderEscalations};
+  emerging: anRenderEmerging, drugs: anRenderDrugs, escalations: anRenderEscalations, competitors: anRenderCompetitors};
 
 // ── Loading ──
 
