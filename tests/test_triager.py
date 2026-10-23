@@ -490,8 +490,11 @@ async def test_sample_fixture_end_to_end_with_fake_brain(state):
     escalated = [m for m in await state.list_mentions(limit=100)
                  if escalation_kind(await state.get_triage(m.id)) in SEVERE_KINDS]
     texts = " ".join(m.text for m in escalated)
-    for marker in ("emergency room", "my lawyer", "HIPAA", "unauthorized charges"):
+    for marker in ("my lawyer", "HIPAA", "unauthorized charges"):
         assert marker in texts
+    # The emergency-room post never names WellPeps: not WellPeps' incident, so no page (R-36, R-42),
+    # even though this fake brain calls every post "about WellPeps".
+    assert "emergency room" not in texts
 
 
 # --- Category-level relevance (live-test finding) -----------------------------------------
@@ -548,10 +551,12 @@ async def test_product_kept_when_text_names_wellpeps():
 
 @pytest.mark.asyncio
 async def test_product_kept_when_subject_type_is_wellpeps():
+    # A reply in a thread (it may answer a WellPeps comment) keeps the model's "about WellPeps"
+    # call even without the name (R-42); a top-level post would need to name WellPeps.
     text = "Their oral sema pills have been fine for me so far"
     brain = FakeBrain({"oral sema": [_answer(subject_type="wellpeps", product="Oral Semaglutide")]})
 
-    triage = await Triager(brain).triage(_mention(text))
+    triage = await Triager(brain).triage(_mention(text).model_copy(update={"parent_external_id": "t1_wp"}))
 
     assert triage.product == "Oral Semaglutide"
 

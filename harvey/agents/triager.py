@@ -162,8 +162,20 @@ def _post_text(mention: Mention) -> str:
 
 
 def _about_wellpeps(answer: "TriageAnswer", mention: Mention) -> bool:
-    return answer.subject_type == "wellpeps" or knowledge.names_wellpeps(
+    return _subject_type(answer, mention) == "wellpeps" or knowledge.names_wellpeps(
         _post_text(mention))
+
+
+def _subject_type(answer: "TriageAnswer", mention: Mention) -> str:
+    """The model's subject_type, except that a top-level post which never names WellPeps is
+    not about WellPeps (R-42, owner decision 2026-10-23): the model read posts about oral
+    minoxidil or compounded tirzepatide as WellPeps because WellPeps sells those drugs, and
+    "about WellPeps" is what pages the clinical owner. A reply inside a thread (it may answer
+    a WellPeps comment) and WellPeps' own channels keep the model's call."""
+    if (answer.subject_type != "wellpeps" or mention.owned_channel or mention.parent_external_id
+            or knowledge.names_wellpeps(_post_text(mention))):
+        return answer.subject_type
+    return "competitor" if (answer.competitor or "").strip() else "category"
 
 
 def _verbatim_phrases(phrases: list[str], text: str) -> list[str]:
@@ -255,7 +267,7 @@ def _to_triage(answer: TriageAnswer, mention: Mention, model: str) -> Triage:
     return Triage(
         mention_id=mention.id or 0,
         relevant=answer.relevant,
-        subject_type=answer.subject_type,
+        subject_type=_subject_type(answer, mention),
         subject=answer.subject.strip()[:200],
         competitor=_canonical(answer.competitor, knowledge.competitor_lookup()),
         # A WellPeps SKU only when the mention is about WellPeps; otherwise

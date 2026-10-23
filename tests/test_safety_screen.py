@@ -225,7 +225,8 @@ class OkNotifier:
 async def test_prompt_injected_praise_is_caught_and_escalated(state):
     from harvey.escalation import escalate
 
-    mid = await _seed(state, INJECTED)
+    # Names WellPeps: only WellPeps' own incidents page (R-36, R-42).
+    mid = await _seed(state, INJECTED.replace("on semaglutide", "on WellPeps semaglutide"))
     brain = AgentBrain(
         triager=FakeBrain({"semaglutide": [_answer(category="praise", urgency="low")]}),
         safety=FakeBrain({"semaglutide": [_screen(adverse_event=True, evidence="skin went yellow")]}),
@@ -249,7 +250,7 @@ async def test_prompt_injected_praise_is_caught_and_escalated(state):
 
 @pytest.mark.asyncio
 async def test_screen_is_skipped_when_already_escalated_or_not_health_related(state):
-    await _seed(state, "emergency room after my semaglutide shot", 1)  # keyword override
+    await _seed(state, "emergency room after my WellPeps semaglutide shot", 1)  # keyword override
     await _seed(state, "The Lakers won again, WellPeps fans rejoice", 2)
     brain = AgentBrain(
         triager=FakeBrain({"": [_answer()]}),

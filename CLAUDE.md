@@ -219,6 +219,11 @@ deterministic compliance filter (`harvey/compliance.py`) exist.
   registry link on "here" as Markdown on Reddit (`MARKDOWN_PLATFORMS`); the UI shows only the label
   (`labels.js` `replyHtml`) and copies HTML + Markdown (`copyReply`).
 
+- About WellPeps = names WellPeps (R-42, 2026-10-23; owner decision): `triager._subject_type` turns the model's
+  `subject_type: wellpeps` into `category` (or `competitor`) for a top-level post that doesn't name WellPeps
+  (`knowledge.names_wellpeps`), unless `owned_channel` or `parent_external_id` (a reply) is set. This keeps
+  R-36: a stranger's side effect with a drug WellPeps sells never pages.
+
 Later phases add everything else. Don't build ahead of the phase you've
 been asked to do.
 

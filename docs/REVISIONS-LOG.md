@@ -12,6 +12,20 @@ summary for discussion.
 
 ---
 
+## 2026-10-23: "About WellPeps" means the post names WellPeps
+
+### R-42. A post that never names WellPeps is not about WellPeps (Live; owner decision)
+- Found after the re-triage: posts about oral minoxidil and compounded tirzepatide were
+  labelled "about WellPeps" by the model because WellPeps sells those drugs. Neither post
+  mentions WellPeps, but "about WellPeps" is what pages the clinical owner, so strangers'
+  side effects were being paged, against R-36.
+- Now a top-level post that never names WellPeps is treated as a general drug post (or as
+  about the competitor it names). It gets no page, and no WellPeps product is attached to it.
+- Two exceptions keep the model's judgment: a reply inside a thread (it may be answering a
+  WellPeps comment) and WellPeps' own channels.
+- Owner's answer (2026-10-23): "yes please". Code: `harvey/agents/triager.py`
+  (`_subject_type`). Tests: `tests/test_wellpeps_subject.py`.
+
 ## 2026-10-23: Short guide links
 
 ### R-41. "Just click here to grab a free copy of the guide" (Live; owner request)
