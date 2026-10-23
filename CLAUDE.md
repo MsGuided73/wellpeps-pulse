@@ -224,6 +224,10 @@ deterministic compliance filter (`harvey/compliance.py`) exist.
   (`knowledge.names_wellpeps`), unless `owned_channel` or `parent_external_id` (a reply) is set. This keeps
   R-36: a stranger's side effect with a drug WellPeps sells never pages.
 
+- Cost checklist first (R-43, 2026-10-23): `engagement.price_comparison` (unmet_need price_clarity or subtype
+  pricing_question, claim publishable) puts `COST_COMPARE_CLAIM` first in `DraftGuidance.preferred_claims` with a
+  note; without it the 12-claim cap (`drafter.MAX_CLAIMS`) dropped the approved checklist.
+
 Later phases add everything else. Don't build ahead of the phase you've
 been asked to do.
 

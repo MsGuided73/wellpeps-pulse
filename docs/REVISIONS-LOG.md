@@ -12,6 +12,18 @@ summary for discussion.
 
 ---
 
+## 2026-10-23: Price-comparison posts use the approved checklist
+
+### R-43. The cost-comparison checklist reaches the drafter (Live; fixes R-39)
+- Found on a live post ("how are you all comparing the first charge vs what you pay each
+  month after?"): Derek's approved cost-comparison checklist (R-39) answers exactly that, but
+  the drafter only sees 12 approved statements per post and this one never made the list. Every
+  draft fell back to the clinician checklist, and the reviewer flagged it as not answering.
+- Now a post about price clarity, or a pricing question, is offered the checklist first, with
+  a note to answer with it. The redrafted post passed review.
+- Code: `harvey/engagement.py` (`price_comparison`, `COST_COMPARE_CLAIM`). Tests:
+  `tests/test_cost_comparison_claim.py`.
+
 ## 2026-10-23: "About WellPeps" means the post names WellPeps
 
 ### R-42. A post that never names WellPeps is not about WellPeps (Live; owner decision)

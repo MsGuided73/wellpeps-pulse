@@ -885,6 +885,21 @@ def _guide_fields(requirement) -> dict:
             "guide_why": requirement.why}
 
 
+# Price-comparison posts get the approved cost-comparison checklist first (R-43, 2026-10-23):
+# with the 12-claim cap the drafter otherwise never saw it.
+COST_COMPARE_CLAIM = "CLM-CHECKLIST-COST-COMPARE"
+PRICE_COMPARISON_SUBTYPES = frozenset({"pricing_question"})
+
+
+def price_comparison(triage: Triage | None) -> bool:
+    """The post asks how to compare prices (price-clarity need or a pricing question) and the
+    checklist is publishable."""
+    if triage is None:
+        return False
+    asks = (triage.unmet_need or "") == "price_clarity" or (triage.subtype or "") in PRICE_COMPARISON_SUBTYPES
+    return asks and COST_COMPARE_CLAIM in knowledge.publishable_claim_ids()
+
+
 def guidance_for(situation: Situation, context: ReplyContext | None = None, triage: Triage | None = None,
                  mention: Mention | None = None) -> DraftGuidance:
     """``mention``: the post (its words pick the guide chapter); None = no text."""
@@ -905,6 +920,12 @@ def guidance_for(situation: Situation, context: ReplyContext | None = None, tria
             f"Answer the general question first. Then add, once, the approved boundary sentence "
             f"({boundary}) for the personal part of the post. Never give a clinical judgment about this person.")
         preferred = preferred + ((boundary,) if boundary not in preferred else ())
+    if price_comparison(triage):
+        notes = (notes + " " if notes else "") + (
+            "This post compares prices: answer with the approved cost-comparison checklist "
+            f"({COST_COMPARE_CLAIM}): what to ask each provider so the first charge can be compared "
+            "with what they pay each month after.")
+        preferred = (COST_COMPARE_CLAIM, *(c for c in preferred if c != COST_COMPARE_CLAIM))
     return DraftGuidance(
         situation_id=situation.id, label=situation.label,
         template=situation.template or "", template_structure=template.structure if template else "",
