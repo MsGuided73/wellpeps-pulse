@@ -196,7 +196,7 @@ async def test_prohibited_community_gets_no_reply_and_stays_triaged(state, confi
 
 
 @pytest.mark.asyncio
-async def test_unknown_community_draft_is_yellow_and_the_drafter_is_told_no_link(state):
+async def test_unknown_community_draft_is_yellow_and_a_link_is_allowed(state):
     reply = ("I work with WellPeps. In general, telehealth programs use licensed healthcare providers to "
              "review a person's health information and determine whether treatment is appropriate.")
     mid = await _mention(state, subtype="general_education",
@@ -206,7 +206,7 @@ async def test_unknown_community_draft_is_yellow_and_the_drafter_is_told_no_link
     await draft_batch(state, drafter, StubReviewer())
 
     guidance = drafter.calls[0]["guidance"]
-    assert guidance.allow_link is False and "unverified" in guidance.link_note
+    assert guidance.allow_link is True and guidance.link_note == ""      # R-40
     assert guidance.template == "A" and guidance.situation_id == "general_education"
     draft = await state.get_latest_draft(mid)
     assert draft.tier == "yellow"

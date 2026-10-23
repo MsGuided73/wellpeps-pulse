@@ -84,8 +84,8 @@ class ReplyContext:
         """Why a link may not be used here ("" = it may)."""
         if self.participation == "prohibited":
             return "brand participation is prohibited"
-        if self.participation == "unknown":
-            return "community rules are unverified"
+        # Unverified rules don't forbid a link (R-40): a rep posts every reply by hand and checks the
+        # community's rules first. A recorded rule (links_allowed False) still does.
         if self.participation == "with_permission" and not self.permission_obtained:
             return "admin/moderator permission has not been obtained"
         if self.links_allowed is False:

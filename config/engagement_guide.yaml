@@ -816,7 +816,7 @@ finalize:
   - key: community_rules
     item: "Each community's rules: brand participation, links, admin permission (config/communities.yaml)"
     sources: ["[PL] Channel 3 ('maintain a database of each community's rules')", "[CT] Module 9", "[OM] §5.2, §12"]
-    pulse_effect: "Every community starts 'unknown': competitor / switching posts HOLD (no draft); other drafts are yellow 'community rules unverified' and may carry no link."
+    pulse_effect: "Every community starts 'unknown': competitor / switching posts HOLD (no draft); other drafts are yellow 'community rules unverified' and may carry a guide and its link (R-40: the rep who posts by hand checks the rules)."
     blocks_go_live: true
     value: null
   - key: protocol_approval

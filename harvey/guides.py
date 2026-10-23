@@ -46,7 +46,6 @@ FORBIDDEN_REASON = "guide referenced in an excluded situation"
 GATE_REASON = "guide offered without saying it is free (\"Here's a link to get a free copy if you'd like\")"
 CHAPTER_REASON = "names a guide chapter that is not a verbatim chapter title from config/guides.yaml"
 OMIT_REASON = "no guide chapter answers this question (considered and omitted)"
-UNVERIFIED_REASON = "community rules are unverified: no company resource until participation permission is verified"
 # Situations / categories where a guide never appears (safety, legal, privacy,
 # media, complaints and billing; Protocol §8 "never in safety / clinical").
 EXCLUDED_CATEGORIES = frozenset({"adverse_event", "legal_regulatory", "privacy", "billing_fraud", "complaint"})
@@ -240,8 +239,6 @@ def requirement_for(situation, context=None, triage=None, mention=None) -> Guide
     promo = getattr(context, "promotion_forbidden", "") if context is not None else ""
     if promo:
         return GuideRequirement("forbidden", None, f"the community prohibits promotion ({promo})")
-    if context is not None and getattr(context, "participation", "") == "unknown":
-        return GuideRequirement("forbidden", None, UNVERIFIED_REASON)
     if not pick.helps:
         return GuideRequirement("omit", pick, OMIT_REASON)
     link_reason = ("this situation never carries a link" if situation.link_policy == "none"

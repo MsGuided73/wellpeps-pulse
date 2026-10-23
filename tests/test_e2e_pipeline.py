@@ -55,11 +55,16 @@ CLEAN_REPLY = (
 CLEAN_IDS = ["CLM-R3-DISCLOSURE", "CLM-R7-PROVIDER-CHECKLIST"]
 # A question is an answering situation: it must point to the relevant Smart
 # Patient's Guide (user instruction 2026-10-07). r/Semaglutide's rules are
-# unverified, so the guide is named without a link (the series index: "Is
-# WellPeps legit?" names no program).
-GUIDE_SENTENCE = (" If it helps, our free Smart Patient's Guides on the WellPeps website (it asks for your email) "
-                  "close with the questions every Smart Patient should know to ask.")
-CLEAN_GUIDE_IDS = [*CLEAN_IDS, "CLM-EDU-GUIDES"]
+# unverified, which no longer stops the guide or its link (R-40). The
+# community is about semaglutide, so the GLP-1 Weight Loss guide is picked.
+GUIDE_SENTENCE = (" If it helps, our free GLP-1 Weight Loss guide has a chapter, \"Questions to ask before "
+                  "choosing a provider\", that walks through what to check. Here's a link to get a free copy "
+                  "if you'd like: https://wellpeps.com/smart-patient-guides/glp-1-weight-loss")
+CLEAN_GUIDE_IDS = [*CLEAN_IDS, "CLM-EDU-GUIDE-GLP-1-WEIGHT-LOSS"]
+REJECT_GUIDE = (" Our free Sexual Wellness guide has a chapter, \"Daily or as needed?\", on how the two compare. "
+                "Here's a link to get a free copy if you'd like: "
+                "https://wellpeps.com/smart-patient-guides/sexual-wellness")
+REJECT_GUIDE_IDS = [*CLEAN_IDS, "CLM-EDU-GUIDE-SEXUAL-WELLNESS"]
 
 
 def _triage_brain() -> FakeBrain:
@@ -88,12 +93,12 @@ def _triage_brain() -> FakeBrain:
 
 def _drafter_brain() -> FakeBrain:
     return FakeBrain({
-        CLEAN_Q: [{"reply": CLEAN_REPLY, "claim_ids": CLEAN_IDS, "rationale": "education",
+        CLEAN_Q: [{"reply": CLEAN_REPLY + GUIDE_SENTENCE, "claim_ids": CLEAN_GUIDE_IDS, "rationale": "education",
                    "needs_human_reason": None}],
         HYPE_Q: [{"reply": "Compounded options through licensed providers are clinically proven.",
                   "claim_ids": ["CLM-R15-COMPOUNDED-DISCLOSURE"], "rationale": "x",
                   "needs_human_reason": None}],
-        REJECT_Q: [{"reply": CLEAN_REPLY, "claim_ids": CLEAN_IDS, "rationale": "education",
+        REJECT_Q: [{"reply": CLEAN_REPLY + REJECT_GUIDE, "claim_ids": REJECT_GUIDE_IDS, "rationale": "education",
                     "needs_human_reason": None}],
     }, model="sonnet")
 
@@ -204,9 +209,9 @@ async def test_full_pipeline_on_the_sample_fixture(state):
     # Drafts: tiers and verdicts
     clean = await state.get_latest_draft(_find(mentions, CLEAN_Q).id)
     # r/Semaglutide's rules are not verified yet (config/communities.yaml), so
-    # the only finding is the yellow "community rules unverified" (R44), and no
-    # guide is offered there (no company resource until permission is verified).
-    assert (clean.tier, clean.review_verdict, clean.claim_ids) == ("yellow", ReviewVerdict.PASS, CLEAN_IDS)
+    # the yellow "community rules unverified" (R44) reminds the rep to check them; the guide
+    # and its link are still offered (R-40: the rep who posts by hand checks the rules).
+    assert (clean.tier, clean.review_verdict, clean.claim_ids) == ("yellow", ReviewVerdict.PASS, CLEAN_GUIDE_IDS)
     assert all(h.startswith("R44") for h in clean.filter_hits), clean.filter_hits
     hype = await state.get_latest_draft(_find(mentions, HYPE_Q).id)
     assert (hype.tier, hype.review_verdict) == ("red", ReviewVerdict.REJECT)

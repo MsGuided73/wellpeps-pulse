@@ -335,10 +335,11 @@ answers").
   WellPeps website": no URL or domain, which would count as a link). Reddit up to ~110 words.
 - **Never**: adverse events, emergencies, self-harm, legal / regulatory, privacy, media,
   complaint or billing escalations, individual clinical questions (all boundary or no-reply
-  situations), a possible minor (safety screen, or "I'm 16" in the post), or a community that
-  prohibits promotion / has not granted permission / has unverified rules (then no guide at all,
-  by name or by link: a named guide is still a company resource offer; [CP] §2 "Unknown rules
-  mean HOLD", §10 "Never silently default unknown permission to allowed"; [OM] §5.1).
+  situations), a possible minor (safety screen, or "I'm 16" in the post), or a community whose
+  recorded rules prohibit promotion or still need permission (then no guide at all, by name or
+  by link). **Unverified rules no longer block a guide or its link** (R-40, owner decision
+  2026-10-22, superseding [CP] §2 / §10 and [OM] §5.1 for guides): Pulse never posts, and the
+  rep who posts by hand checks the community's rules first.
 - **Enforced**: the compliance filter (`GUIDE`): required but missing -> yellow "missing guide
   reference", one automatic redraft with that feedback, still missing -> `needs_human`; a guide
   in an excluded situation -> red; a guide link without the email-gate disclosure -> yellow; a
@@ -510,7 +511,7 @@ database of each community's rules"). Every community starts `unknown`.
 | Rule status | Effect |
 |---|---|
 | `prohibited` | No reply at all (audit `skipped`, never retried); the protocol says DO NOT ENGAGE; a draft is red (R44). |
-| `unknown` (or not registered) | Competitor / switching posts: HOLD, nothing drafted ([CP] §2). Everything else: drafted for internal review, yellow "community rules unverified", no link (a link is red) and no Smart Patient's Guide, even by name (red). **Approval is refused** ("human posts / held until permission") until the rules or a moderator's permission are recorded ([SM] §2 step 2, §5; [CP] §2, §10; [OM] §5.1; [DG]; 2026-10-20, R-20). |
+| `unknown` (or not registered) | Competitor / switching posts: HOLD, nothing drafted ([CP] §2). Everything else: drafted for internal review, yellow "community rules unverified". The Smart Patient's Guide and its tracked link are allowed (R-40, owner decision 2026-10-22: Pulse never posts, and the rep who posts by hand checks the rules first; a recorded "no links" rule still means the guide is named without a link). In enforced mode, **approval is refused** ("human posts / held until permission") until the rules or a moderator's permission are recorded ([SM] §2 step 2, §5; [CP] §2, §10; [OM] §5.1; [DG]; 2026-10-20, R-20). |
 | `with_permission`, permission not obtained | Yellow; no link and no promotion (red); an alternatives request is downgraded to EDUCATIONAL ONLY; **approval refused** until the permission is recorded. |
 | a competitor's own community (named for a competitor or alias) | Listen-only: nothing drafted (`gate:competitor_community`) and approval refused whatever is recorded; mentions feed competitor insights ([SM] §3; [GP] §7.1; session safeguard 2026-10-20). |
 | `allowed` | Normal; `links_allowed: false` still makes any link red. |

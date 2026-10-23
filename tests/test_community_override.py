@@ -184,7 +184,8 @@ async def test_a_prohibited_community_is_drafted_in_advisory_mode(state, config_
     report = await draft_batch(state, drafter, StubReviewer())
 
     assert report.skipped == 0 and len(drafter.calls) == 1
-    assert drafter.calls[0]["guidance"].allow_link is False          # treated like unverified rules
+    # Treated like unverified rules, which no longer stop a link (R-40): the rep checks before posting.
+    assert drafter.calls[0]["guidance"].allow_link is True
     draft = await state.get_latest_draft(mid)
     assert draft is not None and draft.tier != "red"
     assert not any("prohibited" in h for h in draft.filter_hits)

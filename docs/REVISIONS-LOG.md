@@ -12,6 +12,29 @@ summary for discussion.
 
 ---
 
+## 2026-10-22: Guides allowed where community rules are unverified
+
+### R-40. Unverified community rules no longer block a guide or its link (Live; owner decision)
+- The owner's instruction (2026-10-22): "Please allow Pulse to reference the guides when
+  appropriate (no block). We can guard against any rule violations by preventing Pulse
+  itself from POSTING in the communities."
+- Before: in a community whose rules nobody had checked yet (every community today), a
+  draft could not mention a Smart Patient's Guide at all, not even by name, and any link
+  turned the draft red.
+- Now: the guide is offered as in any other community, with its tracked link. The draft
+  still shows the yellow "community rules unverified" reminder, and the rep acknowledges
+  the community warning before approving (R-30). Pulse never posts; the rep who posts by
+  hand checks the community's rules first.
+- Rules someone actually recorded still count: "links not allowed" means the guide is
+  named without a link. With `posting_holds: enforced`, a community that bans brand
+  replies still gets no reply, guide or link.
+- The Communities page no longer lists "No Smart Patient's Guide" or "No links" for an
+  unchecked community.
+- Code: `harvey/guides.py` (`requirement_for`), `harvey/compliance.py`
+  (`ReplyContext.link_forbidden`), `harvey/communities.py` (`drafting_status` keeps a
+  recorded links rule; `_blocks`), `prompts/review.md` (guide check). Tests:
+  `tests/test_guides_unverified_rules.py`.
+
 ## 2026-10-22: Pricing wording approved
 
 ### R-39. The pricing statement and the cost-comparison checklist are approved (Live; Derek's decision)

@@ -480,11 +480,13 @@ def test_examples_show_the_guide_pattern():
 UNKNOWN = ReplyContext(community_id="reddit:r/x", participation="unknown", links_allowed=None)
 
 
-def test_unverified_community_gets_no_guide_even_by_name():
+def test_unverified_community_gets_the_guide_with_its_link():
+    # R-40 (owner decision 2026-10-22) replaced "no guide, even by name": the rep posts by hand
+    # and checks the rules. More cases in tests/test_guides_unverified_rules.py.
     req = _requirement(UNKNOWN)
-    assert req.mode == "forbidden" and "unverified" in req.why
+    assert req.mode == "link"
     red, _ = guides.reference_hits(WITH_GUIDE, IDS, req)
-    assert red and red[0].rule_id == "GUIDE"
+    assert red == []
 
 
 def test_no_matching_chapter_means_the_guide_is_omitted_with_a_reason():

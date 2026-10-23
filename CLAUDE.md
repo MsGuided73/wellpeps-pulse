@@ -209,6 +209,11 @@ deterministic compliance filter (`harvey/compliance.py`) exist.
   `guidance.guide_chapters`) pins the chosen guide chapter after the voice guide; `PLATFORM_HEADINGS` drops other
   platforms' sections; more `exclude_headings`; budgets drafter/reviewer 12000.
 
+- Guides where rules are unverified (R-40, 2026-10-22; owner decision): `participation: unknown` no longer
+  forbids a guide (`guides.requirement_for`) or a link (`ReplyContext.link_forbidden`); the yellow R44
+  "community rules unverified" stays. A recorded `links_allowed: false` still means name only
+  (`drafting_status` keeps it in advisory mode); enforced-mode prohibited still blocks.
+
 Later phases add everything else. Don't build ahead of the phase you've
 been asked to do.
 

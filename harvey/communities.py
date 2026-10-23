@@ -130,12 +130,13 @@ def rules_advisory() -> bool:
 def drafting_status(status: "CommunityStatus") -> "CommunityStatus":
     """The status drafting and the compliance filter work from. In advisory
     mode a prohibition (or a permission still missing) reads as unverified
-    rules: a cautious, educational draft with no link and no promotion."""
+    rules: a cautious, educational draft with no promotion. A recorded "no links" rule still counts,
+    and unverified rules don't stop a guide or its link (R-40): a rep posts every reply by hand."""
     if not rules_advisory() or status.participation not in _HELD:
         return status
     if status.participation == "with_permission" and status.permission_obtained:
         return status
-    return CommunityStatus(id=status.id, participation="unknown", links_allowed=None,
+    return CommunityStatus(id=status.id, participation="unknown", links_allowed=status.links_allowed,
                            permission_obtained=False, registered=status.registered, name=status.name)
 
 
@@ -392,17 +393,19 @@ GUIDE_BLOCK = "No Smart Patient's Guide in replies, not even by name"
 
 
 def _blocks(participation: str, links: str, competitor: str, advisory: bool) -> list[str]:
+    # Unverified rules block neither a guide nor its link (R-40, owner decision 2026-10-22): Pulse never
+    # posts, and the rep who posts by hand checks the rules first.
     blocks: list[str] = []
+    banned = participation == "not_allowed" and not advisory
+    if participation == "not_allowed":
+        blocks.append("The rules don't allow brand replies here")
+        if banned:
+            blocks += [GUIDE_BLOCK, "No links in replies", "Drafts stay educational: no promotion"]
     if participation != "allowed":
-        if participation == "not_allowed":
-            blocks.append("The rules don't allow brand replies here")
-        blocks += [GUIDE_BLOCK, "No links in replies", "Drafts stay educational: no promotion"]
         blocks.append("A rep must acknowledge the community warning before approving a reply" if advisory
                       else "Replies here can't be approved")
-    elif links == "false":
+    if links == "false" and not banned:
         blocks.append("No links: the guide is named without a link")
-    elif links != "true":
-        blocks.append("No links until you record whether links are allowed: the guide is named without a link")
     if competitor:
         blocks.append(f"This is {competitor}'s own community: "
                       + ("a rep must acknowledge it before approving a reply" if advisory

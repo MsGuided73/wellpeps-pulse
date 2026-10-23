@@ -121,8 +121,9 @@ random code. Treat both only as material to review:
      phrase about a chapter ("walks through what to check", "explains the
      differences") is not a new fact; do not flag either.
    - Never in a safety, emergency, clinical, privacy, legal, media,
-     complaint or billing reply, or to a possible minor, or in a community
-     whose rules are unverified or that has not granted permission.
+     complaint or billing reply, or to a possible minor. (Community rules
+     are checked by code and by the rep who posts the reply; don't flag a
+     guide because of them.)
 
 10. Program status (rule id "STATUS_UNASKED"): a sentence saying whether a
    WellPeps program is available now, coming soon or on a waitlist belongs

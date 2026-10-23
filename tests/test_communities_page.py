@@ -57,7 +57,8 @@ def test_an_unchecked_community_lists_every_step_and_its_blocks(monkeypatch):
     assert c["status"] == "not_checked"
     assert _items(c) == {"rules_read": "todo", "brand_replies": "todo", "links": "todo", "moderator": "optional"}
     blocks = " ".join(c["blocks"])
-    assert "Smart Patient's Guide" in blocks and "links" in blocks.lower()
+    # R-40: unverified rules block neither the guide nor its link.
+    assert "Smart Patient's Guide" not in blocks and "links" not in blocks.lower()
     assert "acknowledge" in blocks.lower()            # advisory mode: the rep confirms before approving
 
 

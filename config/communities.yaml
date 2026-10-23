@@ -19,7 +19,8 @@
 #   rules_checked_at:    YYYY-MM-DD (required for allowed / with_permission)
 # What Pulse does (docs/RULES-OF-ENGAGEMENT.md, "Platform and community rules"):
 #   prohibited       -> no reply is drafted (the mention stays triaged; audit "skipped")
-#   unknown          -> drafted, yellow "community rules unverified", no link (red if one is added)
+#   unknown          -> drafted, yellow "community rules unverified"; guides and links allowed (R-40:
+#                       a rep posts every reply by hand and checks the rules first)
 #   with_permission  -> until permission_obtained: yellow, no link, no promotion (red)
 #   links_allowed: false -> a link is red
 # A mention whose permalink names no community (owned channels, review sites,

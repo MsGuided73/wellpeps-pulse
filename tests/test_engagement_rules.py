@@ -184,7 +184,8 @@ ANSWER = ("In general, telehealth programs use licensed healthcare providers to 
 
 @pytest.mark.parametrize("context, red, yellow", [
     (ReplyContext(), set(), set()),
-    (ReplyContext(community_id="reddit:r/x", participation="unknown"), {"R44"}, {"R44"}),
+    # Unverified rules: a reminder (yellow), no longer a red link block (R-40).
+    (ReplyContext(community_id="reddit:r/x", participation="unknown"), set(), {"R44"}),
     (ReplyContext(community_id="reddit:r/x", participation="allowed", links_allowed=False), {"R44"}, set()),
     (ReplyContext(community_id="reddit:r/x", participation="with_permission"), {"R44"}, {"R44"}),
     (ReplyContext(community_id="reddit:r/x", participation="with_permission", permission_obtained=True,
