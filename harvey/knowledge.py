@@ -626,6 +626,15 @@ TOPIC_TERMS = (
     "telehealth", "telemedicine", "tele-health", "online doctor", "online provider", "online clinic",
     "GLP-1", "GLP1", "GLP 1", "GLP-1s", "weight loss", "weight-loss", "hair loss", "hair-loss", "hairloss",
     "erectile", "compounded", "compounding pharmacy", "peptide", "peptides", "TRT",
+    # Condition words people actually write (R-45, owner request 2026-10-23: "words that describe the
+    # condition they are trying to treat: balding"). Vague ones (tired, fatigue, brain fog) stay out.
+    "balding", "going bald", "receding hairline", "thinning hair", "hair thinning", "thinning crown",
+    "male pattern baldness", "female pattern hair loss", "androgenetic alopecia", "alopecia",
+    "hair shedding", "Norwood",
+    "obesity", "overweight", "BMI", "lose weight", "losing weight", "insulin resistance", "prediabetes",
+    "erection problems", "trouble getting hard", "can't stay hard", "cant stay hard", "impotence",
+    "performance anxiety",
+    "anti-aging", "healthy aging", "longevity clinic", "low testosterone", "low T",
 )
 # Slang too common in unrelated posts to signal the market on its own.
 _AMBIGUOUS_SLANG = frozenset({"the shot", "the jab", "fin", "big 3", "serm", "gluta", "microdose", "blue pill"})

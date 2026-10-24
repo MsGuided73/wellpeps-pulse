@@ -12,6 +12,25 @@ summary for discussion.
 
 ---
 
+## 2026-10-23: Broader Reddit searches and condition words
+
+### R-45. 31 searches across every product line; condition words count (Live; owner approved)
+- The owner asked for a broader set of searches, then added: "What about words that describe
+  the condition they are trying to treat: balding; in hair restoration."
+- The daily Reddit run went from 8 searches (all compounded GLP-1, WellPeps or two competitors)
+  to 31: weight loss, competitors (including Mondae, Gimme Care, PreventiveMD), hair
+  restoration, sexual wellness, healthy aging, and price comparison, with condition-plus-intent
+  searches ("balding treatment", "receding hairline", "thinning hair", "erection problems").
+- The topic check (the collection keyword filter and triage's off-topic gate) now knows the
+  words people use for the condition: balding, receding hairline, thinning hair, male / female
+  pattern hair loss, alopecia, Norwood; obesity, BMI, insulin resistance, prediabetes; erection
+  problems, impotence, performance anxiety; anti-aging, low testosterone. Vague words (tired,
+  fatigue, brain fog) are used only inside searches.
+- Budget: 124 posts a run (4 per search), cap $0.90 a run (was $0.25); the $5.00 daily cap is
+  unchanged. Review after a week and prune searches that bring noise.
+- Code/config: `harvey.yaml` `collectors.apify_reddit`, `knowledge.TOPIC_TERMS`. Tests:
+  `tests/test_condition_terms.py`.
+
 ## 2026-10-23: Every competitor mention is tracked
 
 ### R-44. "Competitor mentions" on the Analytics tab (Live; owner request)

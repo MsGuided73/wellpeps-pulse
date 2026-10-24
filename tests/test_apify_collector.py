@@ -202,7 +202,8 @@ def test_repo_config_collects_reddit_daily_within_the_owners_caps():
 
     reddit = load_config().collectors.apify_reddit
     assert reddit.enabled is True and reddit.searches and reddit.interval_minutes == 1440
-    assert reddit.max_charge_usd <= 0.5 and reddit.daily_budget_usd == 5.0
+    # Owner approved $0.90 a run for the 31 searches (R-45, 2026-10-23); the daily cap is unchanged.
+    assert reddit.max_charge_usd <= 0.9 and reddit.daily_budget_usd == 5.0
     assert reddit.require_keyword_match is True
 
 
@@ -273,8 +274,8 @@ def test_config_defaults_and_repo_config_use_relevance_and_the_gate():
     repo = load_config().collectors.apify_reddit
     assert repo.sort == "relevance" and repo.require_keyword_match is True
     assert repo.extra_terms == default.extra_terms
-    assert '"WellPeps"' in repo.searches and len(repo.searches) == 8
-    assert repo.max_items == 30 and repo.max_charge_usd == 0.25
+    assert '"WellPeps"' in repo.searches and len(repo.searches) == 31          # R-45, owner 2026-10-23
+    assert repo.max_items == 124 and repo.max_charge_usd == 0.9
     assert repo.daily_budget_usd == 5.0 and repo.monthly_budget_usd == 155.0   # owner, 2026-10-20
 
 

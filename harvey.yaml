@@ -130,22 +130,54 @@ collectors:
     # Owner: daily collection, at most $5.00 a day.
     enabled: true
     interval_minutes: 1440      # once a day
-    max_items: 30               # ~$0.004 per post on the Apify Free plan
-    max_charge_usd: 0.25        # hard cap per run (Apify maxTotalChargeUsd)
+    max_items: 124              # 4 per search x 31 searches (R-45); ~$0.004 per post on the Apify Free plan
+    max_charge_usd: 0.90        # hard cap per run (Apify maxTotalChargeUsd); owner approved 2026-10-23
     daily_budget_usd: 5.0       # owner's cap: no run starts once today's (UTC) runs cost this
     monthly_budget_usd: 155.0   # backstop: 31 days x the daily cap
     lookback_hours: 48          # never older than this, even on the first run
     sort: relevance             # relevance | new | top | hot | comments
     require_keyword_match: true # drop results with none of the listening terms
     extra_terms: [GLP-1, GLP1, telehealth, telemedicine, compounded, weight loss medication, hair loss, erectile dysfunction, peptide, peptides]
-    searches:                   # Reddit-wide; exact phrases, buying intent (R-11)
+    # Reddit-wide; exact phrases, buying intent (R-11). Every product line and the words people use
+    # for the condition (R-45, owner approved 2026-10-23).
+    searches:
+      # Brand
       - '"WellPeps"'
+      # Weight loss
       - '"compounded tirzepatide" telehealth'
       - '"compounded semaglutide" telehealth'
       - '"GLP-1" telehealth price'
       - '"GLP-1" provider recommendation'
       - '"switching" telehealth semaglutide'
+      - '"oral semaglutide" OR "semaglutide pill" price'
+      - 'Zepbound "cash price" OR "self pay"'
+      - 'Wegovy "insurance" denied OR dropped compounded'
+      - '"insulin resistance" OR prediabetes GLP-1 provider'
+      # Competitors
       - '"Henry Meds" semaglutide'
       - '"Hims" semaglutide'
+      - '"Mochi Health" OR "Zealthy" OR "MEDVi"'
+      - '"Mondae" OR "Gimme Care" OR "PreventiveMD"'
+      - '"OrderlyMeds" OR "Lavender Sky" OR "ShedRx"'
+      # Hair restoration
+      - '"oral minoxidil" telehealth OR prescription'
+      - 'finasteride online prescription'
+      - 'hair loss telehealth "Keeps" OR "Hims" OR "Happy Head"'
+      - 'balding treatment telehealth OR online'
+      - '"receding hairline" finasteride OR minoxidil'
+      - '"thinning hair" women treatment online'
+      # Sexual wellness
+      - 'sildenafil OR tadalafil "online prescription"'
+      - '"daily cialis" telehealth'
+      - '"erection problems" OR "trouble getting hard" online doctor'
+      - '"performance anxiety" sildenafil OR tadalafil'
+      # Healthy aging and wellness
+      - '"NAD+" injections telehealth'
+      - 'sermorelin prescription online'
+      - '"methylene blue" OR glutathione injections'
+      - '"low energy" OR "brain fog" NAD+'
+      # Price comparison
+      - 'telehealth "membership fee" GLP-1'
+      - '"first month" price GLP-1 provider'
 
 retention_days: 180
