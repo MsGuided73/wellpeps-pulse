@@ -86,3 +86,14 @@ def test_dashboard_shows_here_and_copies_a_hyperlink():
     home = (web / "home.js").read_text(encoding="utf-8")
     assert "replyHtml(text)" in home and "copyReply(text)" in home
     assert "copyReply(draft.text)" in (web / "app.js").read_text(encoding="utf-8")
+
+
+def test_rewrite_maps_the_shown_selection_back_to_the_saved_text():
+    """Owner report 2026-10-23: rewriting post 1 failed with "Couldn't find that passage" because the
+    selection read "click here" while the saved draft has "click [here](link)"."""
+    web = ROOT / "harvey" / "web"
+    assert "function replySourceRange" in (web / "labels.js").read_text(encoding="utf-8")
+    rewrite_js = (web / "rewrite.js").read_text(encoding="utf-8")
+    assert "replySourceRange(card.text" in rewrite_js and "card.text.slice(from, to)" in rewrite_js
+    from harvey import rewrite
+    assert "[here](https://...)" in rewrite.GUARDRAILS

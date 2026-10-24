@@ -30,6 +30,37 @@ function replyHtml(text) {
   return out + escHtml(s.slice(last));
 }
 
+// The reply as shown, as plain text: each Markdown link becomes its label.
+function replyShown(text) {
+  return String(text || '').replace(MD_LINK, (m, label) => label || m);
+}
+
+// Positions in the reply as shown (a Markdown link shows only its label) -> positions in the saved
+// text. A selection edge inside a link takes the whole [label](url), so a link is never cut in half.
+function replySourceRange(text, start, end) {
+  const s = String(text || '');
+  const pieces = [];   // [srcStart, srcEnd, shownStart, shownEnd, isMarkdownLink]
+  let last = 0;
+  let shown = 0;
+  for (const m of s.matchAll(MD_LINK)) {
+    if (m.index > last) { pieces.push([last, m.index, shown, shown + m.index - last, false]); shown += m.index - last; }
+    const label = m[1] || m[0];
+    pieces.push([m.index, m.index + m[0].length, shown, shown + label.length, Boolean(m[1])]);
+    shown += label.length;
+    last = m.index + m[0].length;
+  }
+  if (last < s.length) pieces.push([last, s.length, shown, shown + s.length - last, false]);
+  const at = (pos, isEnd) => {
+    for (const [a, b, c, d, link] of pieces) {
+      if (pos < c || pos > d || (pos === d && !isEnd && d > c)) continue;
+      if (link) return isEnd ? b : a;
+      return a + (pos - c);
+    }
+    return isEnd ? s.length : 0;
+  };
+  return [at(start, false), at(end, true)];
+}
+
 // Copy a reply as plain text (Markdown, for Reddit's Markdown editor) AND as HTML (a real
 // "here" hyperlink, for rich-text comment boxes). Falls back to plain text.
 async function copyReply(text) {

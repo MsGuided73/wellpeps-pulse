@@ -62,8 +62,16 @@ const RewriteUI = (() => {
       range.setEnd(txt, txt.childNodes.length);
     }
     const card = host.find(range.startContainer);
-    const passage = range.toString();
-    if (!card || !passage.trim()) return null;
+    if (!card || !range.toString().trim()) return null;
+    // The reply shows a Markdown link as its label ("here"); map the selection back to the saved
+    // text so the passage matches it exactly (labels.js replySourceRange).
+    const before = document.createRange();
+    before.setStart(txt, 0);
+    before.setEnd(range.startContainer, range.startOffset);
+    const start = before.toString().length;
+    const [from, to] = replySourceRange(card.text, start, start + range.toString().length);
+    const passage = card.text.slice(from, to);
+    if (!passage.trim()) return null;
     return {card, kind: 'text', passage, rect: range.getBoundingClientRect()};
   }
 
@@ -110,7 +118,7 @@ const RewriteUI = (() => {
 
   function renderOptions() {
     menu.innerHTML = '<p class="rw-title">Rewrite selection</p>' +
-      '<p class="rw-quote">' + escHtml(clip(target.passage)) + '</p>' +
+      '<p class="rw-quote">' + escHtml(clip(replyShown(target.passage))) + '</p>' +
       '<div class="rw-opts">' + OPTIONS.map((o, i) =>
         '<button type="button" class="rw-opt" data-rw="' + i + '">' + escHtml(o[0]) + '</button>').join('') + '</div>' +
       '<form class="rw-custom"><label for="rw-ask" class="visually-hidden">Describe the change you want</label>' +
@@ -142,7 +150,7 @@ const RewriteUI = (() => {
 
   function renderResult(title) {
     menu.innerHTML = '<p class="rw-title">' + escHtml(title) + '</p><p class="rw-label">Suggestion</p>' +
-      '<p class="rw-result">' + escHtml(last.text) + '</p>' + checkLine(last.tier, last.hits) +
+      '<p class="rw-result">' + replyHtml(last.text) + '</p>' + checkLine(last.tier, last.hits) +
       '<p class="rw-hint">Give it a read before you approve. Pulse checks the whole reply again when you save it.</p>' +
       '<div class="rw-actions"><button type="button" class="btn btn-primary" data-rwact="replace">Replace</button>' +
       '<button type="button" class="btn btn-secondary" data-rwact="again">Try again</button>' +
